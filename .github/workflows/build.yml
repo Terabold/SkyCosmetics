@@ -1,0 +1,55 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+# Read-only: the jobs only build, test and upload artifacts; no secrets are used.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew && ./gradlew build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skycosmetics-jar
+          path: build/libs/*.jar
+      - name: Gametests compile
+        run: ./gradlew compileGametestJava
+      # For coding sessions that cannot download Minecraft: signatures and files they list.
+      - name: API probe
+        if: hashFiles('.github/api-probe.txt') != ''
+        run: bash .github/api-probe.sh .github/api-probe.txt
+
+  # A real client on a virtual display: every gametest check, plus the screenshots to look at.
+  gametest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sudo apt-get update -q && sudo apt-get install -y -q xvfb
+      - name: Client gametest
+        run: chmod +x gradlew && xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gametest-screenshots
+          path: build/run/clientGameTest/screenshots
+          if-no-files-found: ignore
+      - name: Screenshots in the log
+        if: always() && hashFiles('.github/show-screenshots.txt') != ''
+        run: bash .github/show-screenshots.sh

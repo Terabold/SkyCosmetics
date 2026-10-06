@@ -1,0 +1,73 @@
+plugins {
+    // 26.1 ships unobfuscated, so there are no mappings to pick: the Loom
+    // snapshot compiles straight against Mojang's own names.
+    id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT'
+    id 'java'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories {
+    mavenCentral()
+    // Mod Menu only, and only from its own maven.
+    exclusiveContent {
+        forRepository { maven { url = "https://maven.terraformersmc.com/releases/" } }
+        filter { includeGroup "com.terraformersmc" }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Optional: compiled against, never bundled. The dev client and gametests run with it unless -PnoModMenu.
+    compileOnly("com.terraformersmc:modmenu:${project.modmenu_version}") { transitive = false }
+    if (!project.hasProperty('noModMenu')) {
+        localRuntime("com.terraformersmc:modmenu:${project.modmenu_version}") { transitive = false }
+    }
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+}
+
+def targetJava = project.java_version as int
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = targetJava
+}
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(targetJava)
+    targetCompatibility = JavaVersion.toVersion(targetJava)
+}
+
+// Client gametest: boots a real client with a singleplayer world, fakes
+// SkyBlock items, applies looks, and takes screenshots into run/screenshots.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "skycosmetics-test"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+// Point the test client at an existing NEU repo checkout to skip the download:
+// -PskycosmeticsRepo=<path> or the SKYCOSMETICS_REPO environment variable.
+tasks.matching { it.name == 'runClientGameTest' }.configureEach {
+    def repo = project.findProperty('skycosmeticsRepo') ?: System.getenv('SKYCOSMETICS_REPO')
+    if (repo) jvmArgs "-Dskycosmetics.repo=${repo}"
+}
+
+jar {
+    from('LICENSE') { rename { "${it}_${project.archives_base_name}" } }
+}

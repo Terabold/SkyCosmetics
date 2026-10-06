@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "skycosmetics",
+  "version": "${version}",
+  "name": "SkyCosmetics",
+  "description": "Any Hypixel skin, dye, name and glint on your own SkyBlock gear and pets, animated ones included. Purely visual: only you see it, and nothing is sent to the server.",
+  "authors": [
+    "Terabold"
+  ],
+  "contact": {
+    "homepage": "https://github.com/Terabold/SkyCosmetics",
+    "sources": "https://github.com/Terabold/SkyCosmetics",
+    "issues": "https://github.com/Terabold/SkyCosmetics/issues"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "io.github.terabold.skycosmetics.SkyCosmetics"
+    ],
+    "modmenu": [
+      "io.github.terabold.skycosmetics.compat.ModMenuCompat"
+    ]
+  },
+  "mixins": [
+    "skycosmetics.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.1",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "icon": "assets/skycosmetics/icon.png",
+  "breaks": {
+    "skinstudio": "*"
+  },
+  "suggests": {
+    "skyblocker": "*",
+    "firmament": "*",
+    "modmenu": "*"
+  },
+  "custom": {
+    "modmenu": {
+      "update_checker": false
+    }
+  }
+}

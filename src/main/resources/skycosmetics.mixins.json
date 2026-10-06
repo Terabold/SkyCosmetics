@@ -1,0 +1,28 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.terabold.skycosmetics.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "AbstractContainerScreenAccessor",
+    "BufferSourceAccessor",
+    "ClientPacketListenerMixin",
+    "CustomDataAccessor",
+    "EquipmentLayerRendererMixin",
+    "GuiMixin",
+    "HumanoidMobRendererMixin",
+    "ItemFeatureRendererAccessor",
+    "ItemModelResolverMixin",
+    "ItemStackMixin",
+    "ItemStackRenderStateMixin",
+    "LayerRenderStateMixin",
+    "LivingEntityRendererMixin",
+    "MultiPlayerGameModeMixin",
+    "RecipeBookComponentAccessor",
+    "RecipeBookScreenAccessor",
+    "RenderTypeAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

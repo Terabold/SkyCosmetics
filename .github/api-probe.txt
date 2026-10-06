@@ -1,0 +1,21 @@
+# Probe 3: bytecode the nametag and Head Icon Size features need (plain substrings only: no regex escapes).
+
+code net.minecraft.client.renderer.entity.player.AvatarRenderer shouldShowName
+code net.minecraft.client.renderer.entity.player.AvatarRenderer extractRenderState(AvatarlikeEntity
+code net.minecraft.client.renderer.entity.player.AvatarRenderer submitNameDisplay
+code net.minecraft.client.renderer.entity.LivingEntityRenderer shouldShowName(T
+code net.minecraft.client.gui.screens.inventory.InventoryScreen extractEntityInInventory
+javap net.minecraft.client.gui.screens.inventory.InventoryScreen
+code net.minecraft.client.renderer.item.ItemStackRenderState$LayerRenderState applyTransform
+code net.minecraft.client.renderer.item.ItemStackRenderState$LayerRenderState setLocalTransform
+code net.minecraft.client.renderer.item.ItemStackRenderState$LayerRenderState setupSpecialModel
+code net.minecraft.client.renderer.item.ItemStackRenderState$LayerRenderState visitExtents
+code net.minecraft.client.renderer.item.ItemStackRenderState visitExtents
+code net.minecraft.client.renderer.item.SpecialModelWrapper update
+code net.minecraft.client.renderer.state.gui.GuiItemRenderState calculateOversizedItemBounds
+code net.minecraft.client.renderer.state.gui.GuiItemRenderState GuiItemRenderState(
+code net.minecraft.client.gui.render.GuiRenderer prepareItemElements
+code net.minecraft.client.gui.GuiGraphicsExtractor item(net.minecraft.world.entity.LivingEntity, net.minecraft.world.level.Level
+code net.minecraft.client.gui.components.PlayerTabOverlay getNameForDisplay
+javap net.minecraft.client.input.InputWithModifiers
+javap net.minecraft.client.gui.Gui extractSlot|extractItemHotbar

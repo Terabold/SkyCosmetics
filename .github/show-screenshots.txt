@@ -1,0 +1,3 @@
+# Gametest screenshots printed into the CI log (pattern [width]).
+skycosmetics-20-settings-1920x1080-guiscale-3 960
+skycosmetics-24-mod-menu-list 960
