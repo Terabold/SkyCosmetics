@@ -15,9 +15,10 @@ a change to the real item, and nothing heavy per frame.
 - [ ] **Armor trims** per item or per item type.
 - [ ] **Rarity backgrounds** behind items in menus.
 - [ ] **Head size in inventory icons**, for skull items that look too small or too big.
-- [ ] **Other mods' looks.** Show what Skyblocker and SkyOcean already customize (renames, glint, custom skins, dyes,
-      trims) in their own part of Saved, and import them in one click. Read only: other mods' files are never written.
-- [ ] **Saved, by section**, with a list under each item to remove one change at a time.
+- [x] **Other mods' looks.** The Other Mods tab lists what Skyblocker and SkyOcean customize (renames, glint, custom
+      skins, dyes, trims, models), removes a change through that mod's own settings, or moves it into SkyCosmetics.
+      Their files are never written by SkyCosmetics.
+- [x] **Saved, by section**, with a list under each item to remove one change at a time.
 - [ ] **Glint panel.** One place for every glint setting, and a choice of glint texture.
 - [ ] **Names:** a custom two-color gradient and an animated chroma name.
 - [ ] **Minecraft 26.2** builds alongside 26.1.
