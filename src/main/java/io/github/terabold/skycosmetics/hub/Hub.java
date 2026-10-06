@@ -22,6 +22,11 @@ public final class Hub {
         SECTIONS.sort(Comparator.comparingInt(Section::order).thenComparing(Section::id));
     }
 
+    /** Takes a section out again, for tests that add their own; false when none has this id. */
+    public static boolean remove(String id) {
+        return SECTIONS.removeIf(s -> s.id().equals(id));
+    }
+
     public static List<Section> sections() {
         return Collections.unmodifiableList(SECTIONS);
     }

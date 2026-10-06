@@ -6,6 +6,9 @@ import io.github.terabold.skycosmetics.Cosmetics;
 import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.gui.SettingsScreen;
+import io.github.terabold.skycosmetics.gui.hub.CardButton;
+import io.github.terabold.skycosmetics.gui.hub.KeyBindButton;
+import io.github.terabold.skycosmetics.gui.hub.ToggleSwitch;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -13,10 +16,8 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.AbstractScrollArea;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.MultiLineTextWidget;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
@@ -41,11 +42,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Settings and data: the settings screen at every GUI scale and in a small window (title above
- * button above help, Done always visible, the list scrolls), the open-key button (bind, Esc,
- * Backspace, conflicts, side mouse button), "Names in Other Mods" against getHoverName
- * and Cosmetics.originalName, and which menu titles My Items learns from. Labels are read from
- * the lang file, so rewording one never breaks a check.
+ * Settings and data: the settings window at every GUI scale and in a small window (on screen, every control inside
+ * the pane and only themed widgets, the list scrolls), the open-key box (bind, Esc, Backspace, conflicts, side mouse
+ * button), "Names in Other Mods" against getHoverName and Cosmetics.originalName, and which menu titles My Items
+ * learns from. Labels are read from the lang file, so rewording one never breaks a check.
  */
 public class SettingsClientTest implements FabricClientGameTest {
     private static final String OPEN = "key.skycosmetics.open";
@@ -86,7 +86,7 @@ public class SettingsClientTest implements FabricClientGameTest {
         System.out.println("[SkyCosmeticsTest] My Items menu titles checked");
     }
 
-    /** Every GUI scale and a small window: each title sits above its button, Done stays on screen, the list scrolls. */
+    /** Every GUI scale and a small window: the window fits, controls sit inside the pane, the list scrolls. */
     private static void layout(ClientGameTestContext ctx) {
         ctx.setScreen(() -> new SettingsScreen(null));
         ctx.waitTicks(3);
@@ -104,14 +104,17 @@ public class SettingsClientTest implements FabricClientGameTest {
             ctx.runOnClient(SettingsClientTest::checkLayout);
         }
         // The list no longer fits: the wheel scrolls it down to the last setting.
-        AbstractScrollArea area = ctx.computeOnClient(mc -> scrollArea(mc.screen));
-        check(ctx.computeOnClient(mc -> area.maxScrollAmount()) > 0, "the list scrolls in a small window");
+        check(ctx.computeOnClient(mc -> ((SettingsScreen) mc.screen).maxScroll()) > 0, "the list scrolls in a small window");
+        int[] pane = ctx.computeOnClient(mc -> ((SettingsScreen) mc.screen).pane());
         double scale = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
-        ctx.getInput().setCursorPos((area.getX() + area.getWidth() / 2.0) * scale, (area.getY() + area.getHeight() / 2.0) * scale);
+        ctx.getInput().setCursorPos((pane[0] + pane[2] / 2.0) * scale, (pane[1] + pane[3] / 2.0) * scale);
         ctx.waitTicks(1);
         ctx.getInput().scroll(-50);
-        ctx.waitTicks(3);
-        check(ctx.computeOnClient(mc -> area.scrollAmount() == area.maxScrollAmount()), "the wheel scrolls to the end");
+        ctx.waitTicks(10);
+        check(ctx.computeOnClient(mc -> {
+            SettingsScreen s = (SettingsScreen) mc.screen;
+            return s.scrollAmount() == s.maxScroll();
+        }), "the wheel scrolls to the end");
         ctx.takeScreenshot("skycosmetics-20-settings-854x480-scrolled");
         ctx.runOnClient(SettingsClientTest::checkLayout);
         ctx.getInput().resizeWindow(size[0], size[1]);
@@ -151,28 +154,28 @@ public class SettingsClientTest implements FabricClientGameTest {
     }
 
     private static void checkLayout(Minecraft mc) {
-        Screen s = mc.screen;
-        check(s instanceof SettingsScreen, "settings still open");
-        AbstractScrollArea area = scrollArea(s);
-        Button done = button(s, "Done");
-        check(done != null && done.getY() + done.getHeight() <= s.height && done.getY() >= area.getY() + area.getHeight(),
-            "Done is on screen, under the list (" + s.width + "x" + s.height + ")");
-        check(area.getY() >= 20 && area.getX() >= 0 && area.getX() + area.getWidth() <= s.width, "the list fits the width");
-        List<AbstractWidget> all = widgets(area);
-        int buttons = 0;
-        for (int i = 0; i < all.size(); i++) {
-            if (!(all.get(i) instanceof Button b)) continue;
-            buttons++;
-            AbstractWidget title = all.get(i - 1), help = all.get(i + 1);
-            check(title instanceof MultiLineTextWidget && title.getY() + title.getHeight() <= b.getY() && title.getX() == b.getX(),
-                "title above its button: " + title.getMessage().getString());
-            check(help instanceof MultiLineTextWidget && help.getY() >= b.getY() + b.getHeight() && help.getWidth() <= b.getWidth(),
-                "help under its button, as wide at most: " + help.getMessage().getString());
-            check(b.getHeight() == 20 && b.getX() + b.getWidth() <= s.width, "button fits: " + b.getMessage().getString());
+        check(mc.screen instanceof SettingsScreen, "settings still open");
+        SettingsScreen s = (SettingsScreen) mc.screen;
+        int[] w = s.window(), pane = s.pane();
+        check(w[0] >= 0 && w[1] >= 0 && w[0] + w[2] <= s.width && w[1] + w[3] <= s.height,
+            "the window is on screen (" + s.width + "x" + s.height + ")");
+        check(pane[0] > w[0] && pane[0] + pane[2] <= w[0] + w[2] && pane[1] + pane[3] <= w[1] + w[3], "the pane is in the window");
+        int switches = 0;
+        for (String id : s.rowIds()) {
+            AbstractWidget c = s.widget(id);
+            if (c == null) continue;
+            check(c.getX() >= pane[0] && c.getX() + c.getWidth() <= pane[0] + pane[2], "control inside the pane: " + id);
+            if (c instanceof ToggleSwitch) switches++;
+            for (String line : s.rowText(id)) {
+                check(mc.font.width(line) <= pane[2], "text wrapped to the pane: " + line);
+            }
         }
-        int rows = ((SettingsScreen) s).buttonRows();
-        check(buttons == rows && buttons >= 8, "Open Studio, the key and the switches each have one button: " + buttons
-            + " of " + rows);
+        check(s.widget("openStudio") instanceof CardButton, "Open Studio is a card");
+        check(s.widget("openKey") instanceof KeyBindButton, "the open key is a key box");
+        check(switches >= 6, "the studio's settings are switches: " + switches);
+        for (GuiEventListener l : s.children()) {
+            check(l.getClass().getName().startsWith("io.github.terabold.skycosmetics."), "only themed widgets: " + l.getClass().getName());
+        }
     }
 
     /** Click the key button, press a key: it binds and saves; Esc cancels; conflicts show; Backspace unbinds. */
@@ -209,16 +212,17 @@ public class SettingsClientTest implements FabricClientGameTest {
         check(key(ctx).equals("key.keyboard.e"), "E is the open key");
         check(!ctx.computeOnClient(mc -> mc.options.keyInventory.consumeClick()), "the inventory key did not fire");
         String clash = ctx.computeOnClient(mc -> I18n.get("skycosmetics.option.openKey.conflict", "|").split("\\|")[0]);
-        String warning = ctx.computeOnClient(mc -> texts(mc.screen).stream().filter(t -> t.contains(clash)).findFirst().orElse(""));
+        String warning = ctx.computeOnClient(mc -> String.join(" ", ((SettingsScreen) mc.screen).rowText("openKey")));
         System.out.println("[SkyCosmeticsTest] conflict: " + warning.replace('\n', ' '));
-        check(warning.contains("Inventory"), "the clash with the inventory key is shown");
+        check(warning.contains(clash) && warning.contains("Inventory"), "the clash with the inventory key is shown");
         ctx.takeScreenshot("skycosmetics-22-settings-key-conflict");
 
         clickButton(ctx, "E");
         ctx.getInput().pressKey(GLFW.GLFW_KEY_BACKSPACE);
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> KeyMapping.get(OPEN).isUnbound()) && button(ctx, notBound(ctx)) != null, "Backspace unbinds");
-        check(ctx.computeOnClient(mc -> texts(mc.screen).stream().noneMatch(t -> t.contains(clash))), "no clash when unbound");
+        check(ctx.computeOnClient(mc -> !String.join(" ", ((SettingsScreen) mc.screen).rowText("openKey")).contains(clash)),
+            "no clash when unbound");
 
         clickButton(ctx, notBound(ctx));
         ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_4);
@@ -391,17 +395,6 @@ public class SettingsClientTest implements FabricClientGameTest {
         return null;
     }
 
-    private static List<String> texts(Screen s) {
-        List<String> out = new ArrayList<>();
-        for (AbstractWidget w : widgets(s)) if (w instanceof MultiLineTextWidget) out.add(w.getMessage().getString());
-        return out;
-    }
-
-    private static AbstractScrollArea scrollArea(Screen s) {
-        for (GuiEventListener l : s.children()) if (l instanceof AbstractScrollArea a) return a;
-        throw new AssertionError("[SkyCosmeticsTest] failed: the settings list scrolls");
-    }
-
     /** Every widget, inside the scrolling list too, in layout order. */
     private static List<AbstractWidget> widgets(GuiEventListener root) {
         List<AbstractWidget> out = new ArrayList<>();
@@ -410,7 +403,7 @@ public class SettingsClientTest implements FabricClientGameTest {
     }
 
     private static void collect(GuiEventListener l, List<AbstractWidget> out) {
-        if (l instanceof AbstractWidget w && !(l instanceof AbstractScrollArea)) out.add(w);
+        if (l instanceof AbstractWidget w) out.add(w);
         if (l instanceof ContainerEventHandler c) for (GuiEventListener child : c.children()) collect(child, out);
     }
 
