@@ -152,6 +152,11 @@ public final class StylePicker<T> extends AbstractWidget {
         out.add(NarratedElementType.TITLE, label.apply(get.get()));
     }
 
+    /** The value picked now. */
+    public T selected() {
+        return get.get();
+    }
+
     /** For tests: the screen point at the middle of a value's cell. */
     public int[] centerOf(T v) {
         int i = index(v);

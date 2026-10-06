@@ -183,7 +183,7 @@ public final class RarityBackgrounds {
         });
     }
 
-    static Mask.Style style() {
+    public static Mask.Style style() {
         return new Mask.Style(shape, fill, opacity, outline);
     }
 
@@ -193,12 +193,12 @@ public final class RarityBackgrounds {
     }
 
     /** A rarity's current color (RGB). */
-    static int color(Rarity r) {
+    public static int color(Rarity r) {
         return TINT[r.ordinal()] & 0xFFFFFF;
     }
 
     /** The color a rarity has in the named set in use; Hypixel's when the set is Custom. */
-    static int presetColor(Rarity r) {
+    public static int presetColor(Rarity r) {
         return (colors == Colors.CUSTOM ? Colors.HYPIXEL : colors).rgb[r.ordinal()];
     }
 
@@ -252,10 +252,23 @@ public final class RarityBackgrounds {
         RarityBackgrounds.skyblockOnly = skyblockOnly;
     }
 
+    /** Every setting back to its default, custom colors included. */
+    public static void reset() {
+        set(false, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, false);
+        where(true, true, true, true, OwnMenus.ALL, false);
+        which(true, true, false);
+        System.arraycopy(Colors.HYPIXEL.rgb, 0, custom, 0, custom.length);
+        colors(Colors.HYPIXEL);
+    }
+
     /** For tests: a named color set. */
     public static void colors(Colors set) {
         colors = set;
         colorsChanged();
+    }
+
+    public static Colors colorSet() {
+        return colors;
     }
 
     public static long drawn() {

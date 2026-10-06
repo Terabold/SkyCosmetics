@@ -34,6 +34,8 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
     }
 
     private static final String TIER_BOOST = "PET_ITEM_TIER_BOOST";
+    /** Stacks read since start, for tests: drawing the same menu again must read none. */
+    private static long reads;
 
     /** The stack's facts; read now only if its lore or data changed since the last call. */
     public static ItemFacts of(ItemStack s) {
@@ -47,7 +49,12 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
         return f;
     }
 
+    public static long reads() {
+        return reads;
+    }
+
     static ItemFacts read(ItemLore lore, CustomData data) {
+        reads++;
         CompoundTag tag = null;
         String id = "";
         try {

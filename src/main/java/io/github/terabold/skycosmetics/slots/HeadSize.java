@@ -79,6 +79,26 @@ public final class HeadSize {
         percent = Math.clamp(Math.round(p / (float) STEP) * STEP, MIN, MAX);
     }
 
+    /** For tests: where heads are resized, and which. */
+    public static void where(boolean inventory, boolean menus, boolean hotbar, boolean elsewhere, boolean skyblockOnly) {
+        HeadSize.inventory = inventory;
+        HeadSize.menus = menus;
+        HeadSize.hotbar = hotbar;
+        HeadSize.elsewhere = elsewhere;
+        HeadSize.skyblockOnly = skyblockOnly;
+    }
+
+    /** Every setting back to its default. */
+    public static void reset() {
+        percent = DEFAULT;
+        where(true, true, true, false, false);
+    }
+
+    /** For tests: whether an item's model identity element is a Head Size key. */
+    public static boolean isKey(Object o) {
+        return o instanceof Key;
+    }
+
     // ------------------------------------------------------------- the hook ---
 
     /** Resizes the head layers of a GUI item just built. Never throws: the mixin catches. */
@@ -169,19 +189,19 @@ public final class HeadSize {
 
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
-        rows.add(Option.of("headSize", Component.translatable("skycosmetics.headSize.size"),
+        rows.add(Option.of("headSize.size", Component.translatable("skycosmetics.headSize.size"),
                 Component.translatable("skycosmetics.headSize.size.tooltip"),
                 new Control.Slider(() -> percent, v -> setPercent((int) Math.round(v)), MIN, MAX, STEP, HeadSize::sizeLabel))
             .search(Component.translatable("skycosmetics.headSize.search").getString()));
-        rows.add(Option.of("headSizePreview", Component.empty(), Component.empty(),
+        rows.add(Option.of("headSize.preview", Component.empty(), Component.empty(),
             new Control.Custom((host, w) -> new SlotPreview(w, SlotPreview.Kind.HEADS))));
-        rows.add(Option.header("headSizeWhere", Component.translatable("skycosmetics.headSize.group.where")));
+        rows.add(Option.header("headSize.groupWhere", Component.translatable("skycosmetics.headSize.group.where")));
         BooleanSupplier on = () -> percent != DEFAULT;
         rows.add(toggle("inventory", () -> inventory, v -> inventory = v).enabledWhen(on));
         rows.add(toggle("menus", () -> menus, v -> menus = v).enabledWhen(on));
         rows.add(toggle("hotbar", () -> hotbar, v -> hotbar = v).enabledWhen(on));
         rows.add(toggle("elsewhere", () -> elsewhere, v -> elsewhere = v).enabledWhen(on));
-        rows.add(Option.header("headSizeWhich", Component.translatable("skycosmetics.headSize.group.which")));
+        rows.add(Option.header("headSize.groupWhich", Component.translatable("skycosmetics.headSize.group.which")));
         rows.add(toggle("skyblockOnly", () -> skyblockOnly, v -> skyblockOnly = v).enabledWhen(on));
         return rows;
     }
