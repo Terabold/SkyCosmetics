@@ -78,6 +78,8 @@ public class SkyCosmetics implements ClientModInitializer {
         InventoryButton.register();
         Glints.init();
         StudioSection.register();
+        io.github.terabold.skycosmetics.slots.RarityBackgrounds.init();
+        io.github.terabold.skycosmetics.slots.HeadSize.init();
         // Last, so saves queued by the other stop hooks are written before exit.
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Io.flush());
 

@@ -20,7 +20,13 @@
     "MultiPlayerGameModeMixin",
     "RecipeBookComponentAccessor",
     "RecipeBookScreenAccessor",
-    "RenderTypeAccessor"
+    "RenderTypeAccessor",
+    "slots.ContainerSlotsMixin",
+    "slots.HeadSizeMixin",
+    "slots.HotbarSlotMixin",
+    "slots.ItemStackFactsMixin",
+    "slots.ItemStackRenderStateAccess",
+    "slots.LayerRenderStateAccess"
   ],
   "injectors": {
     "defaultRequire": 1

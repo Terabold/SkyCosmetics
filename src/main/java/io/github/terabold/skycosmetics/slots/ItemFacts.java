@@ -71,7 +71,7 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
     public record Line(Rarity rarity, boolean recombobulated) {}
 
     /**
-     * Hypixel's rarity line: "LEGENDARY DUNGEON HELMET", "VERY SPECIAL", "MYTHIC ACCESSORY", or "a EPIC BOW a" when
+     * Hypixel's rarity line: "LEGENDARY DUNGEON HELMET", "VERY SPECIAL", "SHINY MYTHIC", or "a EPIC BOW a" when
      * recombobulated. It is the last line of the item's own lore; menus such as the auction house add lines under
      * it, so the lowest line that reads like one wins. A line with a lowercase letter (other than the obfuscated
      * ones) is never a rarity line.
@@ -98,6 +98,7 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
             recomb = true;
             if (w[to - 1].length() == 1) to--;
         }
+        if (from < to && w[from].equals("SHINY")) from++; // "SHINY LEGENDARY", "a SHINY MYTHIC a"
         if (from >= to) return null;
         Rarity r;
         int next;
