@@ -5,6 +5,7 @@ import net.minecraft.resources.Identifier;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,19 +31,32 @@ final class Reflect {
     /** A public no-argument method's result, or null when {@code target} has none by that name. */
     static Object call(Object target, String method) {
         if (target == null) return null;
-        Object m = CACHE.computeIfAbsent(target.getClass().getName() + "#" + method + "()", k -> {
+        Method m = method(target.getClass(), method);
+        if (m == null) return null;
+        try {
+            return m.invoke(target);
+        } catch (IllegalAccessException | InvocationTargetException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** A public method of {@code c} (or a superclass) by name and parameter types; null if there is none. */
+    static Method method(Class<?> c, String name, Class<?>... types) {
+        Object m = CACHE.computeIfAbsent(c.getName() + "#" + name + Arrays.toString(types), k -> {
             try {
-                return target.getClass().getMethod(method);
+                return c.getMethod(name, types);
             } catch (NoSuchMethodException | RuntimeException | LinkageError e) {
                 return NONE;
             }
         });
-        if (m == NONE) return null;
-        try {
-            return ((Method) m).invoke(target);
-        } catch (IllegalAccessException | InvocationTargetException | RuntimeException e) {
-            return null;
-        }
+        return m == NONE ? null : (Method) m;
+    }
+
+    /** {@link #method} that must exist: a missing one throws {@link Missing}. */
+    static Method requireMethod(Class<?> c, String name, Class<?>... types) {
+        Method m = method(c, name, types);
+        if (m == null) throw new Missing(c.getName() + "#" + name);
+        return m;
     }
 
     /** The first of {@code names} that {@code target}'s class (or a superclass) declares, read even if private. */

@@ -56,7 +56,7 @@ import java.util.regex.Pattern;
 public final class OwnedItems {
     public enum Category {
         HELMET("Helmets"), CHESTPLATE("Chestplates"), LEGGINGS("Leggings"), BOOTS("Boots"),
-        PET("Pets"), WEAPON("Weapons & tools"), DEPLOYABLE("Power orbs");
+        PET("Pets"), WEAPON("Weapons & Tools"), DEPLOYABLE("Power Orbs");
 
         public final String label;
 
@@ -196,6 +196,36 @@ public final class OwnedItems {
     /** Whether this item was learned, whatever Stored Items and the profile filter show. */
     public static boolean knows(String uuid) {
         return ITEMS.containsKey(uuid);
+    }
+
+    /** The item with this UUID as last seen, whatever Stored Items and the profile filter show; null if never seen. */
+    public static Owned get(String uuid) {
+        return uuid == null ? null : ITEMS.get(uuid);
+    }
+
+    /** Any remembered item of this SkyBlock type ("NECRON_HEAD"), or null: Saved shows it for an "every item" look. */
+    public static Owned anyOf(String type) {
+        if (type == null) return null;
+        for (Owned o : ITEMS.values()) if (type.equals(o.type)) return o;
+        return null;
+    }
+
+    /**
+     * A best guess at the category from a SkyBlock id alone ("NECRON_HEAD", "PET:BEE"), for an item never seen;
+     * null when the id says nothing.
+     */
+    public static Category guess(String type) {
+        if (type == null) return null;
+        if (type.startsWith("PET:")) return Category.PET;
+        if (type.endsWith("_POWER_ORB") || type.endsWith("_FLUX")) return Category.DEPLOYABLE;
+        for (String w : new String[]{"HELMET", "_HEAD", "_HAT", "_MASK", "_CROWN", "_GOGGLES"}) if (type.endsWith(w)) return Category.HELMET;
+        if (type.endsWith("CHESTPLATE") || type.endsWith("_TUNIC")) return Category.CHESTPLATE;
+        if (type.endsWith("LEGGINGS") || type.endsWith("_PANTS") || type.endsWith("_TROUSERS")) return Category.LEGGINGS;
+        if (type.endsWith("BOOTS") || type.endsWith("_SHOES") || type.endsWith("_SLIPPERS")) return Category.BOOTS;
+        for (String w : new String[]{"SWORD", "BOW", "WAND", "AXE", "HOE", "SHOVEL", "DRILL", "ROD", "BLADE", "STAFF", "DAGGER"}) {
+            if (type.endsWith(w)) return Category.WEAPON;
+        }
+        return null;
     }
 
     public static void forget(String uuid) {

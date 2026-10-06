@@ -8,10 +8,10 @@ import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 import io.github.terabold.skycosmetics.Textures;
-import io.github.terabold.skycosmetics.data.Repo;
-import io.github.terabold.skycosmetics.data.SkinEntry;
 import io.github.terabold.skycosmetics.compat.OtherLooks.Change;
 import io.github.terabold.skycosmetics.compat.OtherLooks.Kind;
+import io.github.terabold.skycosmetics.data.Repo;
+import io.github.terabold.skycosmetics.data.SkinEntry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 
@@ -38,16 +38,21 @@ import java.util.function.Consumer;
  */
 final class SkyblockerLooks implements OtherLooks.Source {
     static final String MANAGER = "de.hysky.skyblocker.config.SkyblockerConfigManager";
+    private static final String ANIMATED_HEADS = "de.hysky.skyblocker.skyblock.item.custom.CustomAnimatedHelmetTextures";
 
-    /** Every map Skyblocker keeps per item, in the order the studio lists them. */
-    private record Map_(String field, Kind kind) {}
+    /** One map Skyblocker keeps per item. */
+    private record Spec(String field, Kind kind) {}
 
-    private static final Map_[] MAPS = {
-        new Map_("customItemNames", Kind.NAME), new Map_("customDyeColors", Kind.DYE),
-        new Map_("customAnimatedDyes", Kind.DYE), new Map_("customHelmetTextures", Kind.SKIN),
-        new Map_("customAnimatedHelmetTextures", Kind.SKIN), new Map_("customArmorTrims", Kind.TRIM),
-        new Map_("customGlint", Kind.GLINT), new Map_("customItemModel", Kind.MODEL),
-        new Map_("customArmorModel", Kind.MODEL)};
+    /** Every map, in the order the studio lists an item's changes. */
+    private static final Spec[] MAPS = {
+        new Spec("customHelmetTextures", Kind.SKIN), new Spec("customAnimatedHelmetTextures", Kind.SKIN),
+        new Spec("customDyeColors", Kind.DYE), new Spec("customAnimatedDyes", Kind.DYE),
+        new Spec("customItemNames", Kind.NAME), new Spec("customGlint", Kind.GLINT),
+        new Spec("customArmorTrims", Kind.TRIM), new Spec("customItemModel", Kind.MODEL),
+        new Spec("customArmorModel", Kind.MODEL)};
+
+    /** What a change needs to be removed and put back: its map, and the value it had. */
+    private record Handle(String field, Object value) {}
 
     private final String managerClass;
     private final Path file;
@@ -82,7 +87,7 @@ final class SkyblockerLooks implements OtherLooks.Source {
             get = m.getMethod("get");
             update = m.getMethod("update", Consumer.class);
             general = get.getReturnType().getField("general");
-            for (Map_ spec : MAPS) {
+            for (Spec spec : MAPS) {
                 try {
                     Field f = general.getType().getField(spec.field());
                     if (Map.class.isAssignableFrom(f.getType())) fields.put(spec.field(), f);
@@ -98,52 +103,47 @@ final class SkyblockerLooks implements OtherLooks.Source {
         return state > 0;
     }
 
-    private Object config() {
+    private Object generalConfig() {
         try {
-            return get.invoke(null);
+            Object cfg = get.invoke(null);
+            return cfg == null ? null : general.get(cfg);
         } catch (IllegalAccessException | InvocationTargetException e) {
             return null; // not loaded yet: nothing to show this time
+        }
+    }
+
+    private Map<?, ?> map(Object gen, Field f) {
+        try {
+            return gen != null && f.get(gen) instanceof Map<?, ?> m ? m : null;
+        } catch (IllegalAccessException e) {
+            return null;
         }
     }
 
     @Override
     public Object stamp() {
         if (!link()) return fileTime();
-        Object cfg = config();
-        if (cfg == null) return null;
+        Object gen = generalConfig();
+        if (gen == null) return null;
         // Every save makes a new copy to draw with; the sizes catch an edit made in place.
         long sizes = 0;
-        try {
-            Object gen = general.get(cfg);
-            for (Field f : fields.values()) sizes = sizes * 31 + (f.get(gen) instanceof Map<?, ?> m ? m.size() : -1);
-        } catch (IllegalAccessException e) {
-            return null;
+        for (Field f : fields.values()) {
+            Map<?, ?> m = map(gen, f);
+            sizes = sizes * 31 + (m == null ? -1 : m.size());
         }
-        return List.of(System.identityHashCode(cfg), sizes);
+        return List.of(System.identityHashCode(gen), sizes);
     }
 
     @Override
     public List<Change> read() {
         if (!link()) return readFile();
-        Object cfg = config();
-        if (cfg == null) return List.of();
-        Object gen;
-        try {
-            gen = general.get(cfg);
-        } catch (IllegalAccessException e) {
-            return List.of();
-        }
+        Object gen = generalConfig();
+        if (gen == null) return List.of();
         List<Change> out = new ArrayList<>();
-        for (Map_ spec : MAPS) {
+        for (Spec spec : MAPS) {
             Field f = fields.get(spec.field());
-            if (f == null) continue;
-            Object m;
-            try {
-                m = f.get(gen);
-            } catch (IllegalAccessException e) {
-                continue;
-            }
-            if (!(m instanceof Map<?, ?> map)) continue;
+            Map<?, ?> map = f == null ? null : map(gen, f);
+            if (map == null) continue;
             for (Map.Entry<?, ?> e : map.entrySet()) {
                 if (!(e.getKey() instanceof String uuid) || uuid.isEmpty()) continue;
                 try {
@@ -158,57 +158,97 @@ final class SkyblockerLooks implements OtherLooks.Source {
     }
 
     /** One map entry as a change; {@code live} values are Skyblocker's objects, else JSON from its file. */
-    private Change change(String uuid, Map_ spec, Object v, boolean live) {
+    private Change change(String uuid, Spec spec, Object v, boolean live) {
         String field = spec.field();
+        Handle h = new Handle(field, v);
         return switch (field) {
             case "customItemNames" -> {
                 Component name = v instanceof Component c ? c : v instanceof JsonElement j ? component(j) : null;
                 if (name == null) yield null;
-                yield new Change(this, uuid, Kind.NAME, name.getString(), -1, name, field,
-                    l -> l.withName(Names.toCodes(name)), live);
+                String codes = Names.toCodes(name);
+                yield new Change(this, uuid, Kind.NAME, name.getString(), -1, name, h, l -> l.withName(codes), live);
             }
             case "customDyeColors" -> {
                 Integer rgb = v instanceof Number n ? Integer.valueOf(n.intValue())
                     : v instanceof JsonPrimitive p && p.isNumber() ? Integer.valueOf(p.getAsInt()) : null;
                 if (rgb == null) yield null;
                 String hex = Reflect.hex(rgb);
-                yield new Change(this, uuid, Kind.DYE, hex, rgb & 0xFFFFFF, null, field, l -> l.withDye(hex), live);
+                yield new Change(this, uuid, Kind.DYE, hex, rgb & 0xFFFFFF, null, h, l -> l.withDye(hex), live);
             }
-            case "customAnimatedDyes" -> {
-                // Skyblocker times its keyframes its own way: shown and removable, not copied.
-                List<Integer> colors = keyframes(v);
-                yield new Change(this, uuid, Kind.DYE, "Animated, " + Names.count(colors.size(),
-                    "color"), colors.isEmpty() ? -1 : colors.getFirst() & 0xFFFFFF, null, field, null, live);
-            }
+            case "customAnimatedDyes" -> animatedDye(uuid, v, h, live);
             case "customHelmetTextures" -> {
                 String tex = string(v);
                 if (tex == null) yield null;
-                yield new Change(this, uuid, Kind.SKIN, "Custom texture", -1, null, field,
-                    l -> l.withSkin(Textures.CUSTOM_PREFIX + tex), live);
+                SkinEntry known = Values.skinByTexture(tex);
+                String id = known != null ? known.id : Textures.CUSTOM_PREFIX + tex;
+                yield new Change(this, uuid, Kind.SKIN, known != null ? known.name : "Custom texture", -1, null, h,
+                    l -> l.withSkin(id), live);
             }
             case "customAnimatedHelmetTextures" -> {
                 String id = string(v);
                 if (id == null) yield null;
                 SkinEntry e = Repo.get().skin(id);
-                yield new Change(this, uuid, Kind.SKIN, e != null ? e.name : Reflect.words(id), -1, null, field,
+                yield new Change(this, uuid, Kind.SKIN, e != null ? e.name : headName(id), -1, null, h,
                     e != null ? l -> l.withSkin(id) : null, live);
             }
             case "customArmorTrims" -> {
                 Object material = v instanceof JsonObject o ? o.get("material") : Reflect.call(v, "material");
                 Object pattern = v instanceof JsonObject o ? o.get("pattern") : Reflect.call(v, "pattern");
-                yield new Change(this, uuid, Kind.TRIM, Reflect.words(json(pattern)) + " (" + Reflect.words(json(material)) + ")",
-                    -1, null, field, null, live);
+                String text = pattern != null && material != null
+                    ? Reflect.words(json(pattern)) + " · " + Reflect.words(json(material)) : "Custom";
+                yield new Change(this, uuid, Kind.TRIM, text, -1, null, h, null, live);
             }
             case "customGlint" -> {
                 Boolean on = v instanceof Boolean b ? b : v instanceof JsonPrimitive p && p.isBoolean() ? p.getAsBoolean() : null;
                 if (on == null) yield null;
-                yield new Change(this, uuid, Kind.GLINT, on ? "On" : "Off", -1, null, field,
+                yield new Change(this, uuid, Kind.GLINT, on ? "On" : "Off", -1, null, h,
                     l -> l.withGlint(on ? "on" : "off"), live);
             }
             case "customItemModel", "customArmorModel" -> new Change(this, uuid, Kind.MODEL,
-                (field.equals("customArmorModel") ? "Armor: " : "") + Reflect.words(json(v)), -1, null, field, null, live);
+                (field.equals("customArmorModel") ? "Worn: " : "") + Reflect.words(json(v)), -1, null, h, null, live);
             default -> null;
         };
+    }
+
+    /** Skyblocker's animated dye: keyframes it blends over a duration, maybe forth and back. */
+    private Change animatedDye(String uuid, Object v, Handle h, boolean live) {
+        Object frames = v instanceof JsonObject o ? o.get("keyframes") : Reflect.call(v, "keyframes");
+        List<Integer> colors = new ArrayList<>();
+        List<Float> times = new ArrayList<>();
+        if (frames instanceof Iterable<?> it) {
+            for (Object k : it) {
+                Object c = k instanceof JsonObject o ? o.get("color") : Reflect.call(k, "color");
+                Object t = k instanceof JsonObject o ? o.get("time") : Reflect.call(k, "time");
+                Number cn = c instanceof JsonPrimitive p && p.isNumber() ? p.getAsNumber() : c instanceof Number n ? n : null;
+                Number tn = t instanceof JsonPrimitive p && p.isNumber() ? p.getAsNumber() : t instanceof Number n ? n : null;
+                if (cn == null) continue;
+                colors.add(cn.intValue());
+                times.add(tn == null ? colors.size() : tn.floatValue());
+            }
+        }
+        Object back = v instanceof JsonObject o ? o.get("cycleBack") : Reflect.call(v, "cycleBack");
+        Object duration = v instanceof JsonObject o ? o.get("duration") : Reflect.call(v, "duration");
+        boolean b = back instanceof Boolean x ? x : back instanceof JsonPrimitive p && p.isBoolean() && p.getAsBoolean();
+        float secs = duration instanceof Number n ? n.floatValue()
+            : duration instanceof JsonPrimitive p && p.isNumber() ? p.getAsFloat() : 2;
+        int[] rgbs = colors.stream().mapToInt(Integer::intValue).toArray();
+        float[] at = new float[times.size()];
+        for (int i = 0; i < at.length; i++) at[i] = times.get(i);
+        String id = Values.animatedDye(rgbs, at, b, secs);
+        return new Change(this, uuid, Kind.DYE, "Animated · " + Names.count(rgbs.length, "color"),
+            rgbs.length == 0 ? -1 : rgbs[0] & 0xFFFFFF, null, h, id != null ? l -> l.withDye(id) : null, live);
+    }
+
+    /** Skyblocker's own name for one of its animated heads, else the id in words. */
+    private static String headName(String id) {
+        try {
+            Class<?> c = Class.forName(ANIMATED_HEADS);
+            Method m = Reflect.method(c, "formatName", String.class);
+            if (m != null && m.invoke(null, id) instanceof String s && !s.isBlank()) return s;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            // read-only or another version: the id will do
+        }
+        return Reflect.words(id);
     }
 
     private static Object json(Object v) {
@@ -218,20 +258,6 @@ final class SkyblockerLooks implements OtherLooks.Source {
     private static String string(Object v) {
         Object s = json(v);
         return s instanceof String str && !str.isEmpty() ? str : null;
-    }
-
-    /** An animated dye's keyframe colors, from Skyblocker's record or its JSON. */
-    private static List<Integer> keyframes(Object v) {
-        List<Integer> out = new ArrayList<>();
-        Object frames = v instanceof JsonObject o ? o.get("keyframes") : Reflect.call(v, "keyframes");
-        if (frames instanceof Iterable<?> it) {
-            for (Object k : it) {
-                Object c = k instanceof JsonObject o ? o.get("color") : Reflect.call(k, "color");
-                if (c instanceof Number n) out.add(n.intValue());
-                else if (c instanceof JsonPrimitive p && p.isNumber()) out.add(p.getAsInt());
-            }
-        }
-        return out;
     }
 
     private static Component component(JsonElement j) {
@@ -244,33 +270,44 @@ final class SkyblockerLooks implements OtherLooks.Source {
 
     @Override
     public boolean remove(Change c) {
-        if (c.source() != this || !link() || !(c.handle() instanceof String fieldName)) return false;
-        Field f = fields.get(fieldName);
+        if (c.source() != this || !link() || !(c.handle() instanceof Handle h)) return false;
+        Field f = fields.get(h.field());
         if (f == null) return false;
+        edit(f, m -> m.remove(c.item()));
+        Map<?, ?> m = map(generalConfig(), f);
+        return m != null && !m.containsKey(c.item());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public boolean restore(Change c) {
+        if (c.source() != this || !link() || !(c.handle() instanceof Handle h) || h.value() == null) return false;
+        Field f = fields.get(h.field());
+        if (f == null) return false;
+        edit(f, m -> ((Map<Object, Object>) m).put(c.item(), h.value()));
+        Map<?, ?> m = map(generalConfig(), f);
+        return m != null && m.containsKey(c.item());
+    }
+
+    /** Skyblocker edits its config, saves it, and refreshes the copy it draws with: one call, like its commands. */
+    private void edit(Field f, Consumer<Map<?, ?>> change) {
         Consumer<Object> edit = cfg -> {
             try {
-                if (f.get(general.get(cfg)) instanceof Map<?, ?> m) m.remove(c.item());
+                if (f.get(general.get(cfg)) instanceof Map<?, ?> m) change.accept(m);
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException(e);
             }
         };
         try {
-            update.invoke(null, edit); // Skyblocker edits, saves, and refreshes the config it draws with
+            update.invoke(null, edit);
         } catch (IllegalAccessException | InvocationTargetException e) {
-            Io.failed("Removing a look in Skyblocker", e);
-            return false;
-        }
-        Object cfg = config();
-        try {
-            return cfg != null && !(f.get(general.get(cfg)) instanceof Map<?, ?> m && m.containsKey(c.item()));
-        } catch (IllegalAccessException e) {
-            return false;
+            Io.failed("Changing a look in Skyblocker", e);
         }
     }
 
     // ------------------------------------------------------------ file ---
 
-    private Object fileTime() {
+    private long fileTime() {
         try {
             return Files.isRegularFile(file) ? Files.getLastModifiedTime(file).toMillis() : 0L;
         } catch (Exception e) {
@@ -280,7 +317,7 @@ final class SkyblockerLooks implements OtherLooks.Source {
 
     /** Skyblocker's file, read-only: what it saved last. Read again only when the file changes. */
     private List<Change> readFile() {
-        long t = (Long) fileTime();
+        long t = fileTime();
         if (t == fileStamp) return fromFile;
         fileStamp = t;
         List<Change> out = new ArrayList<>();
@@ -288,7 +325,7 @@ final class SkyblockerLooks implements OtherLooks.Source {
             try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 JsonElement root = Io.parse(r);
                 JsonObject gen = root instanceof JsonObject o && o.get("general") instanceof JsonObject g ? g : null;
-                for (Map_ spec : MAPS) {
+                for (Spec spec : MAPS) {
                     if (gen == null || !(gen.get(spec.field()) instanceof JsonObject m)) continue;
                     for (Map.Entry<String, JsonElement> e : m.entrySet()) {
                         try {

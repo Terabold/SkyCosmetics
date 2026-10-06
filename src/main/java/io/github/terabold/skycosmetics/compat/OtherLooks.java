@@ -27,29 +27,36 @@ import java.util.function.UnaryOperator;
  * looks are shown read-only. Every call is guarded: a mod update can hide a look here, never break the game.
  */
 public final class OtherLooks {
-    /** What a change does to an item. */
+    /** What a change does to an item; {@code key} names its lang strings. */
     public enum Kind {
-        NAME("Name", "Renamed by "), DYE("Dye", "Dyed by "), SKIN("Skin", "Skin by "), TRIM("Trim", "Trim by "),
-        GLINT("Glint", "Glint by "), MODEL("Model", "Model by ");
+        NAME("name"), DYE("dye"), SKIN("skin"), TRIM("trim"), GLINT("glint"), MODEL("model");
 
-        public final String label;
-        /** The chip on the item in the editor, before the mod's name. */
-        public final String by;
+        public final String key;
 
-        Kind(String label, String by) {
-            this.label = label;
-            this.by = by;
+        Kind(String key) {
+            this.key = key;
+        }
+
+        /** "Dye". */
+        public Component label() {
+            return Component.translatable("skycosmetics.other.kind." + key);
+        }
+
+        /** "Dyed by Skyblocker". */
+        public Component by(String mod) {
+            return Component.translatable("skycosmetics.other.chip." + key, mod);
         }
     }
 
     /**
      * One change another mod makes to one item.
      *
-     * @param item   the item's SkyBlock UUID, or "id:" and its SkyBlock id for a look on items without one
+     * @param item   the item's SkyBlock UUID; "id:" and a SkyBlock id for a look on every item of that type; "one:"
+     *               and a SkyBlock id for one item without a UUID
      * @param value  what it is set to, short ("#FF8800", "Aurora Dye", "On")
      * @param rgb    a color to show beside the value, or -1
      * @param name   the custom name itself, for {@link Kind#NAME}; else null
-     * @param handle what the source needs to remove it
+     * @param handle what the source needs to remove it, and to put it back
      * @param into   the same change as a SkyCosmetics look, or null when SkyCosmetics has nothing like it
      * @param live   false when only the mod's file could be read: shown, never removed from here
      */
@@ -57,12 +64,32 @@ public final class OtherLooks {
                          UnaryOperator<Looks.Look> into, boolean live) {
         /** The item's UUID, or null for a look keyed by SkyBlock id. */
         public String uuid() {
-            return item.startsWith("id:") ? null : item;
+            return item.startsWith("id:") || item.startsWith("one:") ? null : item;
+        }
+
+        /** The SkyBlock id of a look keyed by it ("id:" or "one:"), else null. */
+        public String type() {
+            if (item.startsWith("id:")) return item.substring(3);
+            if (item.startsWith("one:")) {
+                int at = item.indexOf('@');
+                return item.substring(4, at > 4 ? at : item.length());
+            }
+            return null;
+        }
+
+        /** Whether it is for every item of a type, not one item. */
+        public boolean everyItem() {
+            return item.startsWith("id:");
         }
 
         /** "Dyed by Skyblocker". */
-        public String chip() {
-            return kind.by + source.name();
+        public Component chip() {
+            return kind.by(source.name());
+        }
+
+        /** Whether SkyCosmetics can take it over ("Move here"). */
+        public boolean movable() {
+            return into != null && live && (uuid() != null || everyItem());
         }
     }
 
@@ -82,6 +109,9 @@ public final class OtherLooks {
 
         /** Takes one change off through the mod's own config, then saves it there; true once it is gone. */
         boolean remove(Change change);
+
+        /** Puts a change {@link #remove} took off back, the same way; true once it is back. */
+        boolean restore(Change change);
     }
 
     /** How often the studio may look for changes made elsewhere (another mod's screen, a command). */
@@ -151,6 +181,7 @@ public final class OtherLooks {
      * when nothing changed: one stamp per mod.
      */
     public static void refresh(boolean now) {
+        if (sources.isEmpty()) return;
         long t = Util.getMillis();
         if (!now && t - checkedAt < CHECK_MS) return;
         checkedAt = t;
@@ -175,9 +206,20 @@ public final class OtherLooks {
         index.replaceAll((k, v) -> Collections.unmodifiableList(v));
         List<Change> grouped = new ArrayList<>(list.size());
         for (List<Change> v : index.values()) grouped.addAll(v);
-        if (!grouped.equals(all)) version++;
+        if (!same(grouped, all)) version++;
         all = Collections.unmodifiableList(grouped);
         byItem = Collections.unmodifiableMap(index);
+    }
+
+    /** The same changes, compared by what is shown (handles are new objects on every read). */
+    private static boolean same(List<Change> a, List<Change> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            Change x = a.get(i), y = b.get(i);
+            if (x.source() != y.source() || !x.item().equals(y.item()) || x.kind() != y.kind()
+                || !x.value().equals(y.value()) || x.rgb() != y.rgb() || x.live() != y.live()) return false;
+        }
+        return true;
     }
 
     private static Object stampOf(Source s) {
@@ -198,21 +240,42 @@ public final class OtherLooks {
             Io.failed("Removing a look in " + c.source().name(), e);
             ok = false;
         }
-        if (!ok) SkyCosmetics.LOG.warn("{} kept its {} on {}", c.source().name(), c.kind().label, c.item());
+        if (!ok) SkyCosmetics.LOG.warn("{} kept its {} on {}", c.source().name(), c.kind().key, c.item());
+        refresh(true);
+        return ok;
+    }
+
+    /** Puts {@code c} back in its own mod after {@link #remove} (the studio's Undo). */
+    public static boolean restore(Change c) {
+        if (!c.live()) return false;
+        boolean ok;
+        try {
+            ok = c.source().restore(c);
+        } catch (RuntimeException | LinkageError e) {
+            Io.failed("Restoring a look in " + c.source().name(), e);
+            ok = false;
+        }
         refresh(true);
         return ok;
     }
 
     /**
      * Moves {@code c} into SkyCosmetics: the same change as a look of this item ({@code label} names it in Saved),
-     * then removed from its mod. Nothing changes if SkyCosmetics has no such change or the mod keeps its own.
+     * or of every item of its type, then removed from its mod. Nothing changes if SkyCosmetics has no such change
+     * or the mod keeps its own. Returns the look SkyCosmetics had there before (NONE for none), for an undo, or
+     * null when nothing moved.
      */
-    public static boolean take(Change c, String itemType, String label) {
-        if (c.into() == null || c.uuid() == null || !c.live()) return false;
-        Looks.Look before = Looks.byUuid(c.uuid());
-        Looks.Look next = c.into().apply(before == null ? Looks.Look.NONE : before);
-        if (!remove(c)) return false;
-        Looks.putItem(c.uuid(), itemType, next.withLabel(label != null ? label : before != null ? before.label() : null));
-        return true;
+    public static Looks.Look take(Change c, String itemType, String label) {
+        if (!c.movable()) return null;
+        boolean type = c.uuid() == null;
+        String key = type ? c.type() : c.uuid();
+        Looks.Look before = type ? Looks.byType(key) : Looks.byUuid(key);
+        Looks.Look was = before == null ? Looks.Look.NONE : before;
+        Looks.Look next = c.into().apply(was);
+        if (!remove(c)) return null;
+        String l = label != null ? label : was.label();
+        if (type) Looks.put(true, key, next.withLabel(l));
+        else Looks.putItem(key, itemType != null ? itemType : Looks.itemType(key), next.withLabel(l));
+        return was;
     }
 }

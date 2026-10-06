@@ -7,6 +7,7 @@ import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 import io.github.terabold.skycosmetics.Textures;
+import io.github.terabold.skycosmetics.compat.OtherLooks;
 import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
@@ -63,7 +64,8 @@ import java.util.function.UnaryOperator;
  */
 public class StudioScreen extends Screen {
     private enum Tab {
-        SKINS("Skins", "Skins"), DYES("Dyes", "Dyes"), STYLE("Name & Glint", "Name"), SAVED("Saved", "Saved");
+        SKINS("Skins", "Skins"), DYES("Dyes", "Dyes"), STYLE("Name & Glint", "Name"), SAVED("Saved", "Saved"),
+        OTHER("Other Mods", "Mods");
 
         final String label;
         final String shortLabel;
@@ -113,8 +115,14 @@ public class StudioScreen extends Screen {
     /** Cards are at least this wide (they share the grid's width) and this tall (taller with three-line names). */
     private static final int CARD_W = 54;
     private static final int CARD_H = 46;
-    /** New textures the grid may ask for per game tick: first frames, animation frames. */
-    private static final int FIRSTS_PER_TICK = 12, FRAMES_PER_TICK = 3;
+    /**
+     * New textures the grid may ask for per game tick: first frames, animation frames. While few downloads are
+     * running and every card in view has asked for its first frame, the grid asks for more, so animations start
+     * at once on a fast connection and a slow PC still gets them a few at a time.
+     */
+    private static final int FIRSTS_PER_TICK = 12, FRAMES_PER_TICK = 3, FIRSTS_IDLE = 24, FRAMES_IDLE = 24;
+    /** "Idle": fewer downloads than this still running. */
+    private static final int IDLE_IN_FLIGHT = 16;
     /** Ticks after a scroll before the grid fetches animation frames again. */
     private static final int STILL_TICKS = 8;
     private static final float SMALL = 0.75f;
@@ -222,6 +230,12 @@ public class StudioScreen extends Screen {
     /** What the skins grid cost last frame (heads drawn, texture checks) and every texture it asked for. */
     private int gridItems, gridChecks;
     private final Set<String> asked = new HashSet<>();
+    /** Skins whose every frame was asked for, so the prefetch skips them; animated cards seen moving (tests). */
+    private final Set<String> prefetched = new HashSet<>(), moving = new HashSet<>();
+    /** Visible animated cards last frame, and the most textures asked for in one tick since the studio opened. */
+    private int gridAnimated, askedThisTick, mostPerTick;
+    /** Textures the grid in view may ask for: every frame of its cards, the next rows' first frames (tests). */
+    private int gridWanted;
 
     private EditBox texBox;
     private NameBox nameBox;
@@ -259,8 +273,23 @@ public class StudioScreen extends Screen {
     private UnaryOperator<Looks.Look> pendingGlint;
     private long pendingGlintAt;
 
+    // Saved, Other Mods
+    private SavedTab savedTab;
+    private OtherModsTab otherTab;
+    /** Bumped whenever the item list is built again: Saved's Edit links ask it. */
+    private int rowsVersion;
+    /** The last removal, undone by the footer's Undo while it shows. */
+    private Runnable undo;
+    private long undoAt = Long.MIN_VALUE;
+    private Button undoButton;
+    private static final long UNDO_MS = 8000;
+
     // Right
     private final TooltipPanel tooltip = new TooltipPanel();
+    /** Other mods' changes on the picked item, as chips over the summary; what they were built from. */
+    private final List<OtherChip> chips = new ArrayList<>();
+    private List<OtherLooks.Change> chipsFor = List.of();
+    private int chipRows;
     /** The custom name in the summary, clipped once per name and width rather than every frame. */
     private String summaryNameRaw;
     private int summaryNameWidth;
@@ -277,6 +306,8 @@ public class StudioScreen extends Screen {
     private long budgetTick = -1, scrolledAt = -100;
     private int firstBudget, frameBudget;
     private int listTop, listBottom;
+    /** Where Other Mods' one-line note is drawn. */
+    private int otherNoteY;
 
     /**
      * @param parent screen to return to (a menu stays open underneath)
@@ -321,6 +352,7 @@ public class StudioScreen extends Screen {
     /** Picked, Wearing, Pet, Held, Inventory, then stored items by category - each item once. */
     private void buildRows() {
         builtFor = OwnedItems.version();
+        rowsVersion++;
         rows.clear();
         Set<String> shown = new HashSet<>();
         String q = itemQuery.toLowerCase(Locale.ROOT).trim();
@@ -577,11 +609,256 @@ public class StudioScreen extends Screen {
         }
         widgetsFor = ident();
         widgetsName = widgetsFor == null ? null : Cosmetics.originalName(target()).getString();
+        if (savedTab == null) {
+            savedTab = new SavedTab(font, new SavedHost());
+            otherTab = new OtherModsTab(font, new OtherHost());
+        }
+        if (tab == Tab.OTHER && !OtherLooks.present()) tab = Tab.SAVED;
+        chips.clear();
+        chipRows = 0;
+        chipsFor = changesFor(widgetsFor);
+        chipsVersion = OtherLooks.version();
 
         initLeft();
         initMiddle();
         initPreview();
+        int uw = font.width("Undo") + 10;
+        undoButton = addRenderableWidget(Button.builder(Component.literal("Undo"), b -> runUndo())
+            .bounds(midX + midW - uw, height - PAD - 11, uw, 11).build());
+        undoButton.visible = undoShown();
         refilter();
+    }
+
+    // ------------------------------------------------------- other mods ---
+
+    private int chipsVersion;
+
+    /** Other mods' changes on this item: on it by UUID, then on every item of its type. */
+    private static List<OtherLooks.Change> changesFor(Cosmetics.Ident id) {
+        if (id == null || !OtherLooks.present()) return List.of();
+        List<OtherLooks.Change> own = id.uuid() != null ? OtherLooks.of(id.uuid()) : List.of();
+        List<OtherLooks.Change> type = OtherLooks.of("id:" + id.type());
+        if (type.isEmpty()) return own;
+        List<OtherLooks.Change> all = new ArrayList<>(own);
+        all.addAll(type);
+        return all;
+    }
+
+    /** Same changes as shown: compared by mod, item, kind and value. */
+    private static boolean sameChanges(List<OtherLooks.Change> a, List<OtherLooks.Change> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            OtherLooks.Change x = a.get(i), y = b.get(i);
+            if (x.source() != y.source() || !x.item().equals(y.item()) || x.kind() != y.kind() || !x.value().equals(y.value())
+                || x.live() != y.live()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The chips for {@link #chipsFor}, left to right from {@code x} in rows {@code w} wide that end at {@code bottom},
+     * at most two rows (then a "+N" button opens Other Mods); returns how many rows they take.
+     */
+    private int layChips(int x, int w, int bottom) {
+        if (chipsFor.isEmpty()) return 0;
+        int step = OtherChip.HEIGHT + 2;
+        List<List<OtherLooks.Change>> lines = new ArrayList<>();
+        List<OtherLooks.Change> line = new ArrayList<>();
+        int used = 0, shown = 0;
+        for (OtherLooks.Change c : chipsFor) {
+            int cw = Math.min(OtherChip.width(font, c), w);
+            if (!line.isEmpty() && used + 2 + cw > w) {
+                lines.add(line);
+                line = new ArrayList<>();
+                used = 0;
+                if (lines.size() == 2) break;
+            }
+            used += (line.isEmpty() ? 0 : 2) + cw;
+            line.add(c);
+            shown++;
+        }
+        if (!line.isEmpty() && lines.size() < 2) lines.add(line);
+        int hidden = chipsFor.size() - shown;
+        int top = bottom - lines.size() * step;
+        for (int r = 0; r < lines.size(); r++) {
+            int cx = x;
+            List<OtherLooks.Change> row = lines.get(r);
+            boolean lastRow = r == lines.size() - 1;
+            int moreW = hidden > 0 && lastRow ? font.width("+" + (hidden + row.size())) + 8 : 0;
+            for (int i = 0; i < row.size(); i++) {
+                OtherLooks.Change c = row.get(i);
+                int room = w - (cx - x) - (moreW > 0 ? moreW + 2 : 0);
+                int cw = Math.min(OtherChip.width(font, c), room);
+                if (cw < 30) {
+                    hidden++;
+                    continue;
+                }
+                OtherChip chip = addRenderableWidget(new OtherChip(font, cx, top + r * step, c, this::removeOther, this::moveOther));
+                chip.setWidth(cw);
+                chips.add(chip);
+                cx += cw + 2;
+            }
+            if (hidden > 0 && lastRow) {
+                String more = "+" + hidden;
+                Button b = addRenderableWidget(Button.builder(Component.literal(more), btn -> switchTab(Tab.OTHER))
+                    .bounds(cx, top + r * step, font.width(more) + 8, OtherChip.HEIGHT).build());
+                b.setTooltip(Tooltip.create(Component.translatable("skycosmetics.chip.more")));
+            }
+        }
+        return lines.size();
+    }
+
+    private void removeOther(OtherLooks.Change c) {
+        if (OtherLooks.remove(c)) {
+            offerUndo(Component.translatable("skycosmetics.other.removedHere", c.source().name(),
+                c.kind().label().getString().toLowerCase(Locale.ROOT)).getString(), () -> OtherLooks.restore(c));
+        } else {
+            flash(Component.translatable("skycosmetics.other.kept", c.source().name()).getString(), 0xFFFF6666);
+        }
+        rebuildWidgets();
+    }
+
+    private void moveOther(OtherLooks.Change c) {
+        flushPending();
+        Cosmetics.Ident id = widgetsFor;
+        Looks.Look before = OtherLooks.take(c, id != null ? id.type() : null, widgetsName);
+        if (before == null) {
+            flash(Component.translatable("skycosmetics.other.kept", c.source().name()).getString(), 0xFFFF6666);
+            return;
+        }
+        boolean type = c.uuid() == null;
+        String key = type ? c.type() : c.uuid();
+        String itemType = id != null ? id.type() : null;
+        offerUndo(Component.translatable("skycosmetics.other.movedHere", c.kind().label().getString().toLowerCase(Locale.ROOT))
+            .getString(), () -> {
+                Looks.Look back = before.empty() ? null : before;
+                if (type) Looks.put(true, key, back);
+                else Looks.putItem(key, itemType, back);
+                OtherLooks.restore(c);
+            });
+        rebuildWidgets();
+    }
+
+    // -------------------------------------------------------------- undo ---
+
+    /** Says what was removed, and keeps how to put it back for the footer's Undo. */
+    private void offerUndo(String message, Runnable put) {
+        flash(message, 0xFFFFAA66);
+        undo = put;
+        undoAt = Util.getMillis();
+        if (undoButton != null) undoButton.visible = true;
+    }
+
+    private boolean undoShown() {
+        return undo != null && Util.getMillis() - undoAt < UNDO_MS;
+    }
+
+    private void runUndo() {
+        Runnable u = undo;
+        undo = null;
+        if (u == null) return;
+        try {
+            u.run();
+            flash(Component.translatable("skycosmetics.studio.undone").getString(), 0xFF66DD88);
+        } catch (RuntimeException e) {
+            io.github.terabold.skycosmetics.Io.failed("Undoing a removal", e);
+        }
+        rebuildWidgets();
+    }
+
+    /** Saved asks the studio for textures, the footer and the item list. */
+    private final class SavedHost implements SavedTab.Host {
+        @Override
+        public int readyFrame(SkinEntry e, long tick) {
+            return StudioScreen.this.readyFrame(e, tick, true);
+        }
+
+        @Override
+        public void removed(String message, Runnable undo) {
+            offerUndo(message, undo);
+        }
+
+        @Override
+        public boolean canEdit(boolean type, String key) {
+            return rowFor(type, key) != null;
+        }
+
+        @Override
+        public void edit(boolean type, String key) {
+            editLook(type, key);
+        }
+
+        @Override
+        public String query() {
+            return listQuery();
+        }
+
+        @Override
+        public int editVersion() {
+            return rowsVersion;
+        }
+    }
+
+    private final class OtherHost implements OtherModsTab.Host {
+        @Override
+        public void removed(String message, Runnable undo) {
+            offerUndo(message, undo);
+        }
+
+        @Override
+        public void failed(String message) {
+            flash(message, 0xFFFF6666);
+        }
+
+        @Override
+        public String query() {
+            return listQuery();
+        }
+    }
+
+    /** The search on Saved and Other Mods, as the lists match it. */
+    private String listQuery() {
+        return query.toLowerCase(Locale.ROOT).trim();
+    }
+
+    /** The row of My Items a saved look is for: its item, or (type) any item of that type; null if none is listed. */
+    private Row rowFor(boolean type, String key) {
+        for (Row r : rows) {
+            if (r.isHeader()) continue;
+            if (!type) {
+                if (r.key().equals("uuid:" + key)) return r;
+                continue;
+            }
+            ItemStack s = r.stack().get();
+            Cosmetics.Ident id = s.isEmpty() ? null : Cosmetics.identify(s);
+            if (id != null && key.equals(id.type())) return r;
+        }
+        return null;
+    }
+
+    /** Saved's "Edit": picks the look's item in My Items, on the tab that fits it, at the look's scope. */
+    private void editLook(boolean type, String key) {
+        Row r = rowFor(type, key);
+        if (r == null && !itemQuery.isEmpty()) { // the list's search hides it
+            itemQuery = "";
+            buildRows();
+            r = rowFor(type, key);
+        }
+        if (r == null) return;
+        flushPending();
+        selected = r;
+        selectedKey = keyOf(r);
+        popup = null;
+        identStack = null;
+        styleScroll = 0;
+        resetScope();
+        if (type && ident() != null && ident().uuid() != null) byType = true;
+        tab = Tab.SKINS; // so the item picks its tab
+        query = "";
+        scroll = 0;
+        pickTabFor(target());
+        tooltip.resetScroll();
+        rebuildWidgets();
     }
 
     private void initLeft() {
@@ -616,6 +893,10 @@ public class StudioScreen extends Screen {
         // Short narrow windows: only the item's icon beside the scope switch; its tooltip has the summary.
         listBottom = height - PAD - (!compact ? 4 : slim ? 48 : 98);
         if (compact) actionButtons(x, height - PAD - 44, w, slim ? 24 : 0);
+        if (compact && !slim) {
+            chipRows = layChips(PAD + 6, leftW - 12, listBottom);
+            listBottom -= chipRows * (OtherChip.HEIGHT + 2) + (chipRows > 0 ? 2 : 0);
+        }
     }
 
     /** Scope switch (after {@code indent}) above Reset / Done, in the preview column (or the left one when compact). */
@@ -636,7 +917,14 @@ public class StudioScreen extends Screen {
     }
 
     private void initPreview() {
-        if (prevW > 0) actionButtons(prevX + 4, height - PAD - 48, prevW - 8, 0);
+        if (prevW <= 0) return;
+        actionButtons(prevX + 4, height - PAD - 48, prevW - 8, 0);
+        chipRows = layChips(prevX + 6, prevW - 12, summaryTop() - 3);
+    }
+
+    /** Bottom of the preview's tooltip and model: the summary, and the chips over it, sit under it. */
+    private int previewBottom() {
+        return summaryTop() - (chipRows > 0 ? chipRows * (OtherChip.HEIGHT + 2) + 3 : 0);
     }
 
     private void initMiddle() {
@@ -649,7 +937,7 @@ public class StudioScreen extends Screen {
         texBox = null;
         if (popup != null && !popupOwnerKey().equals(popupOwner)) popup = null; // no stale editor keeps input
         int y = PAD;
-        Tab[] tabs = Tab.values();
+        Tab[] tabs = OtherLooks.present() ? Tab.values() : Arrays.copyOf(Tab.values(), Tab.values().length - 1);
         int tw = Math.min(96, (midW - (tabs.length - 1) * 2) / tabs.length);
         for (int i = 0; i < tabs.length; i++) {
             Tab t = tabs[i];
@@ -699,7 +987,11 @@ public class StudioScreen extends Screen {
                 y = end;
                 scrollStyle(first, y);
             }
-            default -> { }
+            case SAVED -> y = search(y, "Search saved looks...  e.g. necron, aurora", Math.min(midW, SEARCH_W));
+            case OTHER -> {
+                otherNoteY = y;
+                y = search(y + 12, "Search...  e.g. skyblocker, dye, necron", Math.min(midW, SEARCH_W));
+            }
         }
         gridY = y;
         gridH = height - PAD - 14 - gridY;
@@ -722,6 +1014,10 @@ public class StudioScreen extends Screen {
         search.setResponder(v -> {
             query = v;
             scroll = 0;
+            if (savedTab != null) {
+                savedTab.resetScroll();
+                otherTab.resetScroll();
+            }
             refilter();
         });
         addRenderableWidget(search);
@@ -1241,6 +1537,10 @@ public class StudioScreen extends Screen {
         flushPending();
         tab = t;
         scroll = 0;
+        if (savedTab != null) {
+            savedTab.resetScroll();
+            otherTab.resetScroll();
+        }
         styleScroll = 0;
         query = ""; // a "knight" search means nothing on the Dyes tab
         rebuildWidgets();
@@ -1374,7 +1674,7 @@ public class StudioScreen extends Screen {
         if (tooSmall) return;
         panel(g, PAD, PAD, leftW, height - PAD * 2);
         if (prevW > 0) panel(g, prevX, PAD, prevW, height - PAD * 2);
-        if (tab == Tab.SKINS && skinFilter != SkinFilter.PASTE || tab == Tab.DYES || tab == Tab.SAVED) {
+        if (tab == Tab.SKINS && skinFilter != SkinFilter.PASTE || tab == Tab.DYES || tab == Tab.SAVED || tab == Tab.OTHER) {
             panel(g, midX - 2, gridY - 2, midW + 4, gridH + 4);
         }
     }
@@ -1400,6 +1700,14 @@ public class StudioScreen extends Screen {
             buildRows(); // finds the picked item again if it only moved
             if (!Objects.equals(ident(), widgetsFor)) pickedChanged();
         }
+        if (OtherLooks.present()) {
+            OtherLooks.refresh(false); // cheap: one stamp per mod, at most twice a second
+            if (OtherLooks.version() != chipsVersion) {
+                chipsVersion = OtherLooks.version();
+                if (!sameChanges(changesFor(widgetsFor), chipsFor)) rebuildWidgets();
+            }
+        }
+        if (undoButton != null) undoButton.visible = undoShown();
         if (pendingDye != null && Util.getMillis() - pendingAt > 150) {
             setDye(pendingDye);
             pendingDye = null;
@@ -1419,8 +1727,11 @@ public class StudioScreen extends Screen {
         long tick = Util.getMillis() / 50;
         if (tick != budgetTick) {
             budgetTick = tick;
-            firstBudget = FIRSTS_PER_TICK;
-            frameBudget = FRAMES_PER_TICK;
+            // Few downloads running: the grid may ask for more this tick (see drawSkins).
+            boolean idle = Textures.inFlight() < IDLE_IN_FLIGHT;
+            firstBudget = idle ? FIRSTS_IDLE : FIRSTS_PER_TICK;
+            frameBudget = idle && firstsDone ? FRAMES_IDLE : FRAMES_PER_TICK;
+            askedThisTick = 0;
         }
         summaryShown = false;
         modelScale = petSize = 0;
@@ -1435,6 +1746,7 @@ public class StudioScreen extends Screen {
             case DYES -> drawDyes(g, mx, my, tick);
             case STYLE -> drawStyle(g, mx, my);
             case SAVED -> drawSaved(g, mx, my, tick);
+            case OTHER -> drawOther(g, mx, my, tick);
             default -> {
                 if (skinFilter == SkinFilter.PASTE) drawPaste(g);
                 else drawSkins(g, mx, my, tick);
@@ -1447,14 +1759,20 @@ public class StudioScreen extends Screen {
         else foot = switch (tab) {
             case DYES -> Names.count(dyeResults.size(), "dye") + dyeNote();
             case SKINS -> skinFilter == SkinFilter.PASTE ? "" : Names.count(skinResults.size(), "skin");
+            case SAVED -> Names.count(savedTab.shown(), "look");
+            case OTHER -> {
+                int[] n = otherTab.shown();
+                yield Names.count(n[1], "change") + " · " + Names.count(n[0], "item");
+            }
             default -> "";
         };
         // One footer line: a fresh message, else the count. A clipped message shows whole on hover.
-        boolean fresh = !status.isEmpty() && Util.getMillis() - statusAt < 4000;
+        boolean fresh = !status.isEmpty() && Util.getMillis() - statusAt < (undoShown() ? UNDO_MS : 4000);
         int fy = height - PAD - 9;
-        footShown = clip(fresh ? status : foot, midW);
+        int footW = midW - (undoButton != null && undoButton.visible ? undoButton.getWidth() + 4 : 0);
+        footShown = clip(fresh ? status : foot, footW);
         g.text(font, footShown, midX, fy, fresh ? statusColor : MUTED);
-        if (fresh && font.width(status) > midW && mx >= midX && mx < midX + midW && my >= fy - 1 && my < fy + 9) {
+        if (fresh && font.width(status) > footW && mx >= midX && mx < midX + footW && my >= fy - 1 && my < fy + 9) {
             g.setTooltipForNextFrame(font, Component.literal(status), mx, my);
         }
         if (itemsInfo != null && itemsInfo.isHovered()) g.setComponentTooltipForNextFrame(font, Settings.storedItems ? ITEMS_HELP : ITEMS_HELP_STORED_OFF, mx, my);
@@ -1558,10 +1876,10 @@ public class StudioScreen extends Screen {
             g.textWithWordWrap(font, Component.literal("Pick an item on the left"), x, PAD + 8, w, MUTED);
             return;
         }
-        int top = PAD + 6, summaryTop = summaryTop();
-        int room = summaryTop - 6 - top;
+        int top = PAD + 6, summaryTop = summaryTop(), bottom = previewBottom();
+        int room = bottom - 6 - top;
         int used = tooltip.render(g, font, target(), x, top, w, room - Math.max(64, room * 2 / 7));
-        int modelTop = top + used + 4, modelBottom = summaryTop - 6;
+        int modelTop = top + used + 4, modelBottom = bottom - 6;
         if (minecraft.player != null && modelBottom - modelTop >= 30) drawModel(g, modelTop, modelBottom, w, modelX, modelY);
         drawSummary(g, x, summaryTop, x + w, mouseX, mouseY, tick);
     }
@@ -1609,7 +1927,7 @@ public class StudioScreen extends Screen {
             bigItem(g, target(), PAD + 4, height - PAD - 44, 20, mouseX, mouseY, () -> summaryLines(tick));
             return;
         }
-        int x = PAD + 6, y = listBottom + 4;
+        int x = PAD + 6, y = height - PAD - 94; // under the list (and the chips)
         bigItem(g, target(), x, y, 24, mouseX, mouseY, null);
         drawSummary(g, x + 28, y, PAD + leftW - 6, mouseX, mouseY, tick);
     }
@@ -2022,48 +2340,34 @@ public class StudioScreen extends Screen {
         }
     }
 
-    private List<Map.Entry<String, Looks.Look>> savedRows() {
-        List<Map.Entry<String, Looks.Look>> out = new ArrayList<>();
-        for (var e : Looks.uuidLooks().entrySet()) out.add(Map.entry("I" + e.getKey(), e.getValue()));
-        for (var e : Looks.typeLooks().entrySet()) out.add(Map.entry("T" + e.getKey(), e.getValue()));
-        return out;
+    /** Saved: every look in sections, each row opening to its changes (see {@link SavedTab}). */
+    private void drawSaved(GuiGraphicsExtractor g, int mouseX, int mouseY, long tick) {
+        boolean any = savedTab.render(g, midX, gridY, midW, gridH, mouseX, mouseY, tick);
+        if (any) return;
+        boolean none = Looks.uuidLooks().isEmpty() && Looks.typeLooks().isEmpty();
+        g.centeredText(font, none ? "Nothing saved yet" : "Nothing matches \"" + query + "\"", midX + midW / 2, gridY + 20, MUTED);
+        if (none) {
+            g.textWithWordWrap(font, Component.translatable("skycosmetics.saved.emptyHelp"), midX + 12, gridY + 34,
+                midW - 24, 0xFF6A6A78);
+        }
     }
 
-    private void drawSaved(GuiGraphicsExtractor g, int mouseX, int mouseY, long tick) {
-        List<Map.Entry<String, Looks.Look>> saved = savedRows();
-        int visible = gridH / SAVED_H;
-        scroll = Math.max(0, Math.min(scroll, Math.max(0, saved.size() - visible)));
-        if (saved.isEmpty()) {
-            g.centeredText(font, "Nothing changed yet", midX + midW / 2, gridY + 20, MUTED);
-            return;
+    /** Other Mods: what other mods change on your items, with their mod's chip (see {@link OtherModsTab}). */
+    private void drawOther(GuiGraphicsExtractor g, int mouseX, int mouseY, long tick) {
+        List<String> names = new ArrayList<>();
+        for (OtherLooks.Source src : OtherLooks.sources()) names.add(src.name());
+        Component note = Component.translatable("skycosmetics.other.about", String.join(", ", names));
+        String text = note.getString();
+        g.text(font, clip(text, midW), midX, otherNoteY + 1, MUTED);
+        if (mouseX >= midX && mouseX < midX + midW && mouseY >= otherNoteY && mouseY < otherNoteY + 10) {
+            g.setComponentTooltipForNextFrame(font, List.of(Component.literal(text),
+                Component.translatable("skycosmetics.other.aboutHelp").withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
         }
-        Catalog c = Repo.get();
-        g.enableScissor(midX, gridY, midX + midW, gridY + gridH);
-        for (int i = scroll; i < Math.min(saved.size(), scroll + visible + 1); i++) {
-            var r = saved.get(i);
-            Looks.Look l = r.getValue();
-            int y = gridY + (i - scroll) * SAVED_H;
-            boolean type = r.getKey().charAt(0) == 'T';
-            String label = l.label() != null ? l.label() : r.getKey().substring(1);
-            SkinEntry s = c.skin(l.skin());
-            DyeEntry d = c.dye(l.dye());
-            int frame = s != null ? readyFrame(s, tick, true) : -1;
-            if (frame >= 0) g.item(s.icon(frame), midX + 2, y + 3);
-            else if (s == null && d != null) g.fill(midX + 4, y + 5, midX + 16, y + 17, 0xFF000000 | d.rgbAt(tick, 0));
-            g.text(font, clip(label, midW - 90), midX + 24, y + 3, TEXT);
-            List<String> parts = new ArrayList<>();
-            parts.add(type ? "Every item of this type" : "This Item Only");
-            if (l.skin() != null) parts.add(s != null ? s.name : "?");
-            if (l.dye() != null) parts.add(d != null ? d.name : "custom dye");
-            if (l.name() != null) parts.add("renamed");
-            if (l.glint() != null) parts.add("glint " + l.glint());
-            g.text(font, clip(String.join("  ·  ", parts), midW - 90), midX + 24, y + 13, MUTED);
-            int bx = midX + midW - 52;
-            boolean hover = mouseX >= bx && mouseX < bx + 48 && mouseY >= y + 4 && mouseY < y + 18;
-            g.fill(bx, y + 4, bx + 48, y + 18, hover ? 0xFF803040 : 0xFF3A2228);
-            g.centeredText(font, "Remove", bx + 24, y + 7, 0xFFFFD0D0);
-        }
-        g.disableScissor();
+        boolean any = otherTab.render(g, midX, gridY, midW, gridH, mouseX, mouseY, tick);
+        if (any) return;
+        boolean none = OtherLooks.all().isEmpty();
+        g.centeredText(font, none ? Component.translatable("skycosmetics.other.none").getString()
+            : "Nothing matches \"" + query + "\"", midX + midW / 2, gridY + 20, MUTED);
     }
 
     private boolean inCard(int mx, int my, int cx, int cy) {
@@ -2101,19 +2405,8 @@ public class StudioScreen extends Screen {
         if (clickSummary(mx, my)) return true;
         if (mx >= midX + midW || my < gridY || my >= gridY + gridH) return false;
 
-        if (tab == Tab.SAVED) {
-            List<Map.Entry<String, Looks.Look>> saved = savedRows();
-            int i = scroll + (int) ((my - gridY) / SAVED_H);
-            int bx = midX + midW - 52;
-            int rowY = gridY + (i - scroll) * SAVED_H;
-            if (i < saved.size() && mx >= bx && mx < bx + 48 && my >= rowY + 4 && my < rowY + 18) {
-                String k = saved.get(i).getKey();
-                Looks.put(k.charAt(0) == 'T', k.substring(1), null);
-                flash("Removed", 0xFFFFAA66);
-                return true;
-            }
-            return false;
-        }
+        if (tab == Tab.SAVED) return savedTab.click(mx, my, event.button());
+        if (tab == Tab.OTHER) return otherTab.click(mx, my, event.button());
         if (ident() == null) return false;
         boolean grid = tab == Tab.SKINS && skinFilter != SkinFilter.PASTE || tab == Tab.DYES;
         if (!grid) return false;
@@ -2246,6 +2539,8 @@ public class StudioScreen extends Screen {
             placeStyle();
             return true;
         }
+        if (tab == Tab.SAVED && savedTab.scrolled(mx, my, dy, minecraft.hasShiftDown())) return true;
+        if (tab == Tab.OTHER && otherTab.scrolled(mx, my, dy, minecraft.hasShiftDown())) return true;
         int step = minecraft.hasShiftDown() ? 5 : 1;
         if (mx >= midX && mx < midX + midW && my >= gridY && my < gridY + gridH) {
             scroll = Math.max(0, scroll - (int) Math.signum(dy) * step);
