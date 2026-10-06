@@ -2,6 +2,22 @@
 
 SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions use its old command, `/skinstudio`.
 
+## Unreleased
+
+### Settings
+- **One themed window.** The settings are drawn entirely in SkyCosmetics' style: a rounded window with the logo and
+  version, a sidebar of sections (icon, name, a gray line) with a gliding accent bar, and a pane that scrolls smoothly
+  with a slim scrollbar. No vanilla buttons, crisp at every GUI scale; a narrow window shows the sidebar as icons.
+- **Custom controls:** switches that slide, sliders with their value, side-by-side choices or a drop-down list, key
+  boxes ("> Press a key <"), action buttons, and color swatches that open a color picker (with an opacity bar for
+  colors that have one). The studio's section opens with a big **Open Studio** card.
+- **Search every section.** Start typing anywhere, or press Ctrl+F. Every word must match; matches are highlighted,
+  counted per section in the sidebar and grouped by section, and Enter (or a click on a group) jumps to the setting,
+  which glows for a moment.
+- Keyboard: Esc clears the search, then closes; Tab moves between controls; the arrows step sliders and choices;
+  Page Up, Page Down, Home and End scroll.
+- A setting that fails to load shows a gray line instead of closing the settings.
+
 ## 1.4.0-beta — unreleased
 
 ### Renamed: Skin Studio is now SkyCosmetics

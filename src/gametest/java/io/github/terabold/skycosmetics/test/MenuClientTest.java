@@ -21,9 +21,12 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -43,12 +46,13 @@ import java.util.Locale;
  * scale 1 to 4 at 1920x1080 and in a small window.
  */
 public class MenuClientTest implements FabricClientGameTest {
-    private static final String CONTROLS = "test-controls", LONG = "test-long";
+    private static final String CONTROLS = "test-controls", LONG = "test-long", BROKEN = "test-broken",
+        BROKEN_SECTION = "test-broken-section";
     private static final List<String> EDGES = List.of("Soft", "Sharp", "Off");
     private static final List<String> PLACES = List.of("Hub", "Dungeon Hub", "Crimson Isle", "The End", "Dwarven Mines",
         "Crystal Hollows", "The Park", "Spider's Den", "Gold Mine", "Deep Caverns");
     private static final List<String> ADDED = new ArrayList<>();
-    private static boolean sparkles = true, trail = true, filler;
+    private static boolean sparkles = true, trail = true, filler, boom;
     private static double size = 1;
     private static String edge = "Soft", place = "Hub";
     private static int tint = 0xFF3080FF, glass = 0x80FF4060, pressed;
@@ -64,6 +68,7 @@ public class MenuClientTest implements FabricClientGameTest {
                 scales(ctx);
                 controls(ctx);
                 search(ctx);
+                broken(ctx);
                 manySections(ctx);
                 fromStudio(ctx, sp);
             } finally {
@@ -87,6 +92,13 @@ public class MenuClientTest implements FabricClientGameTest {
             s -> controlRows()));
         add(new Section(LONG, Section.FEATURE, Component.literal("Test Long List"), Component.literal("Sixty rows"),
             Component.literal("A section with many rows, to scroll."), () -> new ItemStack(Items.BOOK), s -> longRows()));
+        add(new Section(BROKEN, Section.FEATURE, Component.literal("Test Broken Rows"), Component.literal("Throw on purpose"),
+            Component.literal("Rows whose feature code throws."), () -> new ItemStack(Items.TNT), s -> brokenRows()));
+        add(new Section(BROKEN_SECTION, Section.FEATURE, Component.literal("Test Broken Section"),
+            Component.literal("Can't build"), Component.literal("A section whose rows throw."), () -> new ItemStack(Items.BARRIER),
+            s -> {
+                throw new IllegalStateException("test: a section that can't build its rows");
+            }));
         for (int i = 1; i <= 12; i++) {
             String n = String.format(Locale.ROOT, "%02d", i);
             add(new Section("test-more-" + n, Section.FEATURE, Component.literal("Test Section " + n),
@@ -128,6 +140,38 @@ public class MenuClientTest implements FabricClientGameTest {
         rows.add(Option.of("never", Component.literal("Never Ready"), Component.literal("Grayed out, with a tooltip saying why."),
             new Control.Action(Component.literal("Do It"), () -> pressed += 100, () -> false, Component.literal("Not ready yet"))));
         return rows;
+    }
+
+    private static List<Option> brokenRows() {
+        return List.of(
+            Option.of("throwsOnDraw", Component.literal("Throws When Drawn"), Component.literal("Its value can't be read."),
+                new Control.Toggle(() -> {
+                    if (boom) throw new IllegalStateException("test: a switch whose value can't be read");
+                    return true;
+                }, v -> {})),
+            Option.of("throwsOnClick", Component.literal("Throws When Clicked"), Component.literal("A feature's own widget."),
+                new Control.Custom((host, width) -> new Boom(width))),
+            toggle("stillWorks", "Still Works", "The rows around a broken one keep working."));
+    }
+
+    /** A feature's own widget that throws when clicked. */
+    private static final class Boom extends AbstractWidget {
+        Boom(int width) {
+            super(0, 0, Math.min(width, 60), 16, Component.literal("Boom"));
+        }
+
+        @Override
+        protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+            g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF803040);
+        }
+
+        @Override
+        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+            throw new IllegalStateException("test: a widget that throws when clicked");
+        }
+
+        @Override
+        protected void updateWidgetNarration(NarrationElementOutput out) {}
     }
 
     private static List<Option> longRows() {
@@ -350,13 +394,35 @@ public class MenuClientTest implements FabricClientGameTest {
         System.out.println("[SkyCosmeticsTest] menu search checks passed");
     }
 
-    /** Fifteen sections in a small window: the sidebar scrolls and its last tab opens; a long list scrolls to its end. */
+    /** Feature code that throws, while drawing, on a click or while building a section, never closes the settings. */
+    private static void broken(ClientGameTestContext ctx) {
+        open(ctx, BROKEN);
+        ctx.runOnClient(mc -> boom = true);
+        try {
+            ctx.waitTicks(2);
+            check(ctx.computeOnClient(mc -> !screen(mc).widget("throwsOnDraw").visible), "a row that throws while drawn is switched off");
+            click(ctx, "throwsOnClick");
+            check(ctx.computeOnClient(mc -> !screen(mc).widget("throwsOnClick").visible), "a widget that throws when clicked is switched off");
+            boolean was = filler;
+            click(ctx, "stillWorks");
+            check(filler != was, "the rows around them still work");
+            ctx.takeScreenshot("skycosmetics-42-menu-broken-rows");
+        } finally {
+            ctx.runOnClient(mc -> boom = false);
+        }
+        open(ctx, BROKEN_SECTION);
+        check(ctx.computeOnClient(mc -> screen(mc).rowIds().equals(List.of("!"))), "a section that can't build shows one message");
+        ctx.setScreen(() -> null);
+        System.out.println("[SkyCosmeticsTest] menu broken feature checks passed");
+    }
+
+    /** Seventeen sections in a small window: the sidebar scrolls and its last tab opens; a long list scrolls to its end. */
     private static void manySections(ClientGameTestContext ctx) {
         ctx.getInput().resizeWindow(854, 480);
         setScale(ctx, 2);
         open(ctx, CONTROLS);
-        check(ctx.computeOnClient(mc -> screen(mc).tabs().size() >= 15 && screen(mc).sideMax() > 0),
-            "fifteen sections overflow the sidebar");
+        check(ctx.computeOnClient(mc -> screen(mc).tabs().size() >= 17 && screen(mc).sideMax() > 0),
+            "seventeen sections overflow the sidebar");
         ctx.takeScreenshot("skycosmetics-39-menu-many-sections");
         int[] side = ctx.computeOnClient(mc -> {
             int[] w = screen(mc).window(), pane = screen(mc).pane();

@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /**
  * The settings: one window in the studio's colors. A header (logo, name, version, search, close), a sidebar of
@@ -108,7 +110,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private double scrollBeforeSearch;
     private int results;
     private FormattedCharSequence headTitle = FormattedCharSequence.EMPTY, logoTitle = FormattedCharSequence.EMPTY;
-    private String headHelp = "", version = "", goTo = "";
+    private String headHelp = "", version = "", goTo = "", brokenRow = "";
     private Component headHelpFull = Component.empty();
     /** The pane header's help line was cut: hovering it shows the whole line. */
     private boolean headClipped;
@@ -184,6 +186,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("");
         logoTitle = Component.translatable("skycosmetics.name").withStyle(ChatFormatting.BOLD).getVisualOrderText();
         goTo = Component.translatable("skycosmetics.menu.search.goTo").getString();
+        brokenRow = Component.translatable("skycosmetics.menu.brokenRow").getString();
 
         int searchW = Math.clamp(ww * 34 / 100, 96, 210);
         close = new CloseButton(Component.translatable("skycosmetics.menu.close"),
@@ -619,11 +622,31 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         else o.fit(cx, bodyY, cw, wy + wh - bodyY);
     }
 
+    /** Gives the open overlay an event; one that throws is reported and dropped, a closed one is let go. */
+    private void onOverlay(Consumer<Overlay> event) {
+        try {
+            event.accept(overlay);
+        } catch (RuntimeException e) {
+            overlayFailed(e);
+            return;
+        }
+        if (overlay != null && overlay.isClosed()) overlay = null;
+    }
+
+    private void overlayFailed(RuntimeException e) {
+        Io.failed("Using a settings pop-up", e);
+        overlay = null;
+    }
+
     private void closeOverlay() {
         if (overlay == null) return;
         Overlay o = overlay;
         overlay = null;
-        o.close(); // applies a half-typed hex value; its close saves
+        try {
+            o.close(); // applies a half-typed hex value; its close saves
+        } catch (RuntimeException e) {
+            Io.failed("Closing a settings pop-up", e);
+        }
     }
 
     private void clickTab(Section s) {
@@ -730,7 +753,13 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         sidebar(g, mx, my, delta);
         content(g, mx, my, delta);
         g.pose().popMatrix();
-        if (overlay != null) overlay.render(g, mouseX, mouseY);
+        if (overlay != null) {
+            try {
+                overlay.render(g, mouseX, mouseY);
+            } catch (RuntimeException e) {
+                overlayFailed(e);
+            }
+        }
     }
 
     /** Moves the scrolls toward their targets by the time since the last frame. */
@@ -822,7 +851,21 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             int ry = base + r.y;
             if (r.widget != null) r.widget.setPosition(vx + r.ctrlX, ry + r.ctrlY);
             if (ry + r.h <= vy || ry >= vy + vh) continue;
-            row(g, r, ry, pmx, pmy, delta);
+            if (r.failed) {
+                // Its title, if it has one, and what went wrong under it.
+                int ty = r.title.isEmpty() ? ry + (r.h - 8) / 2 : ry + r.textY;
+                if (!r.title.isEmpty()) {
+                    g.text(font, r.title.getFirst(), vx + r.textX, ty, Theme.DIM, false);
+                    ty += 13;
+                }
+                g.text(font, brokenRow, vx + ROW_X, ty, Theme.fade(Theme.WARN, 0.75f), false);
+                continue;
+            }
+            try {
+                row(g, r, ry, pmx, pmy, delta);
+            } catch (RuntimeException e) {
+                fail(r, "Drawing the setting " + r.id(), e);
+            }
         }
         // Soft edges where more rows hide, and the fade-in after a section switch.
         if (shown > 1) g.fillGradient(cx + 1, vy, cx + cw - 1, vy + 8, Theme.BODY, Theme.BODY & 0xFFFFFF);
@@ -889,6 +932,35 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
     }
 
+    /** A row whose feature code threw: reported once, then shown as a gray line; its widget takes no input. */
+    private void fail(Row r, String what, RuntimeException e) {
+        Io.failed(what, e);
+        r.failed = true;
+        if (r.widget == null) return;
+        r.widget.visible = false;
+        r.widget.active = false;
+        if (getFocused() == r.widget) setFocused(null);
+    }
+
+    /**
+     * Feature widgets get input through this: when {@code suspect} (the widget the input goes to) throws, its row is
+     * reported and switched off, and the settings stay open.
+     */
+    private boolean safely(GuiEventListener suspect, BooleanSupplier input) {
+        try {
+            return input.getAsBoolean();
+        } catch (RuntimeException e) {
+            for (Row r : rows) {
+                if (r.widget != null && r.widget == suspect) {
+                    fail(r, "Using the setting " + r.id(), e);
+                    return true;
+                }
+            }
+            Io.failed("Using the settings", e);
+            return true;
+        }
+    }
+
     /** The glow of a row a search jumped to: accent tint and bar, fading out. */
     private void flash(GuiGraphicsExtractor g, Row r, int ry) {
         if (r != flashRow) return;
@@ -951,8 +1023,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (overlay != null) {
-            overlay.mouseClicked(event);
-            if (overlay != null && overlay.isClosed()) overlay = null;
+            onOverlay(o -> o.mouseClicked(event));
             return true;
         }
         for (KeyBindButton k : keys) if (k.handleClick(event)) return true;
@@ -965,7 +1036,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             dragBar(y);
             return true;
         }
-        if (super.mouseClicked(event, doubleClick)) return true;
+        if (safely(getChildAt(x, y).orElse(null), () -> super.mouseClicked(event, doubleClick))) return true;
         if (getFocused() == search) setFocused(null);
         Row r = event.button() == 0 ? rowAt(x, y) : null;
         if (r == null) return false;
@@ -992,20 +1063,20 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
         if (overlay != null) {
-            overlay.mouseDragged(event);
+            onOverlay(o -> o.mouseDragged(event));
             return true;
         }
         if (draggingBar) {
             dragBar(event.y());
             return true;
         }
-        return super.mouseDragged(event, dx, dy);
+        return safely(getFocused(), () -> super.mouseDragged(event, dx, dy));
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         if (overlay != null) {
-            overlay.mouseReleased(event);
+            onOverlay(o -> o.mouseReleased(event));
             super.mouseReleased(event); // ends the screen's own drag state; a release never presses a button
             return true;
         }
@@ -1013,13 +1084,13 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             draggingBar = false;
             return true;
         }
-        return super.mouseReleased(event);
+        return safely(getFocused(), () -> super.mouseReleased(event));
     }
 
     @Override
     public boolean mouseScrolled(double x, double y, double dx, double dy) {
         if (overlay != null) {
-            overlay.mouseScrolled(x, y, dy);
+            onOverlay(o -> o.mouseScrolled(x, y, dy));
             return true;
         }
         if (tooSmall) return false;
@@ -1030,7 +1101,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
         if (!inPane(x, y)) return false;
         Optional<GuiEventListener> child = getChildAt(x, y);
-        if (child.isPresent() && child.get().mouseScrolled(x, y, dx, dy)) return true;
+        if (child.isPresent() && safely(child.get(), () -> child.get().mouseScrolled(x, y, dx, dy))) return true;
         scroll = Math.clamp(scroll - dy * WHEEL, 0, maxScroll);
         return true;
     }
@@ -1050,8 +1121,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             }
         }
         if (overlay != null) {
-            overlay.keyPressed(event);
-            if (overlay != null && overlay.isClosed()) overlay = null;
+            onOverlay(o -> o.keyPressed(event));
             return true;
         }
         if (tooSmall) return super.keyPressed(event);
@@ -1075,7 +1145,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             search.setValue("");
             return true;
         }
-        if (super.keyPressed(event)) return true;
+        if (safely(getFocused(), () -> super.keyPressed(event))) return true;
         switch (key) {
             case GLFW.GLFW_KEY_PAGE_UP -> scroll = Math.max(0, scroll - vh * 0.85);
             case GLFW.GLFW_KEY_PAGE_DOWN -> scroll = Math.min(maxScroll, scroll + vh * 0.85);
@@ -1096,10 +1166,10 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             return true;
         }
         if (overlay != null) {
-            overlay.charTyped(event);
+            onOverlay(o -> o.charTyped(event));
             return true;
         }
-        if (super.charTyped(event)) return true;
+        if (safely(getFocused(), () -> super.charTyped(event))) return true;
         if (tooSmall || getFocused() == search || !Character.isLetterOrDigit(event.codepoint())) return false;
         setFocused(search);
         search.moveCursorToEnd(false);
@@ -1125,7 +1195,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         Component titleText = Component.empty(), helpText = Component.empty();
         List<FormattedCharSequence> title = List.of(), help = List.of();
         int y, h, textX, textY, textW, titleW, ctrlX, ctrlY;
-        boolean stacked, line, enabled = true;
+        boolean stacked, line, enabled = true, failed;
         final Anim hover = new Anim(110, 0);
 
         Row(Kind kind, Section section, Option option) {

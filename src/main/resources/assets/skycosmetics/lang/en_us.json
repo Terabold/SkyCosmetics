@@ -8,6 +8,7 @@
   "skycosmetics.menu.off": "Off",
   "skycosmetics.menu.default": "Default",
   "skycosmetics.menu.broken": "This section couldn't load. See the log.",
+  "skycosmetics.menu.brokenRow": "This setting couldn't load. See the log.",
   "skycosmetics.menu.tooSmall": "Make the window bigger or lower the GUI scale.",
   "skycosmetics.menu.empty": "Nothing to set here yet.",
   "skycosmetics.menu.close": "Close",
