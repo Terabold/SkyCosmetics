@@ -1,6 +1,5 @@
 package io.github.terabold.skycosmetics.gui;
 
-import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 import io.github.terabold.skycosmetics.hub.Control;
@@ -58,11 +57,6 @@ public final class StudioSection {
 
         rows.add(Option.header("groupWhereLooksShow", Component.translatable("skycosmetics.menu.group.whereLooksShow")));
         rows.add(toggle("worldReskin", () -> Settings.worldReskin, v -> Settings.worldReskin = v));
-        rows.add(toggle("typeLooksOnOthers", () -> Looks.typeLooksOnOthers, v -> {
-            Looks.typeLooksOnOthers = v;
-            Looks.bump();
-            Looks.save();
-        }));
         rows.add(toggle("namesInOtherMods", () -> Settings.namesInOtherMods, v -> Settings.namesInOtherMods = v));
         return rows;
     }

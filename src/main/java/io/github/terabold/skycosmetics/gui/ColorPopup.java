@@ -173,7 +173,7 @@ public class ColorPopup {
 
         if (editor != null) {
             int half = (w - 2 * PAD) / 2;
-            AnimatedDyeEditor.segment(g, font, "Single color", x + PAD, toggleY, half - 1, !animated, mouseX, mouseY);
+            AnimatedDyeEditor.segment(g, font, "Single Color", x + PAD, toggleY, half - 1, !animated, mouseX, mouseY);
             AnimatedDyeEditor.segment(g, font, "Animated", x + PAD + half + 1, toggleY, w - 2 * PAD - half - 1, animated,
                 mouseX, mouseY);
         }

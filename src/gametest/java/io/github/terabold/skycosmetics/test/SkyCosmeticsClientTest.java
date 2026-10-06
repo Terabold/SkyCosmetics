@@ -201,7 +201,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.clickScreenButton("Dyes");
             ctx.waitTicks(20);
             ctx.takeScreenshot("skycosmetics-08e-studio-dye-icons");
-            ctx.clickScreenButton("Custom dye...");
+            ctx.clickScreenButton("Custom Dye…");
             ctx.waitTicks(5);
             ctx.takeScreenshot("skycosmetics-08e2-studio-custom-dye");
             int[] animated = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).popup().toggleAt(true));
@@ -235,6 +235,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.setScreen(() -> null);
             StudioLayoutTest.run(ctx, sp);
             NameGlintTest.run(ctx, sp);
+            TypeLooksTest.run(ctx, sp);
 
             // Taking the look off must restore Hypixel's item instantly.
             ctx.runOnClient(mc -> Looks.put(false, "t-head", null));

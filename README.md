@@ -39,10 +39,11 @@ clicks nothing, and other players see Hypixel's items as usual.
 - Open your inventory and click the small **brush** next to your player, or hover any item in any menu and press your
   **open key** (unbound at first: set it in the settings or in Controls), or type `/skycosmetics edit`.
 - Pick an item on the left, then click a skin, dye or name on the right. It applies at once; there is nothing to save.
-- **Reset** puts Hypixel's look back. The button above it switches between "This Item Only" and "Every item of this
-  type".
-- Right-click an item in the list to remove it (for example after selling it). The **Saved** tab lists everything you
-  changed.
+- **Reset** returns the item to its original look. The button above it switches between **This Item Only** and
+  **Every \<item>**. A look for every item of a type shows only on your own items, never on items in auction, bazaar,
+  trade or shop menus.
+- Right-click an item in My Items to forget it (for example after selling it). The **Saved** tab lists everything you
+  changed, by section; click a look to remove one change at a time.
 
 | Command | What it does |
 |---|---|
@@ -58,8 +59,9 @@ with any mod, you use it under Hypixel's rules on allowed modifications.
 
 **Can other players see my looks?** No. Only you see them.
 
-**Does it work with Skyblocker, SkyOcean and Firmament?** Yes. If you also customize the same item in another mod, the
-two will fight: use one mod per item.
+**Does it work with Skyblocker, SkyOcean and Firmament?** Yes. When Skyblocker or SkyOcean also customizes an item,
+their change shows over SkyCosmetics' one: the editor marks it with a chip ("Dyed by Skyblocker"), and the **Other
+Mods** tab lists all of them, to remove in that mod's own settings or to move into SkyCosmetics.
 
 ## Install
 

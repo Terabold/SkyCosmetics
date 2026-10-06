@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Texture value -> head profile, plus "is this texture actually on the GPU yet".
@@ -35,6 +36,8 @@ public final class Textures {
 
     private static final Map<String, ResolvableProfile> PROFILES = new ConcurrentHashMap<>();
     private static final Map<String, State> STATES = new ConcurrentHashMap<>();
+    /** Downloads started here and not finished yet: the studio asks for more while few are running. */
+    private static final AtomicInteger IN_FLIGHT = new AtomicInteger();
 
     private static final class State {
         CompletableFuture<Optional<PlayerSkinRenderCache.RenderInfo>> future;
@@ -60,7 +63,16 @@ public final class Textures {
         if (s.future != null && now - s.checkedAt < TRUST_MS) return loaded(s.future);
         s.future = Minecraft.getInstance().playerSkinRenderCache().lookup(profile(value));
         s.checkedAt = now;
+        if (!s.future.isDone()) {
+            IN_FLIGHT.incrementAndGet();
+            s.future.whenComplete((r, e) -> IN_FLIGHT.decrementAndGet());
+        }
         return s.future.isDone() && loaded(s.future);
+    }
+
+    /** How many textures are still downloading. */
+    public static int inFlight() {
+        return IN_FLIGHT.get();
     }
 
     private static boolean loaded(CompletableFuture<Optional<PlayerSkinRenderCache.RenderInfo>> f) {

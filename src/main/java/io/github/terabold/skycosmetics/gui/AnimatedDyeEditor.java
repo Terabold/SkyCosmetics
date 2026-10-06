@@ -213,11 +213,11 @@ public class AnimatedDyeEditor {
         if (overTrack || draggingSpeed) {
             g.requestCursor(CursorTypes.RESIZE_EW);
             g.setTooltipForNextFrame(font, Component.literal(ticks + (ticks == 1 ? " tick" : " ticks")
-                + " per step - Hypixel's dyes use 2. Right is faster."), mouseX, mouseY);
+                + " per step (Hypixel dyes: 2)"), mouseX, mouseY);
         }
 
         if (armourY + 40 <= stripY - 4) {
-            g.text(font, "On armor", sideX, armourY, MUTED);
+            g.text(font, "Preview", sideX, armourY, MUTED);
             int mid = sideX + sideW / 2, ay = armourY + 11;
             // Helmet, chestplate, leggings, boots: pieces 3..0 up from the boots, as Cosmetics numbers them.
             int[][] shape = {{10, 6}, {18, 9}, {14, 8}, {16, 4}};
@@ -247,9 +247,10 @@ public class AnimatedDyeEditor {
 
         if (hoveredChip >= 0) {
             g.requestCursor(CursorTypes.POINTING_HAND);
-            g.setTooltipForNextFrame(font, Component.literal("Color " + (hoveredChip + 1) + "  "
-                + ColorPicker.hex(keys.get(hoveredChip))
-                + (keys.size() > MIN_KEYS ? " - click to edit, right-click to remove" : " - click to edit")), mouseX, mouseY);
+            g.setComponentTooltipForNextFrame(font, List.of(Component.literal("Color " + (hoveredChip + 1) + " · "
+                    + ColorPicker.hex(keys.get(hoveredChip))),
+                Component.literal(keys.size() > MIN_KEYS ? "Click to edit · Right-click to remove" : "Click to edit")
+                    .withStyle(net.minecraft.ChatFormatting.YELLOW)), mouseX, mouseY);
         } else if (keys.size() < MAX_KEYS && inChip(keys.size(), mouseX, mouseY)) {
             g.requestCursor(CursorTypes.POINTING_HAND);
             g.setTooltipForNextFrame(font, Component.literal("Add a color after the selected one"), mouseX, mouseY);

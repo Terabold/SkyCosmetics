@@ -1,10 +1,12 @@
 package io.github.terabold.skycosmetics;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.terabold.skycosmetics.compat.OtherLooks;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinLearner;
 import io.github.terabold.skycosmetics.deploy.DeployedOrbs;
 import io.github.terabold.skycosmetics.gui.InventoryButton;
+import io.github.terabold.skycosmetics.items.Mine;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import io.github.terabold.skycosmetics.items.Profiles;
 import io.github.terabold.skycosmetics.gui.SettingsScreen;
@@ -74,9 +76,11 @@ public class SkyCosmetics implements ClientModInitializer {
         PetTracker.init();
         DeployedOrbs.init();
         OwnedItems.init();
+        Mine.init();
         Profiles.init();
         InventoryButton.register();
         Glints.init();
+        OtherLooks.init();
         StudioSection.register();
         // Last, so saves queued by the other stop hooks are written before exit.
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Io.flush());

@@ -18,6 +18,28 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   Page Up, Page Down, Home and End scroll.
 - A setting that fails to load shows a gray line instead of closing the settings.
 
+### Studio
+- **Saved, by section:** looks are grouped into Helmets, Armor, Weapons & Tools, Pets, Power Orbs and Every Item of a
+  Type. Rows light up under the mouse and have a bigger ×. Click a row to see each change on its own line (skin, dye,
+  name, glint, glint color, speed, strength), each with its own ×, and an Edit link to the item. **Undo** in the
+  footer puts back the last removal.
+- **New Other Mods tab** (when Skyblocker or SkyOcean is installed): every look those mods saved for your items
+  (names, dyes and animated dyes, helmet skins, trims, glint, models), grouped per item with each mod's chip. ×
+  removes a change in that mod's own settings, which then save it; **Move Here** makes it a SkyCosmetics look
+  instead. Undo works here too. Mods SkyCosmetics doesn't know how to change are listed read-only.
+- The editor shows a chip such as **Dyed by Skyblocker** when another mod changes the picked item, since that
+  change shows over yours. Click it to remove it there, right-click to move it to SkyCosmetics.
+- Animated skins in the grid start moving right away: the frames of the cards in view are fetched as soon as their
+  first frame is ready, and more at once while few downloads are running.
+- Wording: Original instead of "Hypixel's", Reset for every way back (to original, to default), Title Case buttons
+  (Custom Dye…, Custom Color…, Reset Name), and shorter search hints and messages.
+
+### Changed
+- **"Every item of this type" looks show only on your own items:** what you wear, hold and carry, your pet, your
+  Wardrobe, Ender Chest and other menus of your own things, and items My Items remembers. Never on items in auction,
+  bazaar, trade or shop menus, or on other players, so nobody sees a skin on an item they might buy. The "Looks on
+  Other Players" setting is gone.
+
 ## 1.4.0-beta — unreleased
 
 ### Renamed: Skin Studio is now SkyCosmetics
