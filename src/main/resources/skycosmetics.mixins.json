@@ -20,7 +20,9 @@
     "MultiPlayerGameModeMixin",
     "RecipeBookComponentAccessor",
     "RecipeBookScreenAccessor",
-    "RenderTypeAccessor"
+    "RenderTypeAccessor",
+    "hand.ItemInHandRendererMixin",
+    "hand.LivingEntitySwingMixin"
   ],
   "injectors": {
     "defaultRequire": 1
