@@ -18,7 +18,7 @@ import java.util.function.BooleanSupplier;
  * settings list holds one widget per row, so this one lays its parts out and passes clicks, drags and typing to
  * the part under the mouse (or the box being typed in).
  */
-final class ButtonRow extends AbstractWidget {
+public final class ButtonRow extends AbstractWidget {
     private static final int GAP = 4;
 
     private final List<AbstractWidget> parts = new ArrayList<>();
@@ -43,7 +43,8 @@ final class ButtonRow extends AbstractWidget {
         return add(part, fixed, () -> true);
     }
 
-    List<AbstractWidget> parts() {
+    /** The parts, left to right (for tests). */
+    public List<AbstractWidget> parts() {
         return parts;
     }
 
