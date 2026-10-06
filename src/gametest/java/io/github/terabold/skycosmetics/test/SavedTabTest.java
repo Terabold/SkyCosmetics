@@ -106,9 +106,11 @@ final class SavedTabTest {
         check(ctx.computeOnClient(mc -> Looks.byUuid(BOOTS)) == null, "the big × removes the whole look");
         check(ctx.computeOnClient(mc -> screen(mc).footer()).equals("Removed the look on Spring Boots"), "and says so");
         check(rows(ctx).stream().noneMatch(r -> r.startsWith("> Spring Boots")), "its row is gone");
-        ctx.clickScreenButton("Undo");
+        ctx.getInput().holdControl();
+        ctx.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_Z);
+        ctx.getInput().releaseControl();
         ctx.waitTicks(2);
-        check("DYE_AURORA".equals(ctx.computeOnClient(mc -> Looks.byUuid(BOOTS).dye())), "Undo brings the whole look back");
+        check("DYE_AURORA".equals(ctx.computeOnClient(mc -> Looks.byUuid(BOOTS).dye())), "Ctrl+Z brings the whole look back");
         check(ctx.computeOnClient(mc -> Looks.itemType(BOOTS)).equals("SPRING_BOOTS"), "with its item type");
 
         // The type look's × removes the look for every Spring Boots, not the boots' own look.

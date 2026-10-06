@@ -627,6 +627,7 @@ public class StudioScreen extends Screen {
         int uw = font.width("Undo") + 10;
         undoButton = addRenderableWidget(Button.builder(Component.literal("Undo"), b -> runUndo())
             .bounds(midX + midW - uw, height - PAD - 11, uw, 11).build());
+        undoButton.setTooltip(Tooltip.create(Component.literal("Puts back the last removal · Ctrl+Z")));
         undoButton.visible = undoShown();
         refilter();
     }
@@ -723,7 +724,8 @@ public class StudioScreen extends Screen {
     private void moveOther(OtherLooks.Change c) {
         flushPending();
         Cosmetics.Ident id = widgetsFor;
-        Looks.Look before = OtherLooks.take(c, id != null ? id.type() : null, widgetsName);
+        String label = c.uuid() == null ? "Every " + Repo.get().typeName(c.type()) : widgetsName; // as edit() names them
+        Looks.Look before = OtherLooks.take(c, id != null ? id.type() : null, label);
         if (before == null) {
             flash(Component.translatable("skycosmetics.other.kept", c.source().name()).getString(), 0xFFFF6666);
             return;
@@ -2504,6 +2506,12 @@ public class StudioScreen extends Screen {
             return true;
         }
         if (namePicker != null && namePicker.isEditing()) return namePicker.keyPressed(event);
+        // Ctrl+Z: the footer's Undo, while it shows (text boxes here have no undo of their own).
+        if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_Z && (event.hasControlDownWithQuirk() || minecraft.hasControlDown())
+            && !event.hasShiftDown() && undoShown()) {
+            runUndo();
+            return true;
+        }
         return super.keyPressed(event);
     }
 
