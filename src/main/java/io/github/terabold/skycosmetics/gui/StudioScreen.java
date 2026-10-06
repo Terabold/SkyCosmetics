@@ -801,6 +801,11 @@ public class StudioScreen extends Screen {
         public int editVersion() {
             return rowsVersion;
         }
+
+        @Override
+        public ItemStack listed(String uuid) {
+            return listedItem(uuid);
+        }
     }
 
     private final class OtherHost implements OtherModsTab.Host {
@@ -818,6 +823,33 @@ public class StudioScreen extends Screen {
         public String query() {
             return listQuery();
         }
+
+        @Override
+        public ItemStack listed(String uuid) {
+            return listedItem(uuid);
+        }
+
+        @Override
+        public int listVersion() {
+            return rowsVersion;
+        }
+    }
+
+    /** Items the left list shows by UUID, as of its last build: Saved and Other Mods name items My Items doesn't keep. */
+    private Map<String, ItemStack> listedByUuid = Map.of();
+    private int listedFor = -1;
+
+    private ItemStack listedItem(String uuid) {
+        if (listedFor != rowsVersion) {
+            listedFor = rowsVersion;
+            Map<String, ItemStack> m = new HashMap<>();
+            for (Row r : rows) {
+                if (!r.isHeader() && r.key().startsWith("uuid:")) m.putIfAbsent(r.key().substring(5), r.stack().get());
+            }
+            listedByUuid = m;
+        }
+        ItemStack s = uuid == null ? null : listedByUuid.get(uuid);
+        return s == null ? ItemStack.EMPTY : s;
     }
 
     /** The search on Saved and Other Mods, as the lists match it. */
@@ -2335,18 +2367,18 @@ public class StudioScreen extends Screen {
             return Component.literal("★ Favorite").withStyle(ChatFormatting.GOLD)
                 .append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(Component.literal("Right-click").withStyle(ChatFormatting.YELLOW))
-                .append(Component.literal(" to remove").withStyle(ChatFormatting.GRAY));
+                .append(Component.literal(" to unfavorite").withStyle(ChatFormatting.GRAY));
         }
         return Component.literal("Right-click").withStyle(ChatFormatting.YELLOW)
             .append(Component.literal(" to favorite ").withStyle(ChatFormatting.GRAY))
             .append(Component.literal("★").withStyle(ChatFormatting.GOLD))
-            .append(Component.literal(" (listed first)").withStyle(ChatFormatting.DARK_GRAY));
+            .append(Component.literal(" (listed first)").withStyle(ChatFormatting.GRAY));
     }
 
     /** Says what a right-click on a card did, and moves the card to its place in the list at once. */
     private boolean starred(boolean on, String name) {
         refilter();
-        flash(on ? "★ " + name + " is a favorite: listed first" : name + " is no longer a favorite", on ? GOLD : MUTED);
+        flash(on ? "★ Favorited " + name + ": listed first" : "Unfavorited " + name, on ? GOLD : MUTED);
         return true;
     }
 

@@ -45,6 +45,12 @@ final class OtherModsTab extends RowList {
 
         /** The tab's search, lower case. */
         String query();
+
+        /** The item with this UUID as the studio lists it now (worn, held, carried, My Items), or EMPTY. */
+        ItemStack listed(String uuid);
+
+        /** Changes when {@link #listed} may answer differently. */
+        int listVersion();
     }
 
     private static final int ITEM_H = 22, CHANGE_H = 13;
@@ -65,7 +71,7 @@ final class OtherModsTab extends RowList {
     protected Object stamp() {
         OtherLooks.refresh(false);
         return List.of(OtherLooks.version(), OwnedItems.version(), Looks.version(), System.identityHashCode(Repo.get()),
-            host.query());
+            host.query(), host.listVersion());
     }
 
     /** Items and changes listed (after the search). */
@@ -87,7 +93,7 @@ final class OtherModsTab extends RowList {
         for (Change ch : OtherLooks.all()) perItem.computeIfAbsent(ch.item(), k -> new ArrayList<>()).add(ch);
         Map<LookGroup, List<Item>> groups = new EnumMap<>(LookGroup.class);
         for (var e : perItem.entrySet()) {
-            Item item = item(e.getKey(), e.getValue(), c);
+            Item item = item(e.getKey(), e.getValue(), c, host);
             if (!q.isEmpty() && !matches(item, q)) continue;
             groups.computeIfAbsent(item.group(), k -> new ArrayList<>()).add(item);
         }
@@ -111,7 +117,7 @@ final class OtherModsTab extends RowList {
         return out;
     }
 
-    private static Item item(String key, List<Change> changes, Catalog c) {
+    private static Item item(String key, List<Change> changes, Catalog c, Host host) {
         Change first = changes.getFirst();
         String uuid = first.uuid(), type = first.type();
         if (uuid != null) {
@@ -119,6 +125,13 @@ final class OtherModsTab extends RowList {
             if (o != null) {
                 ItemStack s = o.stack();
                 return new Item(key, Cosmetics.originalName(s).getString(), o.source, o.type, s, LookGroup.of(o.category), changes);
+            }
+            ItemStack live = host.listed(uuid); // one My Items doesn't keep, in your inventory now
+            Cosmetics.Ident id = live.isEmpty() ? null : Cosmetics.identify(live);
+            if (id != null) {
+                OwnedItems.Category cat = OwnedItems.categorize(live, id);
+                return new Item(key, Cosmetics.originalName(live).getString(), null, id.type(), live,
+                    LookGroup.of(cat != null ? cat : OwnedItems.guess(id.type())), changes);
             }
             String known = Looks.itemType(uuid);
             Looks.Look own = Looks.byUuid(uuid);

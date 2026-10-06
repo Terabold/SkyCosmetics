@@ -47,8 +47,11 @@ final class SavedTab extends RowList {
         /** The tab's search, lower case. */
         String query();
 
-        /** Changes when {@link #canEdit} may answer differently. */
+        /** Changes when {@link #canEdit} or {@link #listed} may answer differently. */
         int editVersion();
+
+        /** The item with this UUID as the studio lists it now (worn, held, carried, My Items), or EMPTY. */
+        ItemStack listed(String uuid);
     }
 
     /** One change a look makes, as listed under it. */
@@ -134,12 +137,16 @@ final class SavedTab extends RowList {
         Map<LookGroup, List<Entry>> groups = new EnumMap<>(LookGroup.class);
         for (var e : Looks.uuidLooks().entrySet()) {
             OwnedItems.Owned owned = OwnedItems.get(e.getKey());
-            String itemType = owned != null ? owned.type : Looks.itemType(e.getKey());
-            ItemStack icon = owned != null ? owned.stack() : ItemStack.EMPTY;
+            // Not in My Items (an item it doesn't keep, like an accessory): the studio may still list it.
+            ItemStack live = owned == null ? host.listed(e.getKey()) : ItemStack.EMPTY;
+            Cosmetics.Ident id = live.isEmpty() ? null : Cosmetics.identify(live);
+            String itemType = owned != null ? owned.type : id != null ? id.type() : Looks.itemType(e.getKey());
+            ItemStack icon = owned != null ? owned.stack() : live;
             String title = !icon.isEmpty() ? Cosmetics.originalName(icon).getString()
                 : e.getValue().label() != null ? e.getValue().label()
                 : itemType != null ? c.typeName(itemType) : Component.translatable("skycosmetics.saved.unknownItem").getString();
-            LookGroup g = LookGroup.of(owned != null ? owned.category : OwnedItems.guess(itemType));
+            OwnedItems.Category cat = owned != null ? owned.category : id != null ? OwnedItems.categorize(live, id) : null;
+            LookGroup g = LookGroup.of(cat != null ? cat : OwnedItems.guess(itemType));
             add(groups, new Entry(false, e.getKey(), e.getValue(), title, itemType, icon, g), q, c);
         }
         for (var e : Looks.typeLooks().entrySet()) {
