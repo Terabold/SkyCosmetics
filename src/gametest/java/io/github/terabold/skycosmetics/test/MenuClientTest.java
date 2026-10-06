@@ -24,6 +24,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -89,7 +90,7 @@ public class MenuClientTest implements FabricClientGameTest {
     private static void addSections() {
         add(new Section(CONTROLS, Section.FEATURE, Component.literal("Test Controls"), Component.literal("One of each kind"),
             Component.literal("Every kind of setting row, for the tests."), () -> new ItemStack(Items.REDSTONE_TORCH),
-            s -> controlRows()));
+            MenuClientTest::controlRows));
         add(new Section(LONG, Section.FEATURE, Component.literal("Test Long List"), Component.literal("Sixty rows"),
             Component.literal("A section with many rows, to scroll."), () -> new ItemStack(Items.BOOK), s -> longRows()));
         add(new Section(BROKEN, Section.FEATURE, Component.literal("Test Broken Rows"), Component.literal("Throw on purpose"),
@@ -112,7 +113,7 @@ public class MenuClientTest implements FabricClientGameTest {
         ADDED.add(s.id());
     }
 
-    private static List<Option> controlRows() {
+    private static List<Option> controlRows(Screen settings) {
         List<Option> rows = new ArrayList<>();
         rows.add(Option.header("groupSwitches", Component.literal("Switches")));
         rows.add(Option.of("sparkles", Component.literal("Sparkles"), Component.literal("Adds sparkles around your items. "
@@ -136,7 +137,10 @@ public class MenuClientTest implements FabricClientGameTest {
         rows.add(Option.of("testKey", Component.literal("Test Key"), Component.literal("The open key again."),
             new Control.Key(SkyCosmetics::openKey)));
         rows.add(Option.of("press", Component.literal("Press Me"), Component.literal("Counts presses."),
-            new Control.Action(Component.literal("Press"), () -> pressed++, () -> true, Component.empty())));
+            new Control.Action(Component.literal("Press"), () -> {
+                pressed++;
+                if (settings instanceof SettingsScreen s) s.flash(Component.literal("Pressed " + pressed + " times"));
+            }, () -> true, Component.empty())));
         rows.add(Option.of("never", Component.literal("Never Ready"), Component.literal("Grayed out, with a tooltip saying why."),
             new Control.Action(Component.literal("Do It"), () -> pressed += 100, () -> false, Component.literal("Not ready yet"))));
         return rows;
@@ -304,6 +308,9 @@ public class MenuClientTest implements FabricClientGameTest {
         click(ctx, "press");
         click(ctx, "never");
         check(pressed == was + 1, "the action ran once and the grayed-out one never: " + (pressed - was));
+        check(ctx.computeOnClient(mc -> ("Pressed " + pressed + " times").equals(screen(mc).toastText())),
+            "the action's message shows");
+        ctx.takeScreenshot("skycosmetics-33b-menu-action-message");
 
         // Opaque color: the swatch opens the picker; a click in the square's top left picks white; Esc closes.
         click(ctx, "tint");

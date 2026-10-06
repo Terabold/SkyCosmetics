@@ -77,6 +77,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private static final String[] NONE = new String[0];
     /** How long a row found by a search glows after the jump. */
     private static final long FLASH_MS = 1600;
+    /** How long a message from {@link #flash} shows. */
+    private static final long TOAST_MS = 3500;
 
     /** Where the settings were last, this session: Mod Menu and the command come back to it. */
     private static String lastSection;
@@ -115,6 +117,10 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     /** The pane header's help line was cut: hovering it shows the whole line. */
     private boolean headClipped;
     private ItemStack headIcon = ItemStack.EMPTY;
+    /** A message from {@link #flash}, cut to the pane on its first frame. */
+    private Component toast;
+    private String toastLine;
+    private long toastAt;
     private int contentH;
 
     // ------------------------------------------------------------- motion
@@ -705,6 +711,16 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
     }
 
+    /**
+     * A short message at the bottom of the window for a few seconds, e.g. what an action just did ("Imported 3
+     * looks"). A new message replaces the old one.
+     */
+    public void flash(Component message) {
+        toast = message;
+        toastLine = null;
+        toastAt = Util.getMillis();
+    }
+
     @Override
     public void onClose() {
         minecraft.setScreen(parent);
@@ -752,6 +768,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         header(g, mx, my, delta);
         sidebar(g, mx, my, delta);
         content(g, mx, my, delta);
+        toast(g);
         g.pose().popMatrix();
         if (overlay != null) {
             try {
@@ -959,6 +976,25 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             Io.failed("Using the settings", e);
             return true;
         }
+    }
+
+    /** The message from {@link #flash}: a pill at the bottom of the pane that rises in and fades out. */
+    private void toast(GuiGraphicsExtractor g) {
+        if (toast == null) return;
+        long age = Util.getMillis() - toastAt;
+        if (age >= TOAST_MS) {
+            toast = null;
+            toastLine = null;
+            return;
+        }
+        if (toastLine == null) toastLine = Ui.clip(font, toast.getString(), cw - 40);
+        float in = Math.min(1, age / 150f), a = in * Math.min(1, (TOAST_MS - age) / 400f);
+        int w = font.width(toastLine) + 16, h = 16;
+        int x = cx + (cw - w) / 2, y = wy + wh - h - 10 + Math.round((1 - in) * 4);
+        Shapes.shadow(g, x, y, w, h, 8, 3);
+        Shapes.round(g, x, y, w, h, 8, Theme.fade(Theme.SURFACE_HOVER, a));
+        Shapes.frame(g, x, y, w, h, 8, Theme.fade(Theme.ACCENT, 0.8f * a));
+        if (a > 0.05f) g.text(font, toastLine, x + 8, y + 4, Theme.fade(Theme.TEXT, a), false);
     }
 
     /** The glow of a row a search jumped to: accent tint and bar, fading out. */
@@ -1385,6 +1421,18 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     }
 
     /** The open color pop-up a feature's widget opened, or null. */
+    /** The message {@link #flash} shows, or null once it has faded. */
+    public String toastText() {
+        return toast == null ? null : toast.getString();
+    }
+
+    /** How many rows have a control (a header or a search's group line has none). */
+    public int buttonRows() {
+        int n = 0;
+        for (Row r : rows) if (r.widget != null) n++;
+        return n;
+    }
+
     public ColorPopup popup() {
         return overlay instanceof PopupOverlay p ? p.popup : null;
     }

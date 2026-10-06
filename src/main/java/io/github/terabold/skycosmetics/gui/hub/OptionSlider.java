@@ -36,6 +36,11 @@ public final class OptionSlider extends AbstractWidget {
     private String label = "";
     private boolean dragging;
 
+    /** Without a title: narration reads only the value. */
+    public OptionSlider(int width, Control.Slider slider, Host host) {
+        this(Component.empty(), width, slider, host);
+    }
+
     public OptionSlider(Component title, int width, Control.Slider slider, Host host) {
         super(0, 0, width, H, title);
         this.slider = slider;
