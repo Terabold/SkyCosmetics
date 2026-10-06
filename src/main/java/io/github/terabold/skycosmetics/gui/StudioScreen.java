@@ -116,13 +116,12 @@ public class StudioScreen extends Screen {
     private static final int CARD_W = 54;
     private static final int CARD_H = 46;
     /**
-     * New textures the grid may ask for per game tick: first frames, animation frames. While few downloads are
-     * running and every card in view has asked for its first frame, the grid asks for more, so animations start
-     * at once on a fast connection and a slow PC still gets them a few at a time.
+     * New textures the grid may ask for per game tick at least: first frames, animation frames. While fewer than
+     * {@link #MAX_IN_FLIGHT} downloads run, it may ask for up to that many more (animation frames only once every
+     * card in view asked for its first), so animations start at once on a fast PC and connection, and a slow one
+     * still gets them a few at a time.
      */
-    private static final int FIRSTS_PER_TICK = 12, FRAMES_PER_TICK = 3, FIRSTS_IDLE = 24, FRAMES_IDLE = 24;
-    /** "Idle": fewer downloads than this still running. */
-    private static final int IDLE_IN_FLIGHT = 16;
+    private static final int FIRSTS_PER_TICK = 12, FRAMES_PER_TICK = 3, MAX_IN_FLIGHT = 24;
     /** Ticks after a scroll before the grid fetches animation frames again. */
     private static final int STILL_TICKS = 8;
     private static final float SMALL = 0.75f;
@@ -232,10 +231,10 @@ public class StudioScreen extends Screen {
     private final Set<String> asked = new HashSet<>();
     /** Skins whose every frame was asked for, so the prefetch skips them; animated cards seen moving (tests). */
     private final Set<String> prefetched = new HashSet<>(), moving = new HashSet<>();
-    /** Visible animated cards last frame, and the most textures asked for in one tick since the studio opened. */
-    private int gridAnimated, askedThisTick, mostPerTick;
-    /** Textures the grid in view may ask for: every frame of its cards, the next rows' first frames (tests). */
-    private int gridWanted;
+    /** Animated cards in view last frame and how many of them moved; the most textures asked for in one tick. */
+    private int gridAnimated, gridMoving, askedThisTick, mostPerTick;
+    /** Every card in view asked for its first frame last frame: animation frames may use the spare budget. */
+    private boolean firstsDone;
 
     private EditBox texBox;
     private NameBox nameBox;
@@ -1728,9 +1727,9 @@ public class StudioScreen extends Screen {
         if (tick != budgetTick) {
             budgetTick = tick;
             // Few downloads running: the grid may ask for more this tick (see drawSkins).
-            boolean idle = Textures.inFlight() < IDLE_IN_FLIGHT;
-            firstBudget = idle ? FIRSTS_IDLE : FIRSTS_PER_TICK;
-            frameBudget = idle && firstsDone ? FRAMES_IDLE : FRAMES_PER_TICK;
+            int room = Math.clamp(MAX_IN_FLIGHT - Textures.inFlight(), 0, MAX_IN_FLIGHT);
+            firstBudget = Math.max(FIRSTS_PER_TICK, room);
+            frameBudget = Math.max(FRAMES_PER_TICK, firstsDone ? room : 0);
             askedThisTick = 0;
         }
         summaryShown = false;
@@ -2141,9 +2140,10 @@ public class StudioScreen extends Screen {
     }
 
     /**
-     * The grid shows many animated skins, so it asks for textures on a budget: per game tick a few new first
-     * frames (the cards in view, then the next rows), and fewer animation frames, only while the grid is still.
-     * A frame is asked for when its card shows it, never every frame of every skin at once.
+     * The grid shows many animated skins, so it asks for textures on a budget (see {@link #FIRSTS_PER_TICK}): the
+     * first frames of the cards in view, then, while the grid is still, the animation frames of the cards in view
+     * whose first frame is ready (see {@link #prefetch}), then the next rows' first frames. Never every frame of
+     * every skin at once.
      */
     private void drawSkins(GuiGraphicsExtractor g, int mouseX, int mouseY, long tick) {
         List<SkinEntry> list = skinResults;
@@ -2155,7 +2155,15 @@ public class StudioScreen extends Screen {
         int end = Math.min(list.size(), start + (visible + 1) * cols);
         boolean still = tick - scrolledAt > STILL_TICKS;
         gridItems = gridChecks = 0;
-        for (int i = start; i < end; i++) ask(list.get(i).textures[0]); // every card's first frame before any animation
+        boolean firsts = true;
+        for (int i = start; i < end; i++) { // every card's first frame before any animation
+            String first = list.get(i).textures[0];
+            ask(first);
+            firsts &= asked.contains(first);
+        }
+        firstsDone = firsts;
+        if (still && firsts) prefetch(list, start, end, tick);
+        int animated = 0, moved = 0;
         g.enableScissor(midX, gridY, midX + midW, gridY + gridH);
         for (int i = start; i < end; i++) {
             SkinEntry e = list.get(i);
@@ -2168,6 +2176,11 @@ public class StudioScreen extends Screen {
                 drawIcon(g, e.icon(frame), cx, cy);
                 gridItems++;
             }
+            if (e.animated()) {
+                animated++;
+                if (frame > 0) moving.add(e.id);
+                if (moving.contains(e.id)) moved++;
+            }
             drawCardName(g, cx, cy, e.id, e.name, e.color);
             if (e.animated() || e.missingFrames) animatedBadge(g, cx + cardW - 8, cy + 3, e.animated() ? ACCENT : MUTED);
             boolean fav = Favorites.skin(e.id);
@@ -2177,6 +2190,8 @@ public class StudioScreen extends Screen {
             if (hover) hovered = e;
         }
         g.disableScissor();
+        gridAnimated = animated;
+        gridMoving = moved;
         // Warm the next rows with what the budget leaves, so scrolling down rarely shows empty cards.
         for (int i = end; i < Math.min(list.size(), end + cols * 2); i++) ask(list.get(i).textures[0]);
         if (list.isEmpty() && !Repo.get().skins.isEmpty()) {
@@ -2223,8 +2238,30 @@ public class StudioScreen extends Screen {
             if (first) firstBudget--;
             else frameBudget--;
             asked.add(texture);
+            mostPerTick = Math.max(mostPerTick, ++askedThisTick);
         }
         return Textures.ready(texture);
+    }
+
+    /**
+     * Asks for the animation frames of the cards in view whose first frame is ready, in the order each card will
+     * show them and one step for every card before the next step, so they all start moving at about the same
+     * time rather than one card after another. A card whose every frame was asked for is skipped from then on.
+     */
+    private void prefetch(List<SkinEntry> list, int start, int end, long tick) {
+        for (int step = 1; frameBudget > 0; step++) {
+            boolean more = false;
+            for (int i = start; i < end && frameBudget > 0; i++) {
+                SkinEntry e = list.get(i);
+                int n = e.textures.length;
+                if (step >= n || prefetched.contains(e.id) || !lastFrame.containsKey(e.id)) continue;
+                more = true;
+                String t = e.textures[(e.frameAt(tick) + step) % n];
+                if (!asked.contains(t)) ready(t, false);
+                if (step == n - 1 && asked.containsAll(Arrays.asList(e.textures))) prefetched.add(e.id);
+            }
+            if (!more) return;
+        }
     }
 
     /** Starts loading a first frame if the budget allows; nothing more. */
@@ -2636,6 +2673,14 @@ public class StudioScreen extends Screen {
     /** The skins grid last frame: heads drawn, texture checks; and how many textures it asked for since it opened. */
     public int[] gridCost() {
         return new int[]{gridItems, gridChecks, asked.size()};
+    }
+
+    /**
+     * The skins grid's animations last frame: animated cards in view, how many of them moved yet, and the most
+     * textures it asked for in one game tick since the studio opened.
+     */
+    public int[] animationStart() {
+        return new int[]{gridAnimated, gridMoving, mostPerTick};
     }
 
     /** The player model's box last frame: top, bottom, scale; null when it was not drawn. */
