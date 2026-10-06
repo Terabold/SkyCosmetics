@@ -106,6 +106,7 @@
   "skycosmetics.other.removeHelp": "Changes %s's settings and saves them. Undo puts it back.",
   "skycosmetics.other.removeAll": "Remove every change on this item",
   "skycosmetics.other.move": "Move Here",
+  "skycosmetics.other.moveShort": "Move",
   "skycosmetics.other.moveTitle": "Move to SkyCosmetics",
   "skycosmetics.other.moveHelp": "Saves it as your look here and removes it in %s",
   "skycosmetics.other.removed": "Removed %s's %s on %s",

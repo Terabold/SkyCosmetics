@@ -47,10 +47,14 @@ final class OtherModsTab extends RowList {
         String query();
     }
 
-    private static final int ITEM_H = 22, CHANGE_H = 13, KIND_W = 40;
+    private static final int ITEM_H = 22, CHANGE_H = 13;
+    /** Under this much room for a value, the Move button says "Move" only. */
+    private static final int VALUE_ROOM = 80;
 
     private final Host host;
     private int shownItems, shownChanges;
+    /** The kind column ("Dye", "Model"): as wide as the longest kind, and a gap. */
+    private int kindW = -1;
 
     OtherModsTab(Font font, Host host) {
         super(font);
@@ -76,6 +80,7 @@ final class OtherModsTab extends RowList {
 
     @Override
     protected List<Line> build() {
+        if (kindW < 0) for (OtherLooks.Kind k : OtherLooks.Kind.values()) kindW = Math.max(kindW, font.width(k.label()) + 6);
         Catalog c = Repo.get();
         String q = host.query();
         Map<String, List<Change>> perItem = new LinkedHashMap<>();
@@ -262,11 +267,14 @@ final class OtherModsTab extends RowList {
         }
     }
 
-    /** One change: the mod's chip, what it changes, its value, "Move here" and ×, or a read-only note. */
+    /** One change: the mod's chip, what it changes, its value, "Move Here" and ×, or where to change it. */
     private final class ChangeRow implements Line {
         private final Item item;
         private final Change ch;
-        private final String move = tr("skycosmetics.other.move");
+        private String move = tr("skycosmetics.other.move");
+        /** "Change it in Skyblocker's settings", or "Read-only" where that doesn't fit; per width. */
+        private String note;
+        private int noteFor = -1;
         private FormattedCharSequence name;
         private int nameWidth = -1;
 
@@ -305,8 +313,20 @@ final class OtherModsTab extends RowList {
             return ch.movable() && in(mx, my, moveX(x, w), y + 1, moveW(), CHANGE_H - 2);
         }
 
+        /** Lays the row out for width {@code w}: the Move label and the read-only note. */
+        private void fit(int w) {
+            if (noteFor == w) return;
+            noteFor = w;
+            int valueX = 18 + font.width(ch.source().name()) + 6 + 5 + kindW;
+            move = tr("skycosmetics.other.move");
+            if (w - X_BIG - 8 - (font.width(move) + 6) - 4 - valueX < VALUE_ROOM) move = tr("skycosmetics.other.moveShort");
+            String full = Component.translatable("skycosmetics.other.changeIn", ch.source().name()).getString();
+            note = w - 4 - font.width(full) - valueX >= VALUE_ROOM ? full : tr("skycosmetics.other.readOnly");
+        }
+
         @Override
         public void draw(GuiGraphicsExtractor g, int x, int y, int w, int mouseX, int mouseY, long tick) {
+            fit(w);
             g.fill(x + 11, y, x + 12, y + CHANGE_H, LINE);
             int cx = x + 18;
             String mod = ch.source().name();
@@ -317,8 +337,8 @@ final class OtherModsTab extends RowList {
             g.text(font, mod, cx + 3, y + 3, 0xFFFFFFFF);
             cx += pw + 5;
             g.text(font, ch.kind().label(), cx, y + 3, MUTED);
-            cx += KIND_W;
-            int right = ch.live() ? (ch.movable() ? moveX(x, w) : xAt(x, w)) - 4 : x + w - 4 - font.width(tr("skycosmetics.other.readOnly"));
+            cx += kindW;
+            int right = ch.live() ? (ch.movable() ? moveX(x, w) : xAt(x, w)) - 4 : x + w - 4 - font.width(note);
             if (ch.rgb() >= 0) {
                 g.fill(cx, y + 3, cx + 7, y + 10, 0xFF000000);
                 g.fill(cx + 1, y + 4, cx + 6, y + 9, 0xFF000000 | ch.rgb());
@@ -335,8 +355,7 @@ final class OtherModsTab extends RowList {
                 g.text(font, clip(ch.value(), vw), cx, y + 3, TEXT);
             }
             if (!ch.live()) {
-                String ro = tr("skycosmetics.other.readOnly");
-                g.text(font, ro, x + w - 4 - font.width(ro), y + 3, MUTED);
+                g.text(font, note, x + w - 4 - font.width(note), y + 3, MUTED);
                 return;
             }
             if (ch.movable()) {
@@ -352,6 +371,7 @@ final class OtherModsTab extends RowList {
 
         @Override
         public boolean click(int x, int y, int w, int mouseX, int mouseY, int button) {
+            fit(w);
             if (overX(x, y, w, mouseX, mouseY)) remove(item, ch);
             else if (overMove(x, y, w, mouseX, mouseY)) move(item, ch);
             return true;
@@ -371,7 +391,7 @@ final class OtherModsTab extends RowList {
             List<Component> tip = new ArrayList<>();
             MutableComponent head = ch.chip().copy().withStyle(ChatFormatting.WHITE);
             tip.add(head);
-            tip.add(ch.name() != null ? ch.name() : Component.literal(ch.value()).withStyle(ChatFormatting.GRAY));
+            tip.add(OtherChip.valueLine(ch));
             if (!ch.live()) tip.add(Component.translatable("skycosmetics.other.changeIn", mod).withStyle(ChatFormatting.YELLOW));
             return tip;
         }
@@ -406,6 +426,7 @@ final class OtherModsTab extends RowList {
         int x = drawnX(), w = drawnRowWidth(), ly = drawnY() - scroll();
         for (Line l : lines()) {
             if (l instanceof ChangeRow r && r.item.key().equals(item) && r.ch.source().name().equals(mod) && r.ch.kind() == kind) {
+                r.fit(w);
                 int mx = r.ch.movable() ? r.moveX(x, w) + r.moveW() / 2 : -1;
                 return new int[]{r.xAt(x, w) + X_SMALL / 2, ly + CHANGE_H / 2, mx, ly + CHANGE_H / 2};
             }

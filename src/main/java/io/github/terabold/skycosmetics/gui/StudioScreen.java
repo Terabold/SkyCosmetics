@@ -659,9 +659,9 @@ public class StudioScreen extends Screen {
 
     /**
      * The chips for {@link #chipsFor}, left to right from {@code x} in rows {@code w} wide that end at {@code bottom},
-     * at most two rows (then a "+N" button opens Other Mods); returns how many rows they take.
+     * at most {@code maxRows} rows (then a "+N" button opens Other Mods); returns how many rows they take.
      */
-    private int layChips(int x, int w, int bottom) {
+    private int layChips(int x, int w, int bottom, int maxRows) {
         if (chipsFor.isEmpty()) return 0;
         int step = OtherChip.HEIGHT + 2;
         List<List<OtherLooks.Change>> lines = new ArrayList<>();
@@ -673,13 +673,13 @@ public class StudioScreen extends Screen {
                 lines.add(line);
                 line = new ArrayList<>();
                 used = 0;
-                if (lines.size() == 2) break;
+                if (lines.size() == maxRows) break;
             }
             used += (line.isEmpty() ? 0 : 2) + cw;
             line.add(c);
             shown++;
         }
-        if (!line.isEmpty() && lines.size() < 2) lines.add(line);
+        if (!line.isEmpty() && lines.size() < maxRows) lines.add(line);
         int hidden = chipsFor.size() - shown;
         int top = bottom - lines.size() * step;
         for (int r = 0; r < lines.size(); r++) {
@@ -896,7 +896,7 @@ public class StudioScreen extends Screen {
         listBottom = height - PAD - (!compact ? 4 : slim ? 48 : 98);
         if (compact) actionButtons(x, height - PAD - 44, w, slim ? 24 : 0);
         if (compact && !slim) {
-            chipRows = layChips(PAD + 6, leftW - 12, listBottom);
+            chipRows = layChips(PAD + 6, leftW - 12, listBottom, 2);
             listBottom -= chipRows * (OtherChip.HEIGHT + 2) + (chipRows > 0 ? 2 : 0);
         }
     }
@@ -923,7 +923,7 @@ public class StudioScreen extends Screen {
     private void initPreview() {
         if (prevW <= 0) return;
         actionButtons(prevX + 4, height - PAD - 48, prevW - 8, 0);
-        chipRows = layChips(prevX + 6, prevW - 12, summaryTop() - 3);
+        chipRows = layChips(prevX + 6, prevW - 12, summaryTop() - 3, 3);
     }
 
     /** Bottom of the preview's tooltip and model: the summary, and the chips over it, sit under it. */
@@ -1706,12 +1706,10 @@ public class StudioScreen extends Screen {
             buildRows(); // finds the picked item again if it only moved
             if (!Objects.equals(ident(), widgetsFor)) pickedChanged();
         }
-        if (OtherLooks.present()) {
-            OtherLooks.refresh(false); // cheap: one stamp per mod, at most twice a second
-            if (OtherLooks.version() != chipsVersion) {
-                chipsVersion = OtherLooks.version();
-                if (!sameChanges(changesFor(widgetsFor), chipsFor)) rebuildWidgets();
-            }
+        OtherLooks.refresh(false); // cheap: one stamp per mod, at most twice a second; nothing without other mods
+        if (OtherLooks.version() != chipsVersion) {
+            chipsVersion = OtherLooks.version();
+            if (!sameChanges(changesFor(widgetsFor), chipsFor) || tab == Tab.OTHER && !OtherLooks.present()) rebuildWidgets();
         }
         if (undoButton != null) undoButton.visible = undoShown();
         if (pendingDye != null && Util.getMillis() - pendingAt > 150) {
@@ -2006,11 +2004,14 @@ public class StudioScreen extends Screen {
         String name = l.name() != null ? l.name() : t.name();
         MutableComponent dyeLine = label("Dye");
         if (dye != null) dyeLine.append(Component.literal("■ ").withColor(dye.rgbAt(tick, 0)));
-        return List.of(label("Skin").append(Component.literal(skin.text()).withColor(skin.color() & 0xFFFFFF)),
+        List<Component> lines = new ArrayList<>(List.of(label("Skin").append(Component.literal(skin.text()).withColor(skin.color() & 0xFFFFFF)),
             dyeLine.append(Component.literal(dv.text()).withColor(dv.color() & 0xFFFFFF)),
             label("Name").append(name == null ? Component.literal("Original").withColor(MUTED & 0xFFFFFF)
                 : Names.parse(name + all(l.name(), t.name()))),
-            label("Glint").append(Component.literal(glint.text()).withColor(glint.color() & 0xFFFFFF)));
+            label("Glint").append(Component.literal(glint.text()).withColor(glint.color() & 0xFFFFFF))));
+        // No room for chips here: other mods' changes are listed instead (Other Mods removes them).
+        for (OtherLooks.Change c : chipsFor) lines.add(c.chip().copy().withColor(c.source().color() & 0xFFFFFF));
+        return lines;
     }
 
     private static MutableComponent label(String label) {

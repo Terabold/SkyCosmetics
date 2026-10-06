@@ -131,12 +131,25 @@ public final class OtherLooks {
         List<Source> found = new ArrayList<>();
         Path config = FabricLoader.getInstance().getConfigDir();
         if (FabricLoader.getInstance().isModLoaded("skyblocker")) {
-            found.add(new SkyblockerLooks(SkyblockerLooks.MANAGER, config.resolve("skyblocker.json")));
+            found.add(skyblocker(SkyblockerLooks.MANAGER, config.resolve("skyblocker.json")));
         }
         if (FabricLoader.getInstance().isModLoaded("skyocean")) {
-            found.add(new SkyOceanLooks(SkyOceanLooks.ITEMS, config.resolve("skyocean/data/custom_items.json")));
+            found.add(skyOcean(SkyOceanLooks.ITEMS, config.resolve("skyocean/data/custom_items.json")));
         }
         use(found);
+    }
+
+    /**
+     * Skyblocker's looks, read from the config manager class {@code managerClass} ({@code get()}, {@code update()}),
+     * or from {@code file} when that class isn't one this build knows. Tests pass a fake built like Skyblocker's.
+     */
+    public static Source skyblocker(String managerClass, Path file) {
+        return new SkyblockerLooks(managerClass, file);
+    }
+
+    /** SkyOcean's looks, read from its item data class {@code itemsClass}, or from {@code file} (see above). */
+    public static Source skyOcean(String itemsClass, Path file) {
+        return new SkyOceanLooks(itemsClass, file);
     }
 
     /** Lists these sources instead (tests: fake mods built like the real ones). */
@@ -183,7 +196,7 @@ public final class OtherLooks {
     public static void refresh(boolean now) {
         if (sources.isEmpty()) return;
         long t = Util.getMillis();
-        if (!now && t - checkedAt < CHECK_MS) return;
+        if (!now && checkedAt != Long.MIN_VALUE && t - checkedAt < CHECK_MS) return; // MIN_VALUE: never read yet
         checkedAt = t;
         boolean changed = false;
         Object[] next = new Object[sources.size()];

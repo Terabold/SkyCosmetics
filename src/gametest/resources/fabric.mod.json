@@ -8,7 +8,8 @@
       "io.github.terabold.skycosmetics.test.SkyCosmeticsClientTest",
       "io.github.terabold.skycosmetics.test.SettingsClientTest",
       "io.github.terabold.skycosmetics.test.GlintRenderTest",
-      "io.github.terabold.skycosmetics.test.DataSafetyTest"
+      "io.github.terabold.skycosmetics.test.DataSafetyTest",
+      "io.github.terabold.skycosmetics.test.StudioTabsClientTest"
     ]
   },
   "depends": { "skycosmetics": "*" }

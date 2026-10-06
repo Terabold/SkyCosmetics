@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.gui;
 
+import io.github.terabold.skycosmetics.Io;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
@@ -58,15 +59,21 @@ abstract class RowList {
 
     protected abstract List<Line> build();
 
-    /** Builds the rows now if what they show changed; cheap otherwise. */
+    /** Builds the rows now if what they show changed; cheap otherwise. A list that can't be built shows nothing. */
     final List<Line> lines() {
-        Object s = stamp();
-        if (!Objects.equals(s, builtFor)) {
-            builtFor = s;
-            lines = build();
-            int t = 0;
-            for (Line l : lines) t += l.height();
-            total = t;
+        try {
+            Object s = stamp();
+            if (!Objects.equals(s, builtFor)) {
+                builtFor = s;
+                lines = build();
+                int t = 0;
+                for (Line l : lines) t += l.height();
+                total = t;
+            }
+        } catch (RuntimeException e) {
+            Io.failed("Listing " + getClass().getSimpleName(), e);
+            lines = List.of();
+            total = 0;
         }
         return lines;
     }
@@ -117,7 +124,11 @@ abstract class RowList {
             if (ly + lh > y && ly < y + h) {
                 boolean over = inside && mouseY >= ly && mouseY < ly + lh && mouseX < x + rw;
                 if (over && l.hoverable()) g.fill(x, ly, x + rw, ly + lh, HOVER);
-                l.draw(g, x, ly, rw, inside ? mouseX : -10000, inside ? mouseY : -10000, tick);
+                try {
+                    l.draw(g, x, ly, rw, inside ? mouseX : -10000, inside ? mouseY : -10000, tick);
+                } catch (RuntimeException e) {
+                    Io.failed("Drawing a row of " + getClass().getSimpleName(), e); // the row stays empty
+                }
                 if (over) {
                     hovered = l;
                     hy = ly;
@@ -134,8 +145,12 @@ abstract class RowList {
             g.fill(x + w - 2, ty, x + w, ty + thumb, 0x80FFFFFF);
         }
         if (hovered != null) {
-            List<Component> tip = hovered.tooltip(x, hy, rw, mouseX, mouseY);
-            if (tip != null && !tip.isEmpty()) g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
+            try {
+                List<Component> tip = hovered.tooltip(x, hy, rw, mouseX, mouseY);
+                if (tip != null && !tip.isEmpty()) g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
+            } catch (RuntimeException e) {
+                Io.failed("A tooltip in " + getClass().getSimpleName(), e);
+            }
         }
         return !ls.isEmpty();
     }
@@ -147,7 +162,15 @@ abstract class RowList {
         int ly = y - scroll;
         for (Line l : List.copyOf(lines)) {
             int lh = l.height();
-            if (my >= ly && my < ly + lh) return l.click(x, ly, w - bar, (int) mx, (int) my, button);
+            if (my >= ly && my < ly + lh) {
+                try {
+                    return l.click(x, ly, w - bar, (int) mx, (int) my, button);
+                } catch (RuntimeException e) {
+                    Io.failed("A click in " + getClass().getSimpleName(), e);
+                    invalidate();
+                    return true;
+                }
+            }
             ly += lh;
         }
         return false;
@@ -215,6 +238,11 @@ abstract class RowList {
             g.text(font, title, x + 3, y + 4, ACCENT);
             if (!count.isEmpty()) g.text(font, count, x + 3 + font.width(title) + 5, y + 4, MUTED);
             g.fill(x + 2, y + 14, x + w - 2, y + 15, LINE);
+        }
+
+        @Override
+        public String toString() {
+            return "# " + title + (count.isEmpty() ? "" : " (" + count + ")");
         }
     }
 

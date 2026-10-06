@@ -36,7 +36,7 @@ final class OtherChip extends AbstractWidget {
         this.move = move;
         String mod = change.source().name();
         MutableComponent tip = change.chip().copy().withStyle(ChatFormatting.WHITE).append("\n")
-            .append(change.name() != null ? change.name().copy() : Component.literal(change.value()).withStyle(ChatFormatting.GRAY))
+            .append(valueLine(change))
             .append(Component.literal("\n"))
             .append(Component.translatable("skycosmetics.chip.over", mod).withStyle(ChatFormatting.GRAY));
         if (change.live()) {
@@ -46,6 +46,14 @@ final class OtherChip extends AbstractWidget {
             tip.append("\n").append(Component.translatable("skycosmetics.other.changeIn", mod).withStyle(ChatFormatting.YELLOW));
         }
         setTooltip(Tooltip.create(tip));
+    }
+
+    /** The change's value for a tooltip: the name itself, or the value with a swatch of its color. */
+    static Component valueLine(Change c) {
+        if (c.name() != null) return c.name().copy();
+        MutableComponent line = Component.empty();
+        if (c.rgb() >= 0) line.append(Component.literal("■ ").withColor(c.rgb()));
+        return line.append(Component.literal(c.value()).withStyle(ChatFormatting.GRAY));
     }
 
     static int width(Font font, Change c) {

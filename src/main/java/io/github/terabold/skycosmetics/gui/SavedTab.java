@@ -91,13 +91,15 @@ final class SavedTab extends RowList {
         }
     }
 
-    private static final int ROW_H = 24, PART_H = 12, LINK_H = 13, LABEL_W = 72;
+    private static final int ROW_H = 24, PART_H = 12, LINK_H = 13;
 
     private final Host host;
     /** Open rows: "T" + type or "I" + UUID. */
     private final Set<String> open = new HashSet<>();
     private int openVersion;
     private int shown;
+    /** The parts' label column: as wide as the longest label, and a gap. */
+    private int labelW = -1;
 
     SavedTab(Font font, Host host) {
         super(font);
@@ -126,6 +128,7 @@ final class SavedTab extends RowList {
 
     @Override
     protected List<Line> build() {
+        if (labelW < 0) for (Part p : Part.values()) labelW = Math.max(labelW, font.width(p.label()) + 8);
         Catalog c = Repo.get();
         String q = host.query();
         Map<LookGroup, List<Entry>> groups = new EnumMap<>(LookGroup.class);
@@ -373,7 +376,7 @@ final class SavedTab extends RowList {
         public void draw(GuiGraphicsExtractor g, int x, int y, int w, int mouseX, int mouseY, long tick) {
             g.fill(x + 11, y, x + 12, y + PART_H, LINE);
             g.text(font, p.label(), x + 24, y + 2, MUTED);
-            int vx = x + 24 + LABEL_W, vw = xAt(x, w) - 4 - vx;
+            int vx = x + 24 + labelW, vw = xAt(x, w) - 4 - vx;
             if (dye != null || swatch >= 0) {
                 g.fill(vx, y + 2, vx + 7, y + 9, 0xFF000000);
                 g.fill(vx + 1, y + 3, vx + 6, y + 8, 0xFF000000 | (dye != null ? dye.rgbAt(tick, 0) : swatch));
@@ -457,8 +460,8 @@ final class SavedTab extends RowList {
     }
 
     /**
-     * Where the remove button of {@code key}'s row is, then each of its open parts' (x, y pairs), as drawn last
-     * frame; null when it is not listed.
+     * Where {@code key}'s row was drawn last frame, as x, y pairs: a spot on its name, its remove button, then each
+     * of its open parts' remove buttons, then its Edit link if shown; null when it is not listed.
      */
     int[] buttons(String key) {
         int x = drawnX(), w = drawnRowWidth(), ly = drawnY() - scroll();
@@ -468,12 +471,17 @@ final class SavedTab extends RowList {
             if (l instanceof Row r) {
                 in = r.e.id().equals(key);
                 if (in) {
+                    out.add(x + 40);
+                    out.add(ly + ROW_H / 2);
                     out.add(r.xAt(x, w) + X_BIG / 2);
                     out.add(ly + 4 + X_BIG / 2);
                 }
             } else if (in && l instanceof PartRow p) {
                 out.add(p.xAt(x, w) + X_SMALL / 2);
                 out.add(ly + PART_H / 2);
+            } else if (in && l instanceof EditLink) {
+                out.add(x + 24 + font.width(tr("skycosmetics.saved.edit")) / 2);
+                out.add(ly + LINK_H / 2);
             } else if (!(l instanceof PartRow) && !(l instanceof EditLink)) {
                 in = false;
             }

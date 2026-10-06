@@ -266,8 +266,27 @@ final class StudioLayoutTest {
         open(ctx, mc -> mc.player.getItemBySlot(EquipmentSlot.HEAD));
         ctx.waitTicks(1);
         int[] first = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).gridCost());
+        // Animations start soon after each card's first frame: its next frames are asked for right away.
+        int[] delays = null;
+        for (int t = 0; t < 100; t += 5) {
+            ctx.waitTicks(5);
+            delays = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).startDelays());
+            if (delays.length > 0 && java.util.Arrays.stream(delays).allMatch(d -> d >= 0)) break;
+        }
+        int[] d = delays;
+        int[] moved = java.util.Arrays.stream(d).filter(x -> x >= 0).sorted().toArray();
+        int shown = (int) java.util.Arrays.stream(d).filter(x -> x != -2).count();
+        System.out.println("[SkyCosmeticsTest] animation start: " + moved.length + " of " + d.length + " animated cards in view"
+            + " moved (" + shown + " showed a frame); ticks from first frame to first move: median "
+            + (moved.length == 0 ? "-" : moved[moved.length / 2]) + ", max " + (moved.length == 0 ? "-" : moved[moved.length - 1])
+            + "; most textures asked in one tick: " + ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).mostAskedPerTick()));
+        check(d.length >= 4, "the Helmet skins in view include animated ones: " + d.length);
+        check(moved.length * 5 >= shown * 4, "most animated cards with a frame moved within 5 s: " + moved.length + "/" + shown);
+        check(moved.length > 0 && moved[moved.length / 2] <= 40, "half of them within 2 s of their first frame: "
+            + java.util.Arrays.toString(moved));
         ctx.waitTicks(100);
         int[] still = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).gridCost());
+        int wanted = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).gridWanted());
         int[] at = ctx.computeOnClient(mc -> new int[]{mc.screen.width / 2, mc.screen.height / 2});
         ctx.getInput().setCursorPos(at[0] * 3.0, at[1] * 3.0);
         for (int i = 0; i < 20; i++) {
@@ -280,8 +299,10 @@ final class StudioLayoutTest {
         System.out.println("[SkyCosmeticsTest] grid cost: " + still[0] + " heads and " + still[1]
             + " texture checks per frame; textures asked: " + first[2] + " at once, " + still[2] + " after 5 s still, "
             + scrolled[2] + " after scrolling 20 rows in 1 s, " + after[2] + " 5 s later");
-        // 3 animation frames per tick at most (and the first frames of the cards in view): 754 before 1.3.1.
-        check(still[2] - first[2] <= 400, "the grid asks for textures on a budget: " + (still[2] - first[2]) + " in 5 s");
+        // Only what the cards in view show (and the next rows' first frames), never every frame of every skin.
+        check(still[2] <= wanted, "the grid asks only for what it shows: " + still[2] + " of " + wanted);
+        int most = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).mostAskedPerTick());
+        check(most <= 48, "and at most 48 new textures in one tick: " + most);
         ctx.getInput().setCursorPos(0, 0);
 
         // Card names at 1920x1080, GUI scale 3: wrapped on words, hardly ever cut.
@@ -571,6 +592,16 @@ final class StudioLayoutTest {
         ctx.waitTicks(1);
         ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
         ctx.waitTicks(1);
+    }
+
+    /** Clicks the middle column's search box, so typing goes there. */
+    static void focusSearch(ClientGameTestContext ctx) {
+        int[] at = ctx.computeOnClient(mc -> {
+            AbstractWidget w = widget(mc, "Search");
+            check(w != null, "the tab has a search box");
+            return new int[]{w.getX() + w.getWidth() / 2, w.getY() + w.getHeight() / 2};
+        });
+        click(ctx, at[0], at[1]);
     }
 
     static AbstractWidget widget(Minecraft mc, String label) {
