@@ -217,7 +217,7 @@ public class ColorPicker {
                     g.outline(rx, recentY, CHIP, CHIP, over ? 0xFFFFFFFF : 0xFF000000);
                     if (over) {
                         g.requestCursor(CursorTypes.POINTING_HAND);
-                        g.setTooltipForNextFrame(font, Component.literal(hex(c) + "  - recent color, click to use"),
+                        g.setTooltipForNextFrame(font, Component.literal(hex(c) + " · recent"),
                             mouseX, mouseY);
                     }
                 } else {

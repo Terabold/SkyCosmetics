@@ -911,7 +911,9 @@ public class StudioScreen extends Screen {
         scope.active = id != null && id.uuid() != null;
         String type = id != null ? Repo.get().typeName(id.type()) : null;
         scope.setTooltip(Tooltip.create(Component.literal(type != null
-            ? "Click to switch: this item only, or every " + type : "Click to switch: this item only, or every item of its type")));
+            ? "Click to switch: this item only, or every " + type : "Click to switch: this item only, or every item of its type")
+            .append(Component.literal("\nA look for every item of a type shows only on your own items")
+                .withStyle(ChatFormatting.GRAY))));
         int half = (w - 4) / 2;
         Button reset = addRenderableWidget(new Button.Builder(Component.literal("Reset").withStyle(ChatFormatting.RED),
             b -> resetItem()).bounds(x, y + 24, half, 20).build());
