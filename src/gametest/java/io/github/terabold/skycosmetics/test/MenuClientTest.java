@@ -28,12 +28,14 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -455,6 +457,7 @@ public class MenuClientTest implements FabricClientGameTest {
         open(ctx, LONG);
         ctx.runOnClient(MenuClientTest::checkLayout);
         ctx.takeScreenshot("skycosmetics-40-menu-long-list");
+        frameCost(ctx);
         ctx.getInput().pressKey(GLFW.GLFW_KEY_END);
         ctx.waitTicks(10);
         check(ctx.computeOnClient(mc -> screen(mc).maxScroll() > 0 && screen(mc).scrollAmount() == screen(mc).maxScroll()),
@@ -466,6 +469,34 @@ public class MenuClientTest implements FabricClientGameTest {
         ctx.setScreen(() -> null);
         setScale(ctx, 3);
         System.out.println("[SkyCosmeticsTest] menu sidebar and long list checks passed");
+    }
+
+    /**
+     * What one frame of the settings costs on the render thread, sixty rows and seventeen sections, the mouse over a
+     * row. The bytes are Minecraft's own draw records (about 3 KB per line of text, 1 KB per rounded shape), the same
+     * as any screen with as much text; the screen's own code allocates nothing per frame.
+     */
+    private static void frameCost(ClientGameTestContext ctx) {
+        long[] cost = ctx.computeOnClient(mc -> {
+            SettingsScreen s = screen(mc);
+            int[] pane = s.pane();
+            int mx = pane[0] + pane[2] / 2, my = pane[1] + 30;
+            GuiRenderState state = new GuiRenderState();
+            com.sun.management.ThreadMXBean bean = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
+            long t0 = 0, b0 = 0;
+            int warm = 100, n = 400;
+            for (int i = 0; i < warm + n; i++) {
+                if (i == warm) {
+                    t0 = System.nanoTime();
+                    b0 = bean.getCurrentThreadAllocatedBytes();
+                }
+                state.reset();
+                s.extractRenderState(new GuiGraphicsExtractor(mc, state, mx, my), mx, my, 0);
+            }
+            return new long[]{(System.nanoTime() - t0) / n, (bean.getCurrentThreadAllocatedBytes() - b0) / n};
+        });
+        System.out.println("[SkyCosmeticsTest] settings frame: " + cost[0] / 1000 + " us, " + cost[1] / 1024 + " KB of draw records");
+        check(cost[0] < 3_000_000, "a settings frame takes under 3 ms: " + cost[0] / 1000 + " us");
     }
 
     /**

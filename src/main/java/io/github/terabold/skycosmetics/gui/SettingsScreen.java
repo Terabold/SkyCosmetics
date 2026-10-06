@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.gui;
 
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
@@ -65,7 +66,8 @@ import java.util.function.Consumer;
  *
  * Rows are vanilla widgets (Tab, narration and tests work as everywhere), placed by the scroll each frame and drawn
  * inside the pane's scissor; clicks outside the pane never reach them. Text is wrapped when rows are built, never per
- * frame, and every animation runs on real time without allocating.
+ * frame, and every animation runs on real time without allocating. A feature's row that throws while built, drawn or
+ * used is reported and shown as a gray line; the rest of the window keeps working.
  *
  * One screen behind every door: {@code /skycosmetics}, Mod Menu's Configure button ({@link #create}) and the
  * studio's Settings button. Esc and the x return to whatever opened it.
@@ -715,6 +717,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
      * A short message at the bottom of the window for a few seconds, e.g. what an action just did ("Imported 3
      * looks"). A new message replaces the old one.
      */
+    @Override
     public void flash(Component message) {
         toast = message;
         toastLine = null;
@@ -903,6 +906,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             }
             case GROUP -> {
                 float hv = r.hover.to(over ? 1 : 0);
+                if (over) g.requestCursor(CursorTypes.POINTING_HAND);
                 int top = ry + r.textY - 4;
                 if (hv > 0) Shapes.round(g, vx, top, vw, 16, 4, Theme.fade(Theme.SURFACE, hv));
                 g.pose().pushMatrix();
@@ -931,6 +935,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             case OPTION, CUSTOM -> {
                 if (r.line) g.fill(vx + ROW_X, ry, vx + vw - ROW_X, ry + 1, Theme.LINE_SOFT);
                 float hv = r.hover.to(over ? 1 : 0);
+                // The whole row of a switch flips it.
+                if (over && r.widget instanceof ToggleSwitch t && t.isActive()) g.requestCursor(CursorTypes.POINTING_HAND);
                 if (hv > 0) Shapes.round(g, vx, ry, vw, r.h, 4, Theme.fade(Theme.ROW_HOVER, hv));
                 flash(g, r, ry);
                 int tx = vx + r.textX, ty = ry + r.textY;
