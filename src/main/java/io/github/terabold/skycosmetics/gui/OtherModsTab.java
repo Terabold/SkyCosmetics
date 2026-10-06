@@ -59,6 +59,10 @@ final class OtherModsTab extends RowList {
 
     private final Host host;
     private int shownItems, shownChanges;
+    /** Every change row's layout at {@link #layoutFor}: the mods as bars, the Move label (null: right-click). */
+    private int layoutFor = -1;
+    private boolean bars;
+    private String moveLabel;
     /** The kind column ("Dye", "Model"): as wide as the longest kind, and a gap. */
     private int kindW = -1;
 
@@ -280,14 +284,20 @@ final class OtherModsTab extends RowList {
         }
     }
 
-    /** One change: the mod's chip, what it changes, its value, "Move Here" and ×, or where to change it. */
+    /**
+     * One change: the mod's chip, what it changes, its value, "Move Here" and ×, or where to change it. Narrower
+     * lists shorten "Move Here" to "Move", then show the mod as a colored bar and move on a right-click, so the
+     * value keeps its room.
+     */
     private final class ChangeRow implements Line {
         private final Item item;
         private final Change ch;
-        private String move = tr("skycosmetics.other.move");
-        /** "Change it in Skyblocker's settings", or "Read-only" where that doesn't fit; per width. */
-        private String note;
-        private int noteFor = -1;
+        /** The layout for {@link #laidFor}: the Move label (null: no button), the mod as a bar, the note. */
+        private String move;
+        private boolean bar;
+        /** "Change it in Skyblocker's settings", "Read-only", or nothing where neither fits. */
+        private String note = "";
+        private int laidFor = -1;
         private FormattedCharSequence name;
         private int nameWidth = -1;
 
@@ -311,11 +321,16 @@ final class OtherModsTab extends RowList {
         }
 
         private int moveW() {
-            return font.width(move) + 6;
+            return move == null ? 0 : font.width(move) + 6;
         }
 
         private int moveX(int x, int w) {
             return xAt(x, w) - 4 - moveW();
+        }
+
+        /** Where the kind starts, after the mod's chip (or bar). */
+        private int kindX() {
+            return 18 + (bar ? 4 + 4 : font.width(ch.source().name()) + 6 + 5);
         }
 
         private boolean overX(int x, int y, int w, int mx, int my) {
@@ -323,35 +338,43 @@ final class OtherModsTab extends RowList {
         }
 
         private boolean overMove(int x, int y, int w, int mx, int my) {
-            return ch.movable() && in(mx, my, moveX(x, w), y + 1, moveW(), CHANGE_H - 2);
+            return ch.movable() && move != null && in(mx, my, moveX(x, w), y + 1, moveW(), CHANGE_H - 2);
         }
 
-        /** Lays the row out for width {@code w}: the Move label and the read-only note. */
+        /** Lays the row out for width {@code w}, as the whole list is (see {@link #layout}). */
         private void fit(int w) {
-            if (noteFor == w) return;
-            noteFor = w;
-            int valueX = 18 + font.width(ch.source().name()) + 6 + 5 + kindW;
-            move = tr("skycosmetics.other.move");
-            if (w - X_BIG - 8 - (font.width(move) + 6) - 4 - valueX < VALUE_ROOM) move = tr("skycosmetics.other.moveShort");
-            String full = Component.translatable("skycosmetics.other.changeIn", ch.source().name()).getString();
-            note = w - 4 - font.width(full) - valueX >= VALUE_ROOM ? full : tr("skycosmetics.other.readOnly");
+            if (laidFor == w) return;
+            laidFor = w;
+            layout(w);
+            bar = bars;
+            move = ch.movable() ? moveLabel : null;
+            if (ch.live()) return;
+            String where = Component.translatable("skycosmetics.other.changeIn", ch.source().name()).getString();
+            String readOnly = tr("skycosmetics.other.readOnly");
+            int valueX = kindX() + kindW;
+            note = w - 4 - font.width(where) - valueX >= VALUE_ROOM ? where
+                : w - 4 - font.width(readOnly) - valueX >= VALUE_ROOM / 2 ? readOnly : "";
         }
 
         @Override
         public void draw(GuiGraphicsExtractor g, int x, int y, int w, int mouseX, int mouseY, long tick) {
             fit(w);
             g.fill(x + 11, y, x + 12, y + CHANGE_H, LINE);
-            int cx = x + 18;
-            String mod = ch.source().name();
-            int pw = font.width(mod) + 6;
             int col = ch.source().color();
-            g.fill(cx, y + 1, cx + pw, y + CHANGE_H - 1, (col & 0x00FFFFFF) | 0x50000000);
-            g.outline(cx, y + 1, pw, CHANGE_H - 2, col);
-            g.text(font, mod, cx + 3, y + 3, 0xFFFFFFFF);
-            cx += pw + 5;
+            if (bar) {
+                g.fill(x + 18, y + 1, x + 22, y + CHANGE_H - 1, col);
+            } else {
+                int cx = x + 18;
+                String mod = ch.source().name();
+                int pw = font.width(mod) + 6;
+                g.fill(cx, y + 1, cx + pw, y + CHANGE_H - 1, (col & 0x00FFFFFF) | 0x50000000);
+                g.outline(cx, y + 1, pw, CHANGE_H - 2, col);
+                g.text(font, mod, cx + 3, y + 3, 0xFFFFFFFF);
+            }
+            int cx = x + kindX();
             g.text(font, ch.kind().label(), cx, y + 3, MUTED);
             cx += kindW;
-            int right = ch.live() ? (ch.movable() ? moveX(x, w) : xAt(x, w)) - 4 : x + w - 4 - font.width(note);
+            int right = ch.live() ? (move != null ? moveX(x, w) : xAt(x, w)) - 4 : x + w - 4 - font.width(note);
             if (ch.rgb() >= 0) {
                 g.fill(cx, y + 3, cx + 7, y + 10, 0xFF000000);
                 g.fill(cx + 1, y + 4, cx + 6, y + 9, 0xFF000000 | ch.rgb());
@@ -371,7 +394,7 @@ final class OtherModsTab extends RowList {
                 g.text(font, note, x + w - 4 - font.width(note), y + 3, MUTED);
                 return;
             }
-            if (ch.movable()) {
+            if (move != null) {
                 int mx = moveX(x, w);
                 boolean over = overMove(x, y, w, mouseX, mouseY);
                 g.fill(mx, y + 1, mx + moveW(), y + CHANGE_H - 1, over ? 0xFF4A3A66 : 0xFF2A2436);
@@ -386,12 +409,13 @@ final class OtherModsTab extends RowList {
         public boolean click(int x, int y, int w, int mouseX, int mouseY, int button) {
             fit(w);
             if (overX(x, y, w, mouseX, mouseY)) remove(item, ch);
-            else if (overMove(x, y, w, mouseX, mouseY)) move(item, ch);
+            else if (overMove(x, y, w, mouseX, mouseY) || button == 1 && ch.movable()) move(item, ch);
             return true;
         }
 
         @Override
         public List<Component> tooltip(int x, int y, int w, int mouseX, int mouseY) {
+            fit(w);
             String mod = ch.source().name();
             if (overX(x, y, w, mouseX, mouseY)) {
                 return List.of(Component.translatable("skycosmetics.other.removeIn", mod).withStyle(ChatFormatting.RED),
@@ -406,6 +430,7 @@ final class OtherModsTab extends RowList {
             tip.add(head);
             tip.add(OtherChip.valueLine(ch));
             if (!ch.live()) tip.add(Component.translatable("skycosmetics.other.changeIn", mod).withStyle(ChatFormatting.YELLOW));
+            else if (ch.movable()) tip.add(Component.translatable("skycosmetics.chip.rightClick").withStyle(ChatFormatting.YELLOW));
             return tip;
         }
 
@@ -414,6 +439,27 @@ final class OtherModsTab extends RowList {
             return "  " + ch.source().name() + " " + ch.kind().key + ": " + ch.value() + (ch.live() ? "" : " (read-only)")
                 + (ch.movable() ? " [move]" : "");
         }
+    }
+
+    /**
+     * One layout for every change row at width {@code w}, the widest that leaves a value its room: mod chips and
+     * "Move Here", then "Move", then the mods as colored bars and no Move button (a right-click moves).
+     */
+    private void layout(int w) {
+        if (w == layoutFor) return;
+        layoutFor = w;
+        int chip = 0;
+        for (OtherLooks.Source src : OtherLooks.sources()) chip = Math.max(chip, font.width(src.name()) + 6 + 5);
+        int xRel = w - X_BIG - 4 + (X_BIG - X_SMALL) / 2;
+        int valueX = 18 + chip + kindW + 10; // and a color swatch
+        String full = tr("skycosmetics.other.move"), small = tr("skycosmetics.other.moveShort");
+        bars = false;
+        moveLabel = full;
+        if (xRel - 8 - (font.width(full) + 6) - valueX >= VALUE_ROOM) return;
+        moveLabel = small;
+        if (xRel - 8 - (font.width(small) + 6) - valueX >= VALUE_ROOM / 2) return;
+        bars = true;
+        moveLabel = null;
     }
 
     /** An item for a change on an item never seen: a dyed chestplate for a dye, a name tag for a name... */
@@ -440,7 +486,7 @@ final class OtherModsTab extends RowList {
         for (Line l : lines()) {
             if (l instanceof ChangeRow r && r.item.key().equals(item) && r.ch.source().name().equals(mod) && r.ch.kind() == kind) {
                 r.fit(w);
-                int mx = r.ch.movable() ? r.moveX(x, w) + r.moveW() / 2 : -1;
+                int mx = r.ch.movable() && r.move != null ? r.moveX(x, w) + r.moveW() / 2 : -1;
                 return new int[]{r.xAt(x, w) + X_SMALL / 2, ly + CHANGE_H / 2, mx, ly + CHANGE_H / 2};
             }
             ly += l.height();

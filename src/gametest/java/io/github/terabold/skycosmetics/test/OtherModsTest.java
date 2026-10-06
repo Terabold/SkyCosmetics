@@ -190,6 +190,8 @@ final class OtherModsTest {
         for (int i = 0; i < 8; i++) ctx.getInput().pressKey(GLFW.GLFW_KEY_BACKSPACE);
         ctx.waitTicks(2);
 
+        window(ctx, 1920, 1080, 4);
+        ctx.takeScreenshot("skycosmetics-65b-other-mods-guiscale-4");
         window(ctx, 1920, 1080, 3);
         ctx.takeScreenshot("skycosmetics-65b-other-mods-guiscale-3");
         window(ctx, 854, 480, 2);

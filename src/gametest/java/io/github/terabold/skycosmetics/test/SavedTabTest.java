@@ -131,7 +131,11 @@ final class SavedTabTest {
         for (int i = 0; i < 6; i++) ctx.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE);
         ctx.waitTicks(2);
 
-        // Sizes: GUI scale 3 and a small window (the compact layout).
+        // Sizes: GUI scales 1, 3 and 4, and a small window (the compact layout).
+        window(ctx, 1920, 1080, 1);
+        ctx.takeScreenshot("skycosmetics-63-saved-guiscale-1");
+        window(ctx, 1920, 1080, 4);
+        ctx.takeScreenshot("skycosmetics-63-saved-guiscale-4");
         window(ctx, 1920, 1080, 3);
         ctx.takeScreenshot("skycosmetics-63-saved-guiscale-3");
         window(ctx, 854, 480, 2);
