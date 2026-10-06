@@ -50,7 +50,7 @@ public final class DropdownChoice<T> extends ThemedButton {
             open.close();
             return;
         }
-        if (!(host instanceof Overlay.Host overlays)) return;
+        if (!(host instanceof OverlayHost overlays)) return;
         open = new Menu();
         overlays.openOverlay(open);
     }

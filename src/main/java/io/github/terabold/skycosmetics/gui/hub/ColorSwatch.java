@@ -62,7 +62,7 @@ public final class ColorSwatch extends ThemedButton {
             open.close();
             return;
         }
-        if (!(host instanceof Overlay.Host overlays)) return;
+        if (!(host instanceof OverlayHost overlays)) return;
         open = new ColorPopover(getMessage(), this, color, host);
         overlays.openOverlay(open);
     }

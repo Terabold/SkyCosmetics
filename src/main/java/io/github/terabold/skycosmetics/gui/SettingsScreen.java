@@ -2,8 +2,21 @@ package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.Settings;
+import io.github.terabold.skycosmetics.SkyCosmetics;
+import io.github.terabold.skycosmetics.gui.hub.ActionButton;
+import io.github.terabold.skycosmetics.gui.hub.CardButton;
+import io.github.terabold.skycosmetics.gui.hub.CloseButton;
 import io.github.terabold.skycosmetics.gui.hub.Controls;
 import io.github.terabold.skycosmetics.gui.hub.KeyBindButton;
+import io.github.terabold.skycosmetics.gui.hub.Overlay;
+import io.github.terabold.skycosmetics.gui.hub.OverlayHost;
+import io.github.terabold.skycosmetics.gui.hub.SearchBox;
+import io.github.terabold.skycosmetics.gui.hub.SectionTab;
+import io.github.terabold.skycosmetics.gui.hub.ToggleSwitch;
+import io.github.terabold.skycosmetics.gui.ui.Anim;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Ui;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Host;
 import io.github.terabold.skycosmetics.hub.Hub;
@@ -13,56 +26,103 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.MultiLineTextWidget;
-import net.minecraft.client.gui.components.ScrollableLayout;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.layouts.LinearLayout;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
+import org.lwjgl.glfw.GLFW;
 
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 
 /**
- * The settings, in the studio's colors: a sidebar of sections (the studio's own first, then one per feature)
- * and the open section's rows in a list that scrolls. Each row is its title, its control and gray help under
- * it. Every change applies and saves at once.
+ * The settings: one window in the studio's colors. A header (logo, name, version, search, close), a sidebar of
+ * sections (the studio's own first, then one per feature) and the open section's rows in a pane that scrolls. Each
+ * row is its title and gray help on the left and its control on the right, or under the text when the window is too
+ * narrow for both. Every change applies and saves at once.
+ *
+ * The search looks through every section at once: each typed word must appear in a setting's title, help, group,
+ * section, choices or search words. Results keep working controls, grouped under "Section > Group" lines that jump
+ * to the setting in its section; so does Enter, and a click on a section in the sidebar scrolls to its results.
+ *
+ * Rows are vanilla widgets (Tab, narration and tests work as everywhere), placed by the scroll each frame and drawn
+ * inside the pane's scissor; clicks outside the pane never reach them. Text is wrapped when rows are built, never per
+ * frame, and every animation runs on real time without allocating.
  *
  * One screen behind every door: {@code /skycosmetics}, Mod Menu's Configure button ({@link #create}) and the
- * studio's Settings button. Done and Esc return to whatever opened it.
+ * studio's Settings button. Esc and the x return to whatever opened it.
  */
-public class SettingsScreen extends Screen implements Host {
-    private static final int PAD = 8, TAB_H = 24, RAIL = 28, HEADER_H = 34, FOOTER_H = 30, ROW_W = 360;
-    private static final int BG = 0xE0101014, BG_OPAQUE = 0xFF101014, PANEL = 0xF01B1B22, LINE = 0xFF34343F;
-    private static final int TEXT = 0xFFE8E8EE, MUTED = 0xFF8C8C9A, ACCENT = 0xFFD58CFF, HELP = 0x9A9AA8;
-    /** The section the settings opened on last, this session: Mod Menu and the command come back to it. */
+public class SettingsScreen extends Screen implements Host, OverlayHost {
+    private static final int MAX_W = 680, MAX_H = 420, HEADER_H = 26, HEAD_H = 34, RAIL_W = 30, MIN_W = 280, MIN_H = 170;
+    private static final int ROW_X = 8, ROW_Y = 6, GAP = 12, MIN_TEXT = 110, WHEEL = 30, BAR_W = 3;
+    private static final Identifier LOGO = Identifier.fromNamespaceAndPath(SkyCosmetics.MOD_ID, "icon.png");
+    private static final String[] NONE = new String[0];
+    /** How long a row found by a search glows after the jump. */
+    private static final long FLASH_MS = 1600;
+
+    /** Where the settings were last, this session: Mod Menu and the command come back to it. */
     private static String lastSection;
+    private static double lastScroll;
 
     private final Screen parent;
     private String sectionId;
-    /** Tick time of the footer message, and the message. */
-    private long statusAt;
-    private Component status = Component.empty();
+    /** A row to scroll to and highlight once the rows are built, then null. */
+    private String pendingOption;
 
-    // Built in init().
-    private Section section;
-    private boolean rail, tooSmall;
-    private int sideW, cx, cw;
-    private ScrollableLayout list;
-    private final List<Controls.Built> built = new ArrayList<>();
-    private final List<String> rowIds = new ArrayList<>();
+    // ------------------------------------------------------------- layout, set in layout()
+    private boolean tooSmall, rail;
+    private int wx, wy, ww, wh, sideW, bodyY, cx, cw, vx, vy, vw, vh, sideTop, sideH, tabStep, titleRight;
+
+    // ------------------------------------------------------------- widgets
+    private SearchBox search;
+    private CloseButton close;
+    private ActionButton done;
     private final List<SectionTab> tabs = new ArrayList<>();
-    private KeyBindButton keyButton;
-    private MultiLineTextWidget keyHelp;
-    private Component keyUsualHelp;
-    private ColorPopup popup;
+    private final List<Row> rows = new ArrayList<>();
+    private final List<KeyBindButton> keys = new ArrayList<>();
+    private Overlay overlay;
+
+    // ------------------------------------------------------------- content
+    private Section section;
+    private final Map<String, List<Option>> options = new HashMap<>();
+    private final List<Entry> entries = new ArrayList<>();
+    private String typed = "";
+    private String[] words = NONE;
+    private boolean muteSearch;
+    private double scrollBeforeSearch;
+    private int results;
+    private FormattedCharSequence headTitle = FormattedCharSequence.EMPTY, logoTitle = FormattedCharSequence.EMPTY;
+    private String headHelp = "", version = "", goTo = "";
+    private Component headHelpFull = Component.empty();
+    private ItemStack headIcon = ItemStack.EMPTY;
+    private int contentH;
+
+    // ------------------------------------------------------------- motion
+    private double scroll, shown, maxScroll, sideScroll, sideShown, sideMax;
+    private boolean draggingBar;
+    private double barGrab;
+    private long lastFrame = -1;
+    private float barY = -1;
+    private boolean opened, swallowChar;
+    private Row flashRow;
+    private long flashAt;
+    private final Anim openAnim = new Anim(150, 0), switchAnim = new Anim(170, 1), barHover = new Anim(100, 0);
 
     /** On the studio's own section: what the tests and the studio's Settings button open. */
     public SettingsScreen(Screen parent) {
@@ -71,118 +131,437 @@ public class SettingsScreen extends Screen implements Host {
 
     /** On the section with this id; an unknown id opens the first section. */
     public SettingsScreen(Screen parent, String sectionId) {
+        this(parent, sectionId, null);
+    }
+
+    /** On a section, scrolled to the row with this option id, which glows for a moment (null: the top). */
+    public SettingsScreen(Screen parent, String sectionId, String optionId) {
         super(Component.translatable("skycosmetics.name"));
         this.parent = parent;
         this.sectionId = sectionId;
+        this.pendingOption = optionId;
     }
 
-    /** For Mod Menu and {@code /skycosmetics}: the section viewed last this session, else the studio's. */
+    /** For Mod Menu and {@code /skycosmetics}: where the settings were last this session, else the studio's section. */
     public static Screen create(Screen parent) {
-        return new SettingsScreen(parent, lastSection != null ? lastSection : Hub.STUDIO);
+        SettingsScreen s = new SettingsScreen(parent, lastSection != null ? lastSection : Hub.STUDIO);
+        if (lastSection != null) s.scroll = s.shown = lastScroll;
+        return s;
     }
 
-    // ------------------------------------------------------------- layout ---
+    // ============================================================ building
 
     @Override
     protected void init() {
-        built.clear();
-        rowIds.clear();
+        closeOverlay();
         tabs.clear();
-        keyButton = null;
-        keyHelp = null;
-        tooSmall = width < 280 || height < 180 || Hub.sections().isEmpty();
+        rows.clear();
+        keys.clear();
+        options.clear();
+        entries.clear();
+        flashRow = null;
+        draggingBar = false;
+        layout();
         if (tooSmall) {
-            addRenderableWidget(Button.builder(Component.translatable("gui.done").withStyle(ChatFormatting.GREEN),
-                b -> onClose()).bounds(width / 2 - 40, height / 2 + 14, 80, 20).build());
+            done = new ActionButton(CommonComponents.GUI_DONE, 80, true, b -> onClose());
+            done.setPosition(width / 2 - 40, height / 2 + 6);
+            addWidget(done);
             return;
         }
         section = Hub.find(sectionId);
         if (section == null) section = Hub.sections().getFirst();
         sectionId = section.id();
         lastSection = sectionId;
+        version = FabricLoader.getInstance().getModContainer(SkyCosmetics.MOD_ID)
+            .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("");
+        logoTitle = Component.translatable("skycosmetics.name").withStyle(ChatFormatting.BOLD).getVisualOrderText();
+        goTo = Component.translatable("skycosmetics.menu.search.goTo").getString();
 
-        rail = width < 400;
-        sideW = rail ? RAIL : Math.clamp(width * 24 / 100, 116, 160);
-        cx = PAD * 2 + sideW;
-        cw = width - cx - PAD;
+        int searchW = Math.clamp(ww * 34 / 100, 96, 210);
+        close = new CloseButton(Component.translatable("skycosmetics.menu.close"),
+            Component.translatable("skycosmetics.menu.close.tooltip"), b -> onClose());
+        close.setPosition(wx + ww - 6 - CloseButton.SIZE, wy + 5);
+        close.setTabOrderGroup(1);
+        search = new SearchBox(font, searchW, Component.translatable("skycosmetics.menu.search.hint"));
+        search.setPosition(close.getX() - 6 - searchW, wy + 5);
+        search.setValue(typed);
+        search.setResponder(this::searched);
+        search.setTooltip(Tooltip.create(Component.translatable("skycosmetics.menu.search.tooltip")));
+        search.setTooltipDelay(Duration.ofMillis(700));
+        titleRight = search.getX() - 8;
+        addWidget(search);
+        addWidget(close);
 
-        int ty = PAD + (rail ? 4 : 26);
         for (Section s : Hub.sections()) {
-            SectionTab tab = addRenderableWidget(new SectionTab(s, PAD + 2, ty, sideW - 4));
-            tabs.add(tab);
-            ty += TAB_H;
+            SectionTab t = new SectionTab(s, sideW - (rail ? 6 : 10), rail, b -> clickTab(((SectionTab) b).section()));
+            tabs.add(t);
+            addWidget(t);
+            collect(s);
         }
+        tabStep = (rail ? SectionTab.RAIL_H : SectionTab.H) + 2;
+        sideMax = Math.max(0, tabs.size() * tabStep + 6 - sideH);
+        sideScroll = sideShown = Math.clamp(sideScroll, 0, sideMax);
 
-        int listTop = PAD + HEADER_H + 4, listBottom = height - PAD - FOOTER_H - 2;
-        int rw = Math.min(ROW_W, cw - 30);
-        list = new ScrollableLayout(minecraft, rows(rw), listBottom - listTop);
-        list.setY(listTop);
-        list.arrangeElements();
-        list.setX(cx + Math.max(10, (cw - list.getWidth()) / 2)); // centered in the panel, scrollbar included
-        list.arrangeElements();
-        list.visitWidgets(this::addRenderableWidget);
+        buildRows();
+        if (pendingOption != null) {
+            Row r = rowOf(section, pendingOption);
+            pendingOption = null;
+            if (r != null) reveal(r, true);
+        }
+    }
 
-        addRenderableWidget(Button.builder(Component.translatable("gui.done").withStyle(ChatFormatting.GREEN), b -> onClose())
-            .bounds(cx + cw - 90, height - PAD - 25, 80, 20).build());
+    private void layout() {
+        tooSmall = width < MIN_W || height < MIN_H || Hub.sections().isEmpty();
+        int margin = width >= 720 && height >= 460 ? 28 : width >= 480 && height >= 300 ? 12 : 4;
+        ww = Math.min(width - 2 * margin, MAX_W);
+        wh = Math.min(height - 2 * margin, MAX_H);
+        wx = (width - ww) / 2;
+        wy = (height - wh) / 2;
+        rail = ww < 400;
+        sideW = rail ? RAIL_W : Math.clamp(ww * 27 / 100, 112, 156);
+        bodyY = wy + HEADER_H + 1;
+        cx = wx + sideW + 1;
+        cw = wx + ww - cx;
+        vx = cx + 6;
+        vw = cw - 6 - (BAR_W + 6);
+        vy = bodyY + HEAD_H + 1;
+        vh = wy + wh - 4 - vy;
+        sideTop = bodyY + 5;
+        sideH = wy + wh - 5 - sideTop;
+    }
+
+    /** A section's options, read once per opening, and what a search can match in each. */
+    private void collect(Section s) {
+        List<Option> list;
+        try {
+            list = List.copyOf(s.rows().apply(this));
+        } catch (RuntimeException e) {
+            Io.failed("Building the settings section " + s.id(), e);
+            options.put(s.id(), null);
+            return;
+        }
+        options.put(s.id(), list);
+        String where = (s.name().getString() + " " + s.sub().getString()).toLowerCase(Locale.ROOT);
+        Option group = null;
+        for (Option o : list) {
+            if (o.control() instanceof Control.Header) {
+                group = o;
+                continue;
+            }
+            StringBuilder hay = new StringBuilder(o.title().getString()).append(' ').append(o.help().getString())
+                .append(' ').append(o.search()).append(' ').append(where);
+            if (group != null) hay.append(' ').append(group.title().getString());
+            switch (o.control()) {
+                case Control.Action a -> hay.append(' ').append(a.label().getString());
+                case Control.Choice<?> c -> choices(c, hay);
+                default -> {}
+            }
+            entries.add(new Entry(s, group, o, hay.toString().toLowerCase(Locale.ROOT)));
+        }
+    }
+
+    private static <T> void choices(Control.Choice<T> c, StringBuilder hay) {
+        for (T v : c.values()) hay.append(' ').append(c.label().apply(v).getString());
+    }
+
+    /** Builds the rows the pane shows: the open section's, or every match of the search. */
+    private void buildRows() {
+        GuiEventListener focused = getFocused();
+        for (Row r : rows) {
+            if (r.widget == null) continue;
+            if (focused == r.widget) setFocused(null);
+            removeWidget(r.widget);
+        }
+        rows.clear();
+        keys.clear();
+        flashRow = null;
+        results = 0;
+        if (words.length == 0) {
+            List<Option> list = options.get(section.id());
+            if (list == null) rows.add(message(Component.translatable("skycosmetics.menu.broken")));
+            else if (list.isEmpty()) rows.add(message(Component.translatable("skycosmetics.menu.empty")));
+            else for (Option o : list) add(section, o);
+            for (SectionTab t : tabs) {
+                t.setCount(-1);
+                t.setSelected(t.section() == section);
+            }
+        } else {
+            int[] counts = new int[tabs.size()];
+            Section lastIn = null;
+            Option lastGroup = null;
+            for (Entry e : entries) {
+                if (!matches(e.hay)) continue;
+                if (e.section != lastIn || e.group != lastGroup) {
+                    rows.add(group(e.section, e.group));
+                    lastIn = e.section;
+                    lastGroup = e.group;
+                }
+                if (add(e.section, e.option)) {
+                    results++;
+                    counts[Math.max(0, tabIndex(e.section))]++;
+                }
+            }
+            for (int i = 0; i < tabs.size(); i++) {
+                tabs.get(i).setCount(counts[i]);
+                tabs.get(i).setSelected(false);
+            }
+            if (results == 0) rows.add(message(Component.translatable("skycosmetics.menu.search.none.help")));
+        }
+        layoutRows();
+        head();
         refresh();
     }
 
-    /** The open section's rows: title, control, help, with the group headers between them. */
-    private LinearLayout rows(int w) {
-        LinearLayout rows = LinearLayout.vertical().spacing(6);
-        List<Option> options;
+    /** Adds a row for this option; false for a header or when it could not be built (logged, and left out). */
+    private boolean add(Section s, Option o) {
+        Row r;
         try {
-            options = section.rows().apply(this);
+            r = o.control() instanceof Control.Header ? header(o)
+                : o.control() instanceof Control.Action a && o.title().getString().isEmpty() ? card(s, o, a)
+                : option(s, o);
         } catch (RuntimeException e) {
-            Io.failed("Building the settings section " + section.id(), e);
-            rows.addChild(text(Component.translatable("skycosmetics.menu.broken").withColor(HELP), w));
-            return rows;
+            Io.failed("Building the setting " + o.id(), e);
+            return false;
         }
-        for (Option o : options) {
-            rowIds.add(o.id());
-            if (o.control() instanceof Control.Header) {
-                rows.addChild(text(o.title().copy().withColor(ACCENT & 0xFFFFFF), w), s -> s.paddingTop(rowIds.size() > 1 ? 6 : 2));
-                continue;
-            }
-            Controls.Built b;
-            try {
-                b = Controls.build(o, w, this, this::keyChanged);
-            } catch (RuntimeException e) {
-                Io.failed("Building the setting " + o.id(), e);
-                continue;
-            }
-            LinearLayout entry = LinearLayout.vertical().spacing(3);
-            if (!o.title().getString().isEmpty()) entry.addChild(text(o.title().copy().withColor(TEXT & 0xFFFFFF), w));
-            entry.addChild(b.widget());
-            MultiLineTextWidget help = o.help().getString().isEmpty() ? null : text(o.help().copy().withColor(HELP), w);
-            if (b.widget() instanceof KeyBindButton k) {
-                keyButton = k;
-                keyUsualHelp = o.help();
-                keyHelp = help != null ? help : text(Component.empty(), w);
-                help = keyHelp;
-                keyHelp.setMessage(k.help(keyUsualHelp, HELP));
-            }
-            if (help != null) entry.addChild(help);
-            rows.addChild(entry);
-            built.add(b);
+        rows.add(r);
+        if (r.widget != null) addWidget(r.widget);
+        return r.kind != Kind.HEADER;
+    }
+
+    private Row header(Option o) {
+        Row r = new Row(Kind.HEADER, section, o);
+        r.title = List.of(o.title().copy().withStyle(ChatFormatting.BOLD).getVisualOrderText());
+        r.titleW = font.width(r.title.getFirst());
+        r.textX = ROW_X;
+        r.textY = rows.isEmpty() ? 3 : 12;
+        r.h = r.textY + 13;
+        return r;
+    }
+
+    /** A titleless Action is the section's main action: a big card with the section's icon. */
+    private Row card(Section s, Option o, Control.Action a) {
+        CardButton card = new CardButton(a.label(), o.help(), iconOf(s), vw, b -> a.run().run());
+        Row r = new Row(Kind.CARD, s, o);
+        r.widget = card;
+        r.ctrlY = rows.isEmpty() ? 2 : 6;
+        r.h = r.ctrlY + card.getHeight() + 6;
+        r.refresh = () -> {
+            boolean on = a.active().getAsBoolean() && o.enabled().getAsBoolean();
+            card.active = on;
+            card.setTooltip(on || a.inactiveTip().getString().isEmpty() ? null : Tooltip.create(a.inactiveTip()));
+        };
+        return r;
+    }
+
+    private Row option(Section s, Option o) {
+        boolean custom = o.control() instanceof Control.Custom;
+        int inner = vw - 2 * ROW_X;
+        int w = custom ? inner : Controls.width(o, vw);
+        boolean stacked = custom || !(o.control() instanceof Control.Toggle) && inner - w - GAP < MIN_TEXT;
+        if (stacked && !custom) w = Controls.stackedWidth(o, inner);
+        Controls.Built b = Controls.build(o, w, this, this::keyChanged);
+        Row r = new Row(custom ? Kind.CUSTOM : Kind.OPTION, s, o);
+        r.widget = b.widget();
+        r.refresh = b.refresh();
+        r.stacked = stacked;
+        r.textX = ROW_X;
+        r.textW = Math.max(40, stacked ? inner : inner - r.widget.getWidth() - GAP);
+        r.titleText = words.length == 0 ? o.title() : highlight(o.title().getString(), words);
+        r.helpText = o.help();
+        if (r.widget instanceof KeyBindButton k) {
+            keys.add(k);
+            r.key = k;
+            r.helpText = k.help(o.help(), Theme.MUTED);
+        } else if (words.length > 0) {
+            r.helpText = highlight(o.help().getString(), words);
         }
-        // Room under the last row, so its help is never flush with the footer.
-        rows.addChild(text(Component.empty(), w), s -> s.paddingBottom(2));
-        return rows;
+        wrap(r);
+        return r;
     }
 
-    private MultiLineTextWidget text(Component c, int w) {
-        return new MultiLineTextWidget(c, font).setMaxWidth(w);
+    /** In search results: the section (and group) the rows under it come from; a click jumps there. */
+    private Row group(Section s, Option groupHeader) {
+        Row r = new Row(Kind.GROUP, s, groupHeader);
+        MutableComponent text = s.name().copy().withColor(Theme.ACCENT & 0xFFFFFF);
+        if (groupHeader != null) {
+            text.append(Component.literal("  »  ").withColor(Theme.DIM & 0xFFFFFF))
+                .append(groupHeader.title().copy().withColor(Theme.MUTED & 0xFFFFFF));
+        }
+        List<FormattedCharSequence> lines = font.split(text, Math.max(40, vw - 2 * ROW_X - 30 - font.width(goTo)));
+        r.title = lines.isEmpty() ? List.of() : List.of(lines.getFirst());
+        r.icon = iconOf(s);
+        r.textX = ROW_X + 15;
+        r.textY = rows.isEmpty() ? 4 : 12;
+        r.h = r.textY + 14;
+        return r;
     }
 
-    /** A key row changed: its help line may have grown (a clash) or shrunk; the key itself is in options.txt. */
-    private void keyChanged() {
-        if (keyButton == null || keyHelp == null) return;
-        keyHelp.setMessage(keyButton.help(keyUsualHelp, HELP));
-        if (list != null) list.arrangeElements();
+    private Row message(Component text) {
+        Row r = new Row(Kind.MESSAGE, section, null);
+        r.title = font.split(text.copy().withColor(Theme.MUTED & 0xFFFFFF), Math.max(60, vw - 40));
+        r.h = 30 + r.title.size() * 10;
+        return r;
     }
 
-    // --------------------------------------------------------------- host ---
+    /** Wraps a row's title and help to its text width and sizes the row around them and its control. */
+    private void wrap(Row r) {
+        r.title = r.titleText.getString().isEmpty() ? List.of() : font.split(r.titleText, r.textW);
+        r.help = r.helpText.getString().isEmpty() ? List.of() : font.split(r.helpText, r.textW);
+        int textH = r.title.isEmpty() ? 0 : r.title.size() * 10 - 1;
+        if (!r.help.isEmpty()) textH += (textH > 0 ? 3 : 0) + r.help.size() * 10 - 1;
+        int ch = r.widget.getHeight();
+        if (r.stacked) {
+            r.textY = ROW_Y;
+            r.ctrlX = ROW_X;
+            r.ctrlY = ROW_Y + textH + (textH > 0 ? 5 : 0);
+            r.h = r.ctrlY + ch + ROW_Y;
+        } else {
+            int inner = Math.max(textH, ch);
+            r.h = inner + 2 * ROW_Y;
+            r.textY = ROW_Y + (inner - textH) / 2;
+            r.ctrlX = vw - ROW_X - r.widget.getWidth();
+            r.ctrlY = ROW_Y + (inner - ch) / 2;
+        }
+    }
+
+    /** Stacks the rows and marks the hairlines between neighboring settings. */
+    private void layoutRows() {
+        int y = 0;
+        Row prev = null;
+        for (Row r : rows) {
+            r.y = y;
+            y += r.h;
+            r.line = prev != null && prev.setting() && r.setting();
+            prev = r;
+        }
+        contentH = y + 8;
+        maxScroll = Math.max(0, contentH - vh);
+        scroll = Math.clamp(scroll, 0, maxScroll);
+        shown = Math.clamp(shown, 0, maxScroll);
+    }
+
+    /** The pane's header: the section, or what the search found. */
+    private void head() {
+        int room = cw - 32 - 10;
+        Component title;
+        if (words.length == 0) {
+            headIcon = iconOf(section);
+            title = section.name().copy().withStyle(ChatFormatting.BOLD);
+            headHelpFull = section.help();
+        } else {
+            headIcon = ItemStack.EMPTY;
+            title = Component.translatable("skycosmetics.menu.search.results", typed.strip()).withStyle(ChatFormatting.BOLD);
+            headHelpFull = results == 0 ? Component.translatable("skycosmetics.menu.search.none")
+                : Component.translatable(results == 1 ? "skycosmetics.menu.search.one" : "skycosmetics.menu.search.many", results);
+        }
+        List<FormattedCharSequence> t = font.split(title, Math.max(20, room));
+        headTitle = t.isEmpty() ? FormattedCharSequence.EMPTY : t.getFirst();
+        headHelp = Ui.clip(font, headHelpFull.getString(), room);
+    }
+
+    private ItemStack iconOf(Section s) {
+        for (SectionTab t : tabs) if (t.section() == s) return t.icon();
+        return ItemStack.EMPTY;
+    }
+
+    private int tabIndex(Section s) {
+        for (int i = 0; i < tabs.size(); i++) if (tabs.get(i).section() == s) return i;
+        return -1;
+    }
+
+    private Row rowOf(Section s, String optionId) {
+        for (Row r : rows) {
+            if (r.section == s && r.kind != Kind.GROUP && r.option != null && r.option.id().equals(optionId)) return r;
+        }
+        return null;
+    }
+
+    // ============================================================ search
+
+    private void searched(String text) {
+        if (muteSearch) return;
+        typed = text;
+        String q = text.strip().toLowerCase(Locale.ROOT);
+        String[] w = q.isEmpty() ? NONE : q.split("\\s+");
+        if (Arrays.equals(w, words)) {
+            head();
+            return;
+        }
+        if (words.length == 0) scrollBeforeSearch = scroll;
+        boolean back = w.length == 0;
+        words = w;
+        closeOverlay();
+        scroll = shown = back ? scrollBeforeSearch : 0;
+        buildRows();
+        if (back) switchAnim.set(0.4f);
+    }
+
+    private boolean matches(String hay) {
+        for (String w : words) if (!hay.contains(w)) return false;
+        return true;
+    }
+
+    /** The text with every typed word in gold. Built when the search changes, never per frame. */
+    private static Component highlight(String text, String[] words) {
+        String low = text.toLowerCase(Locale.ROOT);
+        if (low.length() != text.length()) return Component.literal(text);
+        boolean[] hit = new boolean[text.length()];
+        boolean any = false;
+        for (String w : words) {
+            for (int i = low.indexOf(w); i >= 0; i = low.indexOf(w, i + 1)) {
+                Arrays.fill(hit, i, i + w.length(), true);
+                any = true;
+            }
+        }
+        if (!any) return Component.literal(text);
+        MutableComponent out = Component.empty();
+        int start = 0;
+        for (int i = 1; i <= text.length(); i++) {
+            if (i == text.length() || hit[i] != hit[start]) {
+                MutableComponent part = Component.literal(text.substring(start, i));
+                out.append(hit[start] ? part.withColor(Theme.GOLD & 0xFFFFFF) : part);
+                start = i;
+            }
+        }
+        return out;
+    }
+
+    /** Leaves the search for this section and scrolls to the row (or group) found there. */
+    private void jumpTo(Section s, Option option) {
+        muteSearch = true;
+        search.setValue("");
+        muteSearch = false;
+        typed = "";
+        words = NONE;
+        if (getFocused() == search) setFocused(null);
+        closeOverlay();
+        section = s;
+        sectionId = s.id();
+        lastSection = sectionId;
+        scroll = shown = 0;
+        buildRows();
+        switchAnim.set(0);
+        Row r = option == null ? null : rowOf(s, option.id());
+        if (r != null) reveal(r, true);
+    }
+
+    /** Enter in the search: the first result, in its section. */
+    private void jumpToFirst() {
+        for (Row r : rows) {
+            if (r.setting() || r.kind == Kind.CARD) {
+                jumpTo(r.section, r.option);
+                return;
+            }
+        }
+    }
+
+    private void focusSearch() {
+        setFocused(search);
+        search.moveCursorToEnd(false);
+        search.setHighlightPos(0);
+    }
+
+    // ============================================================ host
 
     @Override
     public void changed() {
@@ -190,34 +569,110 @@ public class SettingsScreen extends Screen implements Host {
         refresh();
     }
 
+    /** Every row's value and grayed-out state, read again. */
     private void refresh() {
-        for (Controls.Built b : built) {
+        for (Row r : rows) {
+            if (r.refresh == null) continue;
             try {
-                b.refresh().run();
+                r.refresh.run();
+                r.enabled = r.option == null || r.option.enabled().getAsBoolean();
             } catch (RuntimeException e) {
-                Io.failed("Refreshing a setting", e);
+                Io.failed("Refreshing the setting " + r.id(), e);
             }
         }
     }
 
+    /** A key row changed: its help line may have grown (a clash, what to press) or shrunk. */
+    private void keyChanged() {
+        boolean any = false;
+        for (Row r : rows) {
+            if (r.key == null) continue;
+            r.helpText = r.key.help(r.option.help(), Theme.MUTED);
+            wrap(r);
+            any = true;
+        }
+        if (any) layoutRows();
+    }
+
     @Override
-    public void openPopup(ColorPopup p) {
-        popup = p;
-        if (rail) p.place(PAD, PAD, width - 2 * PAD, height - 2 * PAD);
-        else p.place(cx, PAD, cw, height - 2 * PAD);
+    public void openPopup(ColorPopup popup) {
+        openOverlay(new PopupOverlay(popup));
     }
 
-    /** A message in the footer for a few seconds. */
-    public void flash(Component message) {
-        status = message;
-        statusAt = Util.getMillis();
+    @Override
+    public void openOverlay(Overlay o) {
+        if (overlay != null && overlay != o) overlay.close();
+        overlay = o;
+        shown = scroll; // the widget it hangs from stays where it is
+        if (o instanceof PopupOverlay) {
+            if (rail || cw < 330) o.fit(wx, wy, ww, wh);
+            else o.fit(cx, bodyY, cw, wy + wh - bodyY);
+        } else {
+            o.fit(wx, wy, ww, wh);
+        }
     }
 
-    private void open(Section s) {
-        if (s.id().equals(sectionId)) return;
+    private void closeOverlay() {
+        if (overlay == null) return;
+        Overlay o = overlay;
+        overlay = null;
+        o.close(); // applies a half-typed hex value; its close saves
+    }
+
+    private void clickTab(Section s) {
+        if (words.length > 0) {
+            for (Row r : rows) {
+                if (r.kind == Kind.GROUP && r.section == s) {
+                    scroll = Math.clamp(r.y, 0, maxScroll);
+                    return;
+                }
+            }
+            jumpTo(s, null); // nothing found there: show the section
+            return;
+        }
+        if (s == section) {
+            scroll = 0;
+            return;
+        }
+        closeOverlay();
+        section = s;
         sectionId = s.id();
-        popup = null;
-        rebuildWidgets();
+        lastSection = sectionId;
+        scroll = shown = 0;
+        buildRows();
+        switchAnim.set(0);
+    }
+
+    /** Scrolls so the row shows whole; {@code glow} puts it a third down the pane and lights it up for a moment. */
+    private void reveal(Row r, boolean glow) {
+        if (glow) {
+            scroll = Math.clamp(r.y - vh / 3.0, 0, maxScroll);
+            flashRow = r;
+            flashAt = Util.getMillis();
+        } else if (r.y < scroll) {
+            scroll = Math.max(0, r.y - 4);
+        } else if (r.y + r.h > scroll + vh) {
+            scroll = Math.min(maxScroll, r.y + r.h - vh + 4);
+        }
+    }
+
+    /** Tab and the arrows scroll the pane (or the sidebar) to what they focus. */
+    @Override
+    public void setFocused(GuiEventListener focused) {
+        super.setFocused(focused);
+        if (focused == null || minecraft == null || !minecraft.getLastInputType().isKeyboard()) return;
+        for (Row r : rows) {
+            if (r.widget == focused) {
+                reveal(r, false);
+                return;
+            }
+        }
+        for (int i = 0; i < tabs.size(); i++) {
+            if (tabs.get(i) != focused) continue;
+            int top = i * tabStep;
+            if (top < sideScroll) sideScroll = top;
+            else if (top + tabStep > sideScroll + sideH) sideScroll = Math.min(sideMax, top + tabStep - sideH);
+        }
     }
 
     @Override
@@ -227,11 +682,8 @@ public class SettingsScreen extends Screen implements Host {
 
     @Override
     public void removed() {
-        if (popup != null) {
-            ColorPopup p = popup;
-            popup = null;
-            p.close(); // applies a half-typed hex value; its close action saves
-        }
+        closeOverlay();
+        if (!tooSmall && words.length == 0) lastScroll = scroll;
         super.removed();
     }
 
@@ -240,151 +692,500 @@ public class SettingsScreen extends Screen implements Host {
         return false;
     }
 
-    // ------------------------------------------------------------- render ---
+    // ============================================================ render
 
     @Override
     public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        // Opaque from the title screen (Mod Menu): its panorama would shimmer through.
-        g.fill(0, 0, width, height, minecraft.level == null ? BG_OPAQUE : BG);
-        if (tooSmall) return;
-        panel(g, PAD, PAD, sideW, height - 2 * PAD);
-        panel(g, cx, PAD, cw, height - 2 * PAD);
-        g.fill(cx + 1, PAD + HEADER_H, cx + cw - 1, PAD + HEADER_H + 1, LINE);
-        g.fill(cx + 1, height - PAD - FOOTER_H, cx + cw - 1, height - PAD - FOOTER_H + 1, LINE);
-    }
-
-    private static void panel(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-        g.fill(x, y, x + w, y + h, PANEL);
-        g.outline(x, y, w, h, LINE);
+        if (minecraft.level == null) extractPanorama(g, delta);
+        extractBlurredBackground(g);
+        g.fill(0, 0, width, height, Theme.SHADE);
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        if (popup != null && popup.isClosed()) popup = null;
-        // Under an open pop-up nothing is hovered: no highlights, no tooltips.
-        int mx = popup != null ? -10000 : mouseX, my = popup != null ? -10000 : mouseY;
-        super.extractRenderState(g, mx, my, delta);
         if (tooSmall) {
-            g.centeredText(font, Component.translatable("skycosmetics.menu.tooSmall"), width / 2, height / 2 - 10, TEXT);
+            g.centeredText(font, Component.translatable("skycosmetics.menu.tooSmall"), width / 2, height / 2 - 12, Theme.TEXT);
+            if (done != null) done.extractRenderState(g, mouseX, mouseY, delta);
             return;
         }
-        if (!rail) {
-            g.text(font, Component.translatable("skycosmetics.name").withStyle(ChatFormatting.BOLD), PAD + 6, PAD + 9, ACCENT);
-            String version = FabricLoader.getInstance().getModContainer("skycosmetics")
-                .map(c -> "v" + c.getMetadata().getVersion().getFriendlyString()).orElse("");
-            small(g, version, PAD + 6, height - PAD - 10, MUTED);
-        }
-        g.text(font, section.name().copy().withStyle(ChatFormatting.BOLD), cx + 10, PAD + 9, TEXT);
-        String help = clip(section.help().getString(), cw - 20);
-        g.text(font, help, cx + 10, PAD + 21, MUTED);
-        if (help.length() != section.help().getString().length() && mx >= cx && mx < cx + cw && my >= PAD + 20 && my < PAD + 30) {
-            g.setTooltipForNextFrame(font, section.help(), mx, my);
-        }
-        if (Util.getMillis() - statusAt < 4000) g.text(font, clip(status.getString(), cw - 110), cx + 10, height - PAD - 19, ACCENT);
-        if (popup != null) popup.render(g, mouseX, mouseY);
-    }
-
-    private void small(GuiGraphicsExtractor g, String text, int x, int y, int color) {
+        if (overlay != null && overlay.isClosed()) overlay = null;
+        // Under an open overlay nothing is hovered: no highlights, no tooltips.
+        int mx = overlay != null ? -10000 : mouseX, my = overlay != null ? -10000 : mouseY;
+        step();
+        float open = Anim.easeOut(openAnim.to(1));
+        if (open >= 1) opened = true;
+        int lift = opened ? 0 : Math.round((1 - open) * 8);
         g.pose().pushMatrix();
-        g.pose().translate(x, y);
-        g.pose().scale(0.75f, 0.75f);
-        g.text(font, text, 0, 0, color);
+        g.pose().translate(0, lift);
+        window(g);
+        header(g, mx, my, delta);
+        sidebar(g, mx, my, delta);
+        content(g, mx, my, delta);
         g.pose().popMatrix();
+        if (overlay != null) overlay.render(g, mouseX, mouseY);
     }
 
-    private String clip(String s, int px) {
-        if (px <= 0) return "";
-        if (font.width(s) <= px) return s;
-        return font.plainSubstrByWidth(s, Math.max(0, px - font.width("..."))) + "...";
+    /** Moves the scrolls toward their targets by the time since the last frame. */
+    private void step() {
+        long now = Util.getMillis();
+        long dt = lastFrame < 0 ? 1000 : Math.min(250, now - lastFrame);
+        lastFrame = now;
+        double k = 1 - Math.exp(-dt / 55.0);
+        shown = draggingBar || Math.abs(scroll - shown) < 0.5 ? scroll : shown + (scroll - shown) * k;
+        sideShown = Math.abs(sideScroll - sideShown) < 0.5 ? sideScroll : sideShown + (sideScroll - sideShown) * k;
     }
 
-    // -------------------------------------------------------------- input ---
+    private void window(GuiGraphicsExtractor g) {
+        int r = Theme.RADIUS, bh = wy + wh - bodyY;
+        Shapes.shadow(g, wx, wy, ww, wh, r, 8);
+        Shapes.round(g, wx, wy, ww, wh, r, Theme.CHROME);
+        Shapes.round(g, cx, bodyY, cw, bh, r, Theme.BODY);
+        g.fill(cx, bodyY, cx + cw, bodyY + r, Theme.BODY);
+        g.fill(cx, bodyY, cx + r, bodyY + bh, Theme.BODY);
+        g.fill(cx - 1, bodyY, cx, wy + wh - 1, Theme.LINE_SOFT);
+        Shapes.gradient(g, wx + 1, bodyY - 1, wx + ww - 1, bodyY, Theme.PURPLE, Theme.PINK);
+        Shapes.frame(g, wx, wy, ww, wh, r, Theme.LINE);
+    }
+
+    private void header(GuiGraphicsExtractor g, int mx, int my, float delta) {
+        g.blit(RenderPipelines.GUI_TEXTURED, LOGO, wx + 7, wy + 5, 0, 0, 16, 16, 128, 128, 128, 128);
+        int tx = wx + 28, nameW = font.width(logoTitle);
+        if (tx + nameW <= titleRight) {
+            g.text(font, logoTitle, tx, wy + 9, Theme.ACCENT, false);
+            int at = tx + nameW + 5;
+            if (!version.isEmpty() && at + font.width(version) <= titleRight) g.text(font, version, at, wy + 9, Theme.DIM, false);
+        }
+        search.extractRenderState(g, mx, my, delta);
+        close.extractRenderState(g, mx, my, delta);
+    }
+
+    private void sidebar(GuiGraphicsExtractor g, int mx, int my, float delta) {
+        int left = wx + (rail ? 3 : 5);
+        boolean inSide = mx >= wx && mx < cx && my >= sideTop && my < sideTop + sideH;
+        int smx = inSide ? mx : -10000, smy = inSide ? my : -10000;
+        g.enableScissor(wx + 1, sideTop, cx - 1, sideTop + sideH);
+        int y = sideTop + 1 - (int) Math.round(sideShown);
+        int target = Integer.MIN_VALUE;
+        for (SectionTab t : tabs) {
+            t.setPosition(left, y);
+            if (t.selected()) target = y;
+            if (y + t.getHeight() > sideTop && y < sideTop + sideH) t.extractRenderState(g, smx, smy, delta);
+            y += tabStep;
+        }
+        if (target != Integer.MIN_VALUE) {
+            // The accent bar glides to the open section.
+            barY = barY < 0 || Math.abs(barY - target) > sideH ? target : barY + (target - barY) * 0.35f;
+            if (Math.abs(barY - target) < 0.5f) barY = target;
+            int th = rail ? SectionTab.RAIL_H : SectionTab.H;
+            Shapes.round(g, wx + 1, Math.round(barY) + 5, 2, th - 10, 1, Theme.ACCENT);
+        }
+        g.disableScissor();
+        if (sideMax > 0) {
+            int track = sideH - 4, thumb = Math.max(12, (int) (track * (long) sideH / (sideH + (long) sideMax)));
+            int ty = sideTop + 2 + (int) Math.round((track - thumb) * sideShown / sideMax);
+            Shapes.round(g, cx - 4, ty, 2, thumb, 1, Theme.DIM);
+        }
+    }
+
+    private void content(GuiGraphicsExtractor g, int mx, int my, float delta) {
+        // The pane's header.
+        int hx = cx + 10, hy = bodyY + 8;
+        if (!headIcon.isEmpty()) g.item(headIcon, hx, bodyY + (HEAD_H - 16) / 2);
+        else Ui.magnifier(g, hx + 3, bodyY + (HEAD_H - 9) / 2, Theme.ACCENT);
+        g.text(font, headTitle, hx + 22, hy, Theme.TEXT, false);
+        g.text(font, headHelp, hx + 22, hy + 12, Theme.MUTED, false);
+        if (headHelp.length() != headHelpFull.getString().length() && mx >= hx + 22 && mx < cx + cw && my >= hy + 11 && my < hy + 21) {
+            g.setTooltipForNextFrame(font, headHelpFull, mx, my);
+        }
+        g.fill(cx + 8, vy - 1, cx + cw - 8, vy, Theme.LINE_SOFT);
+
+        float sw = Anim.easeOut(switchAnim.to(1));
+        int slide = Math.round((1 - sw) * 10);
+        boolean inView = inPane(mx, my);
+        int pmx = inView ? mx : -10000, pmy = inView ? my : -10000;
+        int base = vy - (int) Math.round(shown) + slide;
+        g.enableScissor(cx + 1, vy, cx + cw - 1, vy + vh);
+        for (Row r : rows) {
+            int ry = base + r.y;
+            if (r.widget != null) r.widget.setPosition(vx + r.ctrlX, ry + r.ctrlY);
+            if (ry + r.h <= vy || ry >= vy + vh) continue;
+            row(g, r, ry, pmx, pmy, delta);
+        }
+        // Soft edges where more rows hide, and the fade-in after a section switch.
+        if (shown > 1) g.fillGradient(cx + 1, vy, cx + cw - 1, vy + 8, Theme.BODY, Theme.BODY & 0xFFFFFF);
+        if (shown < maxScroll - 1) g.fillGradient(cx + 1, vy + vh - 8, cx + cw - 1, vy + vh, Theme.BODY & 0xFFFFFF, Theme.BODY);
+        if (sw < 1) g.fill(cx + 1, vy, cx + cw - 1, vy + vh, Theme.fade(Theme.BODY, 1 - sw));
+        g.disableScissor();
+        scrollbar(g, mx, my);
+    }
+
+    private void row(GuiGraphicsExtractor g, Row r, int ry, int mx, int my, float delta) {
+        boolean over = mx >= vx && mx < vx + vw && my >= ry && my < ry + r.h;
+        switch (r.kind) {
+            case HEADER -> {
+                int tx = vx + r.textX, ty = ry + r.textY;
+                g.text(font, r.title.getFirst(), tx, ty, Theme.ACCENT, false);
+                int lx = tx + r.titleW + 6, end = vx + vw - ROW_X;
+                if (lx < end) g.fill(lx, ty + 4, end, ty + 5, Theme.LINE_SOFT);
+            }
+            case GROUP -> {
+                float hv = r.hover.to(over ? 1 : 0);
+                int top = ry + r.textY - 4;
+                if (hv > 0) Shapes.round(g, vx, top, vw, 16, 4, Theme.fade(Theme.SURFACE, hv));
+                g.pose().pushMatrix();
+                g.pose().translate(vx + ROW_X - 2, top + 2);
+                g.pose().scale(0.75f, 0.75f);
+                g.item(r.icon, 0, 0);
+                g.pose().popMatrix();
+                if (!r.title.isEmpty()) g.text(font, r.title.getFirst(), vx + r.textX, ry + r.textY, Theme.TEXT, false);
+                if (hv > 0) {
+                    int gx = vx + vw - ROW_X - 6 - font.width(goTo), color = Theme.fade(Theme.ACCENT, hv);
+                    g.text(font, goTo, gx, ry + r.textY, color, false);
+                    Ui.chevronRight(g, vx + vw - ROW_X - 3, ry + r.textY + 1, color);
+                }
+            }
+            case MESSAGE -> {
+                int ty = ry + 15;
+                for (FormattedCharSequence line : r.title) {
+                    g.text(font, line, vx + (vw - font.width(line)) / 2, ty, Theme.MUTED, false);
+                    ty += 10;
+                }
+            }
+            case CARD -> {
+                flash(g, r, ry);
+                r.widget.extractRenderState(g, mx, my, delta);
+            }
+            case OPTION, CUSTOM -> {
+                if (r.line) g.fill(vx + ROW_X, ry, vx + vw - ROW_X, ry + 1, Theme.LINE_SOFT);
+                float hv = r.hover.to(over ? 1 : 0);
+                if (hv > 0) Shapes.round(g, vx, ry, vw, r.h, 4, Theme.fade(Theme.ROW_HOVER, hv));
+                flash(g, r, ry);
+                int tx = vx + r.textX, ty = ry + r.textY;
+                int titleColor = r.enabled ? Theme.TEXT : Theme.DIM, helpColor = r.enabled ? Theme.MUTED : Theme.DIM;
+                for (FormattedCharSequence line : r.title) {
+                    g.text(font, line, tx, ty, titleColor, false);
+                    ty += 10;
+                }
+                if (!r.title.isEmpty()) ty += 3;
+                for (FormattedCharSequence line : r.help) {
+                    g.text(font, line, tx, ty, helpColor, false);
+                    ty += 10;
+                }
+                r.widget.extractRenderState(g, mx, my, delta);
+            }
+        }
+    }
+
+    /** The glow of a row a search jumped to: accent tint and bar, fading out. */
+    private void flash(GuiGraphicsExtractor g, Row r, int ry) {
+        if (r != flashRow) return;
+        float t = (Util.getMillis() - flashAt) / (float) FLASH_MS;
+        if (t >= 1) {
+            flashRow = null;
+            return;
+        }
+        float a = 1 - Anim.easeOut(Math.max(0, t * 1.4f - 0.4f));
+        Shapes.round(g, vx, ry, vw, r.h, 4, Theme.fade(Theme.ACCENT_BG, a * 0.85f));
+        Shapes.round(g, vx, ry + 3, 2, r.h - 6, 1, Theme.fade(Theme.ACCENT, a));
+    }
+
+    private void scrollbar(GuiGraphicsExtractor g, int mx, int my) {
+        if (maxScroll <= 0) return;
+        int tx = barX(), ty = vy + 2, th = vh - 4;
+        int thumbH = thumbH(th), thumbY = ty + (int) Math.round((th - thumbH) * shown / maxScroll);
+        boolean over = draggingBar || mx >= tx - 3 && mx < tx + BAR_W + 3 && my >= ty && my < ty + th;
+        float hv = barHover.to(over ? 1 : 0);
+        Shapes.round(g, tx, ty, BAR_W, th, 1, Theme.fade(Theme.SURFACE, 0.5f + 0.5f * hv));
+        Shapes.round(g, tx, thumbY, BAR_W, thumbH, 1, Theme.mix(Theme.DIM, Theme.ACCENT, hv));
+    }
+
+    private int barX() {
+        return cx + cw - BAR_W - 4;
+    }
+
+    private int thumbH(int track) {
+        return Math.max(14, (int) ((long) track * vh / Math.max(1, contentH)));
+    }
+
+    // ============================================================ input
+
+    /** Content widgets get the mouse only inside the pane, tabs only inside the sidebar. */
+    @Override
+    public Optional<GuiEventListener> getChildAt(double x, double y) {
+        if (tooSmall) return done != null && done.isMouseOver(x, y) ? Optional.of(done) : Optional.empty();
+        if (search.isMouseOver(x, y)) return Optional.of(search);
+        if (close.isMouseOver(x, y)) return Optional.of(close);
+        if (x >= wx && x < cx && y >= sideTop && y < sideTop + sideH) {
+            for (SectionTab t : tabs) if (t.isMouseOver(x, y)) return Optional.of(t);
+        }
+        if (inPane(x, y)) {
+            for (Row r : rows) if (r.widget != null && r.widget.isMouseOver(x, y)) return Optional.of(r.widget);
+        }
+        return Optional.empty();
+    }
+
+    private boolean inPane(double x, double y) {
+        return x >= cx && x < cx + cw && y >= vy && y < vy + vh;
+    }
+
+    private Row rowAt(double x, double y) {
+        if (!inPane(x, y) || x < vx || x >= vx + vw) return null;
+        double at = y - vy + shown;
+        for (Row r : rows) if (at >= r.y && at < r.y + r.h) return r;
+        return null;
+    }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (popup != null) {
-            popup.mouseClicked(event.x(), event.y(), event.button());
-            if (popup.isClosed()) popup = null;
+        if (overlay != null) {
+            overlay.mouseClicked(event);
+            if (overlay != null && overlay.isClosed()) overlay = null;
             return true;
         }
-        if (keyButton != null && keyButton.handleClick(event)) return true;
-        return super.mouseClicked(event, doubleClick);
+        for (KeyBindButton k : keys) if (k.handleClick(event)) return true;
+        if (tooSmall) return super.mouseClicked(event, doubleClick);
+        double x = event.x(), y = event.y();
+        if (event.button() == 0 && maxScroll > 0 && x >= barX() - 3 && x < barX() + BAR_W + 3 && y >= vy && y < vy + vh) {
+            int th = vh - 4, thumbH = thumbH(th), thumbY = vy + 2 + (int) Math.round((th - thumbH) * shown / maxScroll);
+            barGrab = y >= thumbY && y < thumbY + thumbH ? y - thumbY : thumbH / 2.0;
+            draggingBar = true;
+            dragBar(y);
+            return true;
+        }
+        if (super.mouseClicked(event, doubleClick)) return true;
+        if (getFocused() == search) setFocused(null);
+        Row r = event.button() == 0 ? rowAt(x, y) : null;
+        if (r == null) return false;
+        if (r.kind == Kind.GROUP) {
+            AbstractWidget.playButtonClickSound(minecraft.getSoundManager());
+            jumpTo(r.section, r.option);
+            return true;
+        }
+        // A click anywhere on a switch's row flips it.
+        if (r.widget instanceof ToggleSwitch t && t.isActive()) {
+            t.playDownSound(minecraft.getSoundManager());
+            t.onPress(event);
+            return true;
+        }
+        return false;
+    }
+
+    private void dragBar(double y) {
+        int th = vh - 4, thumbH = thumbH(th);
+        double p = (y - barGrab - (vy + 2)) / Math.max(1, th - thumbH);
+        scroll = shown = Math.clamp(p, 0, 1) * maxScroll;
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (popup != null) return popup.mouseDragged(event.x(), event.y(), event.button());
+        if (overlay != null) {
+            overlay.mouseDragged(event);
+            return true;
+        }
+        if (draggingBar) {
+            dragBar(event.y());
+            return true;
+        }
         return super.mouseDragged(event, dx, dy);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (popup != null) {
-            popup.mouseReleased(event.x(), event.y(), event.button());
+        if (overlay != null) {
+            overlay.mouseReleased(event);
             super.mouseReleased(event); // ends the screen's own drag state; a release never presses a button
+            return true;
+        }
+        if (draggingBar) {
+            draggingBar = false;
             return true;
         }
         return super.mouseReleased(event);
     }
 
     @Override
-    public boolean mouseScrolled(double mx, double my, double dx, double dy) {
-        return popup != null || super.mouseScrolled(mx, my, dx, dy);
-    }
-
-    /** A listening key row gets every key first (Esc cancels it, never closes the screen), then the pop-up. */
-    @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (keyButton != null && keyButton.handleKey(event)) return true;
-        if (popup != null) {
-            popup.keyPressed(event);
-            if (popup.isClosed()) popup = null;
+    public boolean mouseScrolled(double x, double y, double dx, double dy) {
+        if (overlay != null) {
+            overlay.mouseScrolled(x, y, dy);
             return true;
         }
-        return super.keyPressed(event);
+        if (tooSmall) return false;
+        if (x >= wx && x < cx && y >= sideTop && y < sideTop + sideH) {
+            if (sideMax <= 0) return false;
+            sideScroll = Math.clamp(sideScroll - dy * WHEEL, 0, sideMax);
+            return true;
+        }
+        if (!inPane(x, y)) return false;
+        Optional<GuiEventListener> child = getChildAt(x, y);
+        if (child.isPresent() && child.get().mouseScrolled(x, y, dx, dy)) return true;
+        scroll = Math.clamp(scroll - dy * WHEEL, 0, maxScroll);
+        return true;
     }
 
+    /**
+     * In order: a key row waiting for a key, an open overlay, Ctrl+F, the search box's own keys (Esc clears it,
+     * Enter jumps to the first result), Esc clearing a search, then the focused widget and Tab, then Page Up / Page
+     * Down / Home / End for the pane.
+     */
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        swallowChar = false;
+        for (KeyBindButton k : keys) {
+            if (k.handleKey(event)) {
+                swallowChar = true; // the character of the key just bound must not start a search
+                return true;
+            }
+        }
+        if (overlay != null) {
+            overlay.keyPressed(event);
+            if (overlay != null && overlay.isClosed()) overlay = null;
+            return true;
+        }
+        if (tooSmall) return super.keyPressed(event);
+        int key = event.key();
+        if (key == GLFW.GLFW_KEY_F && event.hasControlDown()) {
+            focusSearch();
+            swallowChar = true;
+            return true;
+        }
+        if (getFocused() == search) {
+            if (event.isEscape()) {
+                if (!search.getValue().isEmpty()) search.setValue("");
+                else setFocused(null);
+                return true;
+            }
+            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                jumpToFirst();
+                return true;
+            }
+        }
+        if (event.isEscape() && words.length > 0) {
+            search.setValue("");
+            return true;
+        }
+        if (super.keyPressed(event)) return true;
+        switch (key) {
+            case GLFW.GLFW_KEY_PAGE_UP -> scroll = Math.max(0, scroll - vh * 0.85);
+            case GLFW.GLFW_KEY_PAGE_DOWN -> scroll = Math.min(maxScroll, scroll + vh * 0.85);
+            case GLFW.GLFW_KEY_HOME -> scroll = 0;
+            case GLFW.GLFW_KEY_END -> scroll = maxScroll;
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Typing a letter or digit with no text box focused starts a search. */
     @Override
     public boolean charTyped(CharacterEvent event) {
-        if (popup != null) return popup.charTyped(event);
-        return super.charTyped(event);
+        if (swallowChar) {
+            swallowChar = false;
+            return true;
+        }
+        if (overlay != null) {
+            overlay.charTyped(event);
+            return true;
+        }
+        if (super.charTyped(event)) return true;
+        if (tooSmall || getFocused() == search || !Character.isLetterOrDigit(event.codepoint())) return false;
+        setFocused(search);
+        search.moveCursorToEnd(false);
+        return search.charTyped(event);
     }
 
-    // --------------------------------------------------------------- tabs ---
+    // ============================================================ rows
 
-    /** A section in the sidebar, drawn like the studio's item rows: icon, name, a gray line under it. */
-    private final class SectionTab extends Button.Plain {
-        private final Section s;
-        private final ItemStack icon;
+    private enum Kind { HEADER, OPTION, CUSTOM, CARD, GROUP, MESSAGE }
 
-        SectionTab(Section s, int x, int y, int w) {
-            super(x, y, w, TAB_H - 2, s.name(), b -> open(s), Supplier::get);
-            this.s = s;
-            ItemStack i;
-            try {
-                i = s.icon().get();
-            } catch (RuntimeException e) {
-                Io.failed("Building the icon of settings section " + s.id(), e);
-                i = ItemStack.EMPTY;
-            }
-            this.icon = i;
-            if (rail) setTooltip(Tooltip.create(s.name()));
+    /** What a search can find: an option, its section and group, and its words in lower case. */
+    private record Entry(Section section, Option group, Option option, String hay) {}
+
+    /** One row of the pane; positions are relative to the row, the row's to the top of the list. */
+    private static final class Row {
+        final Kind kind;
+        final Section section;
+        final Option option;
+        AbstractWidget widget;
+        Runnable refresh;
+        KeyBindButton key;
+        ItemStack icon = ItemStack.EMPTY;
+        Component titleText = Component.empty(), helpText = Component.empty();
+        List<FormattedCharSequence> title = List.of(), help = List.of();
+        int y, h, textX, textY, textW, titleW, ctrlX, ctrlY;
+        boolean stacked, line, enabled = true;
+        final Anim hover = new Anim(110, 0);
+
+        Row(Kind kind, Section section, Option option) {
+            this.kind = kind;
+            this.section = section;
+            this.option = option;
+        }
+
+        boolean setting() {
+            return kind == Kind.OPTION || kind == Kind.CUSTOM;
+        }
+
+        String id() {
+            return option == null ? "" : option.id();
+        }
+    }
+
+    /** A {@link ColorPopup} a feature's own widget opened through {@link Host#openPopup}. */
+    private static final class PopupOverlay implements Overlay {
+        private final ColorPopup popup;
+
+        PopupOverlay(ColorPopup popup) {
+            this.popup = popup;
         }
 
         @Override
-        protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-            boolean open = s.id().equals(sectionId);
-            if (open) g.fill(getX(), getY(), getRight(), getBottom(), 0x50FFC94A);
-            else if (isHoveredOrFocused()) g.fill(getX(), getY(), getRight(), getBottom(), 0x30FFFFFF);
-            g.item(icon, getX() + (rail ? 4 : 3), getY() + 3);
-            if (rail) return;
-            int color = s.order() == Section.FIRST ? ACCENT : TEXT;
-            g.text(font, clip(s.name().getString(), getWidth() - 26), getX() + 23, getY() + 3, color);
-            small(g, clip(s.sub().getString(), (int) ((getWidth() - 26) / 0.75f)), getX() + 23, getY() + 13, MUTED);
+        public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+            popup.render(g, mouseX, mouseY);
+        }
+
+        @Override
+        public void mouseClicked(MouseButtonEvent e) {
+            popup.mouseClicked(e.x(), e.y(), e.button());
+        }
+
+        @Override
+        public void mouseDragged(MouseButtonEvent e) {
+            popup.mouseDragged(e.x(), e.y(), e.button());
+        }
+
+        @Override
+        public void mouseReleased(MouseButtonEvent e) {
+            popup.mouseReleased(e.x(), e.y(), e.button());
+        }
+
+        @Override
+        public void keyPressed(KeyEvent e) {
+            popup.keyPressed(e);
+        }
+
+        @Override
+        public void charTyped(CharacterEvent e) {
+            popup.charTyped(e);
+        }
+
+        @Override
+        public boolean isClosed() {
+            return popup.isClosed();
+        }
+
+        @Override
+        public void close() {
+            popup.close();
+        }
+
+        @Override
+        public void fit(int x, int y, int width, int height) {
+            popup.place(x, y, width, height);
         }
     }
 
-    // --------------------------------------------------------- test hooks ---
+    // ============================================================ test hooks
 
     public Screen parent() {
         return parent;
@@ -394,20 +1195,93 @@ public class SettingsScreen extends Screen implements Host {
         return sectionId;
     }
 
-    /** The open section's row ids, headers included, in order. */
+    /** The pane's rows by option id, headers included, in order; a search's group lines read "> section id". */
     public List<String> rowIds() {
-        return List.copyOf(rowIds);
+        List<String> out = new ArrayList<>();
+        for (Row r : rows) out.add(r.kind == Kind.GROUP ? "> " + r.section.id() : r.kind == Kind.MESSAGE ? "!" : r.id());
+        return out;
     }
 
-    /** How many rows of the open section have a button: a toggle, choice, key or action. */
-    public int buttonRows() {
-        int n = 0;
-        for (Controls.Built b : built) if (b.widget() instanceof Button) n++;
-        return n;
+    /** The widget of the row with this option id, or null. */
+    public AbstractWidget widget(String optionId) {
+        for (Row r : rows) if (r.widget != null && r.kind != Kind.GROUP && r.id().equals(optionId)) return r.widget;
+        return null;
     }
 
-    /** The open color pop-up, or null. */
+    /** The row's title and help lines as shown. */
+    public List<String> rowText(String optionId) {
+        List<String> out = new ArrayList<>();
+        for (Row r : rows) {
+            if (r.kind == Kind.GROUP || !r.id().equals(optionId)) continue;
+            for (FormattedCharSequence l : r.title) out.add(plain(l));
+            for (FormattedCharSequence l : r.help) out.add(plain(l));
+        }
+        return out;
+    }
+
+    private static String plain(FormattedCharSequence line) {
+        StringBuilder sb = new StringBuilder();
+        line.accept((i, style, cp) -> {
+            sb.appendCodePoint(cp);
+            return true;
+        });
+        return sb.toString();
+    }
+
+    /** Whether the row's control sits under its text (true) or beside it. */
+    public boolean stacked(String optionId) {
+        for (Row r : rows) if (r.kind != Kind.GROUP && r.id().equals(optionId)) return r.stacked;
+        return false;
+    }
+
+    public SearchBox search() {
+        return search;
+    }
+
+    public List<SectionTab> tabs() {
+        return List.copyOf(tabs);
+    }
+
+    /** Where the pane is scrolling to, and how far it can. */
+    public double scrollAmount() {
+        return scroll;
+    }
+
+    public double maxScroll() {
+        return maxScroll;
+    }
+
+    /** The scrolling pane: x, y, width, height. */
+    public int[] pane() {
+        return new int[]{cx, vy, cw, vh};
+    }
+
+    /** The window: x, y, width, height. */
+    public int[] window() {
+        return new int[]{wx, wy, ww, wh};
+    }
+
+    /** How many settings the search found, or -1 with no search. */
+    public int results() {
+        return words.length == 0 ? -1 : results;
+    }
+
+    public Overlay overlay() {
+        return overlay;
+    }
+
+    /** The open color pop-up a feature's widget opened, or null. */
     public ColorPopup popup() {
-        return popup;
+        return overlay instanceof PopupOverlay p ? p.popup : null;
+    }
+
+    /** The row glowing after a jump, or null. */
+    public String flashing() {
+        return flashRow == null ? null : flashRow.id();
+    }
+
+    /** The sidebar shows icons only. */
+    public boolean narrow() {
+        return rail;
     }
 }

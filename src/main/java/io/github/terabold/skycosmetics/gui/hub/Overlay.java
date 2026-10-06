@@ -31,9 +31,4 @@ public interface Overlay {
 
     /** Moves it back inside this area after a resize. */
     default void fit(int x, int y, int width, int height) {}
-
-    /** What can open an overlay: the settings screen. */
-    interface Host {
-        void openOverlay(Overlay overlay);
-    }
 }

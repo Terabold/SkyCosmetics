@@ -11,6 +11,8 @@ public final class Theme {
     public static final int BODY = 0xFF17171D;
     /** The header and the sidebar: one step darker than the body. */
     public static final int CHROME = 0xFF111116;
+    /** Under a row the mouse is over: a breath lighter than the body. */
+    public static final int ROW_HOVER = 0xFF1E1E26;
     /** Fields and controls at rest, and their hover. */
     public static final int SURFACE = 0xFF24242D, SURFACE_HOVER = 0xFF2F2F3A;
     /** The window's frame and separators. */

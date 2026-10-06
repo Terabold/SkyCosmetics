@@ -25,6 +25,8 @@ import net.minecraft.util.Util;
  */
 public final class SegmentedChoice<T> extends AbstractWidget {
     public static final int H = 16, MAX = 4;
+    /** Room around each value. */
+    private static final int PAD = 14;
     private final Control.Choice<T> choice;
     private final Host host;
     private final FormattedCharSequence[] labels;
@@ -48,13 +50,24 @@ public final class SegmentedChoice<T> extends AbstractWidget {
         }
     }
 
+    /** Equal segments as wide as the longest value plus padding; -1 for fewer than 2 or more than {@value MAX}. */
+    public static <T> int naturalWidth(Control.Choice<T> choice) {
+        int n = choice.values().size();
+        if (n < 2 || n > MAX) return -1;
+        return n * (widest(choice) + PAD);
+    }
+
     /** True when these values fit side by side in {@code width}. */
     public static <T> boolean fits(Control.Choice<T> choice, int width) {
         int n = choice.values().size();
-        if (n < 2 || n > MAX) return false;
+        return n >= 2 && n <= MAX && widest(choice) + PAD <= width / n;
+    }
+
+    private static <T> int widest(Control.Choice<T> choice) {
         Font font = Minecraft.getInstance().font;
-        for (T v : choice.values()) if (font.width(choice.label().apply(v)) + 10 > width / n) return false;
-        return true;
+        int widest = 0;
+        for (T v : choice.values()) widest = Math.max(widest, font.width(choice.label().apply(v)));
+        return widest;
     }
 
     private int selected() {

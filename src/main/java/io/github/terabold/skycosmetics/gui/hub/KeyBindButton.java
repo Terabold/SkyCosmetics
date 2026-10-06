@@ -26,7 +26,7 @@ import java.util.function.Supplier;
  * shows in red, with the clash in the row's help.
  */
 public final class KeyBindButton extends ThemedButton {
-    public static final int H = 16;
+    public static final int H = 16, W = 96;
     private final Supplier<KeyMapping> mapping;
     private final Runnable onChange;
     private boolean listening;
