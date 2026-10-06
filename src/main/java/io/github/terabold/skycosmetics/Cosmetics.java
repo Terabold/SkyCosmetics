@@ -9,6 +9,7 @@ import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
 import io.github.terabold.skycosmetics.data.SkinLearner;
 import io.github.terabold.skycosmetics.deploy.DeployedOrbs;
+import io.github.terabold.skycosmetics.items.Mine;
 import io.github.terabold.skycosmetics.mixin.CustomDataAccessor;
 import io.github.terabold.skycosmetics.pet.WorldPet;
 import io.github.terabold.skycosmetics.render.Glints;
@@ -67,7 +68,12 @@ public final class Cosmetics {
     private static final class Entry {
         CustomData data;
         int version;
+        /** Whether "every item of this type" looks were used, and the {@link Mine#version} that was decided at. */
         boolean typeLooks;
+        int mineVersion;
+        /** The item's UUID, and whether its type has a look at all (if not, whose item it is never matters). */
+        String uuid;
+        boolean typeLook;
         SkinEntry skin;
         DyeEntry dye;
         /** Plain leather piece to draw a dyed non-leather item as (iron boots...), else null. */
@@ -87,7 +93,7 @@ public final class Cosmetics {
     /** Items drawn anywhere: GUI, hand, item frames, dropped items. */
     public static ItemStack forRender(ItemStack s, Object owner) {
         // Your pet's or orb's head may be an item display's item or held in a hand; the lock checks which.
-        return owner instanceof Entity e ? forEntity(e, null, s) : apply(s, true);
+        return owner instanceof Entity e ? forEntity(e, null, s) : apply(s, null);
     }
 
     /** Equipment read by the head and armour layers of an entity's model ({@code slot} null: an item model it draws). */
@@ -100,8 +106,8 @@ public final class Cosmetics {
         } catch (RuntimeException ex) {
             Io.failed("Reskinning a pet or power orb", ex);
         }
-        boolean typeLooks = !(e instanceof Player) || e == Minecraft.getInstance().player || Looks.typeLooksOnOthers;
-        return apply(s, typeLooks);
+        // Another player's items never wear your "every item" looks; anything else wears them if it is yours.
+        return apply(s, e instanceof Player && e != Minecraft.getInstance().player ? Boolean.FALSE : null);
     }
 
     /** Glint colour/speed of a stack about to be drawn (a copy made by {@link #apply}), or null. */
@@ -115,25 +121,31 @@ public final class Cosmetics {
         return copy;
     }
 
-    /** The look that applies to this stack for you (UUID look merged over its type look), or null. */
+    /** The look that applies to this stack for you (UUID look merged over its type look if the item is yours), or null. */
     public static Looks.Look lookOf(ItemStack s) {
         Ident id = identify(s);
-        return id == null ? null : lookFor(id, true);
+        return id == null ? null : lookFor(id, Mine.allows(s, id.uuid()));
     }
 
     // ----------------------------------------------------------- core ---
 
+    /** The stack as drawn with its look; {@code typeLooks} true or false forces "every item" looks on or off. */
     public static ItemStack apply(ItemStack s, boolean typeLooks) {
+        return apply(s, Boolean.valueOf(typeLooks));
+    }
+
+    /** {@code typeLooks} null: "every item" looks only if the item is yours ({@link Mine}). */
+    private static ItemStack apply(ItemStack s, Boolean typeLooks) {
         try {
             return restyle(s, typeLooks);
         } catch (RuntimeException ex) {
             Io.failed("Drawing an item with its look", ex);
-            plain(s, typeLooks);
+            plain(s);
             return s;
         }
     }
 
-    private static ItemStack restyle(ItemStack s, boolean typeLooks) {
+    private static ItemStack restyle(ItemStack s, Boolean typeLooks) {
         if (s == null || s.isEmpty()) return s;
         CustomData data = s.get(DataComponents.CUSTOM_DATA);
         if (data == null) return s;
@@ -141,12 +153,8 @@ public final class Cosmetics {
         StackCache cache = (StackCache) (Object) s;
         Object raw = cache.skycosmetics$entry();
         if (raw instanceof Output) return s;
-        Entry e = (Entry) raw;
-        int version = Looks.version();
-        if (e == null || e.data != data || e.version != version || e.typeLooks != typeLooks) {
-            e = resolve(s, data, version, typeLooks);
-            cache.skycosmetics$entry(e);
-        }
+        Entry e = fresh(s, data, (Entry) raw, typeLooks);
+        if (e != raw) cache.skycosmetics$entry(e);
         if (e.skin == null && e.dye == null && e.glint == null && e.glintStyle == null) return s;
 
         long tick = Util.getMillis() / 50;
@@ -191,14 +199,38 @@ public final class Cosmetics {
         return out;
     }
 
+    /**
+     * The cached entry if it still fits: same data, same looks and, when the item's type has a look, the same
+     * answer to whose item it is (asked again only after {@link Mine#version} changes). Else a new one.
+     */
+    private static Entry fresh(ItemStack s, CustomData data, Entry e, Boolean typeLooks) {
+        int version = Looks.version();
+        if (e == null || e.data != data || e.version != version) return resolve(s, data, version, typeLooks);
+        if (!e.typeLook) return e;
+        boolean want;
+        if (typeLooks != null) {
+            want = typeLooks;
+        } else if (e.mineVersion == Mine.version()) {
+            want = e.typeLooks;
+        } else {
+            want = Mine.allows(s, e.uuid);
+            e.mineVersion = Mine.version();
+        }
+        return want == e.typeLooks ? e : resolve(s, data, version, want);
+    }
+
     /** The look for this stack; if anything about it fails, an empty entry (drawn as sent) that the caller caches. */
-    private static Entry resolve(ItemStack s, CustomData data, int version, boolean typeLooks) {
-        Entry e = empty(data, version, typeLooks);
+    private static Entry resolve(ItemStack s, CustomData data, int version, Boolean force) {
+        Entry e = empty(data, version);
         try {
             Ident id = identify(data);
             if (id == null) return e;
             SkinLearner.seen(s, id.type());
-            Looks.Look look = lookFor(id, typeLooks);
+            e.uuid = id.uuid();
+            e.typeLook = Looks.byType(id.type()) != null;
+            e.mineVersion = Mine.version();
+            e.typeLooks = e.typeLook && (force != null ? force : Mine.allows(s, e.uuid));
+            Looks.Look look = lookFor(id, e.typeLooks);
             if (look == null) return e;
 
             Catalog c = Repo.get();
@@ -213,24 +245,23 @@ public final class Cosmetics {
             return e;
         } catch (RuntimeException ex) {
             Io.failed("Finding an item's look", ex);
-            return empty(data, version, typeLooks); // nothing half filled in
+            return empty(data, version); // nothing half filled in
         }
     }
 
-    private static Entry empty(CustomData data, int version, boolean typeLooks) {
+    private static Entry empty(CustomData data, int version) {
         Entry e = new Entry();
         e.data = data;
         e.version = version;
-        e.typeLooks = typeLooks;
         return e;
     }
 
     /** After a failure: the stack is drawn as sent until its data or the looks change, not retried every frame. */
-    private static void plain(ItemStack s, boolean typeLooks) {
+    private static void plain(ItemStack s) {
         try {
             StackCache cache = (StackCache) (Object) s;
             if (s != null && !(cache.skycosmetics$entry() instanceof Output)) {
-                cache.skycosmetics$entry(empty(s.get(DataComponents.CUSTOM_DATA), Looks.version(), typeLooks));
+                cache.skycosmetics$entry(empty(s.get(DataComponents.CUSTOM_DATA), Looks.version()));
             }
         } catch (RuntimeException ignored) {
             // nothing cached: the next frame tries again, and Io.failed keeps the log quiet
@@ -266,9 +297,8 @@ public final class Cosmetics {
     /**
      * Your custom name for this stack, or null. {@code getStyledHoverName}
      * (tooltips, held-item name) asks for it, and {@code getHoverName} too when
-     * "Show my names in other mods" is on (see {@link #sharedName}). Any fresh
-     * entry will do: re-resolving for the type-look flag would make a stack the
-     * renderer also draws flip between two entries every frame.
+     * "Show my names in other mods" is on (see {@link #sharedName}). An "every
+     * item" name only on your own items, decided the same way as when it is drawn.
      */
     public static Component customName(ItemStack s) {
         try {
@@ -278,11 +308,8 @@ public final class Cosmetics {
             StackCache cache = (StackCache) (Object) s;
             Object raw = cache.skycosmetics$entry();
             if (raw instanceof Output) return null;
-            Entry e = (Entry) raw;
-            if (e == null || e.data != data || e.version != Looks.version()) {
-                e = resolve(s, data, Looks.version(), true);
-                cache.skycosmetics$entry(e);
-            }
+            Entry e = fresh(s, data, (Entry) raw, null);
+            if (e != raw) cache.skycosmetics$entry(e);
             return e.name;
         } catch (RuntimeException ex) {
             Io.failed("Finding an item's custom name", ex);

@@ -544,7 +544,9 @@ public class StudioScreen extends Screen {
         if (id == null) return;
         Looks.Look next = change.apply(look());
         String label = byType ? "Every " + Repo.get().typeName(id.type()) : widgetsName;
-        Looks.put(byType, key(id), next.empty() ? null : next.withLabel(label));
+        Looks.Look l = next.empty() ? null : next.withLabel(label);
+        if (byType) Looks.put(true, id.type(), l);
+        else Looks.putItem(id.uuid(), id.type(), l); // its type sorts it in Saved, even once the item is forgotten
     }
 
     // ------------------------------------------------------------ layout ---

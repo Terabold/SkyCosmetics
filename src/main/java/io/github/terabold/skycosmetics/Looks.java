@@ -5,13 +5,13 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -20,8 +20,10 @@ import java.util.Set;
 /**
  * Saved looks, keyed two ways:
  * - by item UUID: only that one item (your Necron helmet, not anyone else's);
- * - by type: every item with that SkyBlock id ("NECRON_HEAD", or "PET:GOLDEN_DRAGON").
- * A UUID look wins over a type look, field by field.
+ * - by type: every item with that SkyBlock id ("NECRON_HEAD", or "PET:GOLDEN_DRAGON"), only on your own items
+ *   ({@link io.github.terabold.skycosmetics.items.Mine}).
+ * A UUID look wins over a type look, field by field. A UUID look also remembers its item's type, so the Saved
+ * tab can sort it under Helmets, Armor... after the item itself is forgotten.
  */
 public final class Looks {
     /**
@@ -59,9 +61,8 @@ public final class Looks {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final Map<String, Look> BY_UUID = new LinkedHashMap<>();
     private static final Map<String, Look> BY_TYPE = new LinkedHashMap<>();
-
-    /** Apply "all items of this type" looks to other players too. Off: only you, your menus, and NPCs. */
-    public static boolean typeLooksOnOthers = false;
+    /** SkyBlock type of the item each UUID look is for, when known. */
+    private static final Map<String, String> ITEM_TYPES = new HashMap<>();
 
     private static volatile int version;
     /** Skin ids some look uses; a snapshot any thread may read (learned skins in use are never dropped). */
@@ -98,13 +99,28 @@ public final class Looks {
         return usedSkins;
     }
 
+    /** The SkyBlock type of the item a UUID look is for ("NECRON_HEAD"), or null when it was never noted. */
+    public static String itemType(String uuid) {
+        return uuid == null ? null : ITEM_TYPES.get(uuid);
+    }
+
     public static void put(boolean type, String key, Look look) {
         Map<String, Look> m = type ? BY_TYPE : BY_UUID;
-        if (look == null || look.empty()) m.remove(key);
-        else m.put(key, look);
+        if (look == null || look.empty()) {
+            m.remove(key);
+            if (!type) ITEM_TYPES.remove(key);
+        } else {
+            m.put(key, look);
+        }
         indexSkins();
         bump();
         save();
+    }
+
+    /** {@link #put} for one item, noting its SkyBlock type ({@code itemType} may be null). */
+    public static void putItem(String uuid, String itemType, Look look) {
+        if (itemType != null && look != null && !look.empty()) ITEM_TYPES.put(uuid, itemType);
+        put(false, uuid, look);
     }
 
     private static void indexSkins() {
@@ -129,12 +145,12 @@ public final class Looks {
         if (!Files.isRegularFile(f)) return;
         Map<String, Look> uuids = new LinkedHashMap<>();
         Map<String, Look> types = new LinkedHashMap<>();
-        boolean others;
+        Map<String, String> itemTypes = new HashMap<>();
         int skipped;
         try (Reader r = Files.newBufferedReader(f, StandardCharsets.UTF_8)) {
             JsonObject o = JsonParser.parseReader(r).getAsJsonObject();
-            skipped = read(o.get("items"), uuids) + read(o.get("types"), types);
-            others = o.get("typeLooksOnOthers") instanceof JsonPrimitive p ? p.getAsBoolean() : typeLooksOnOthers;
+            // "typeLooksOnOthers" (before 1.4) is ignored: "every item" looks now show only on your own items.
+            skipped = read(o.get("items"), uuids, itemTypes) + read(o.get("types"), types, null);
         } catch (Exception e) {
             Io.setAside(f, "Could not read looks.json", e);
             save();
@@ -144,7 +160,8 @@ public final class Looks {
         BY_UUID.putAll(uuids);
         BY_TYPE.clear();
         BY_TYPE.putAll(types);
-        typeLooksOnOthers = others;
+        ITEM_TYPES.clear();
+        ITEM_TYPES.putAll(itemTypes);
         indexSkins();
         bump();
         if (skipped > 0) {
@@ -153,8 +170,11 @@ public final class Looks {
         }
     }
 
-    /** Reads one section into {@code into}; returns how many looks in it could not be read. */
-    private static int read(JsonElement section, Map<String, Look> into) {
+    /**
+     * Reads one section into {@code into} (and each look's item type into {@code itemTypes}, if given); returns how
+     * many looks in it could not be read.
+     */
+    private static int read(JsonElement section, Map<String, Look> into, Map<String, String> itemTypes) {
         if (section == null || section.isJsonNull()) return 0;
         JsonObject o = section.getAsJsonObject(); // not an object: the whole file is unreadable
         int skipped = 0;
@@ -171,6 +191,8 @@ public final class Looks {
                 Look look = new Look(s(l, "skin"), s(l, "dye"), s(l, "name"), s(l, "glint"), color, speed,
                     strength, s(l, "label"));
                 if (!look.empty()) into.put(k, look);
+                String type = s(l, "type");
+                if (itemTypes != null && type != null && !look.empty()) itemTypes.put(k, type);
             } catch (RuntimeException e) {
                 SkyCosmetics.LOG.warn("Skipping unreadable look {}: {}", k, e.toString());
                 skipped++;
@@ -198,13 +220,12 @@ public final class Looks {
     public static void save() {
         JsonObject root = new JsonObject();
         root.addProperty("version", 1);
-        root.addProperty("typeLooksOnOthers", typeLooksOnOthers);
-        root.add("items", write(BY_UUID));
-        root.add("types", write(BY_TYPE));
+        root.add("items", write(BY_UUID, ITEM_TYPES));
+        root.add("types", write(BY_TYPE, Map.of()));
         Io.writeAsync(file(), root);
     }
 
-    private static JsonObject write(Map<String, Look> m) {
+    private static JsonObject write(Map<String, Look> m, Map<String, String> itemTypes) {
         JsonObject o = new JsonObject();
         for (Map.Entry<String, Look> e : m.entrySet()) {
             JsonObject l = new JsonObject();
@@ -216,6 +237,8 @@ public final class Looks {
             if (e.getValue().glintSpeed() != null) l.addProperty("glintSpeed", e.getValue().glintSpeed());
             if (e.getValue().glintStrength() != null) l.addProperty("glintStrength", e.getValue().glintStrength());
             if (e.getValue().label() != null) l.addProperty("label", e.getValue().label());
+            String type = itemTypes.get(e.getKey());
+            if (type != null) l.addProperty("type", type);
             o.add(e.getKey(), l);
         }
         return o;

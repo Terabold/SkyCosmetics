@@ -235,6 +235,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.setScreen(() -> null);
             StudioLayoutTest.run(ctx, sp);
             NameGlintTest.run(ctx, sp);
+            TypeLooksTest.run(ctx, sp);
 
             // Taking the look off must restore Hypixel's item instantly.
             ctx.runOnClient(mc -> Looks.put(false, "t-head", null));
