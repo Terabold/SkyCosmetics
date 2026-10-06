@@ -1,14 +1,18 @@
 package io.github.terabold.skycosmetics.gui.hub;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.ChatFormatting;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.Util;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -16,22 +20,25 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * A key bound in place, like SkyHanni's and Firmament's: click it, then press a key. While it listens the
- * settings screen hands it every key and click first: a key binds, Esc cancels, Backspace or Delete unbinds,
- * a side mouse button binds and any other click cancels.
+ * A key bound in place: click it, then press a key. While it listens it reads "> Press a key <" in a pulsing
+ * accent frame, and the settings screen hands it every key and click first: a key binds, Esc cancels, Backspace
+ * or Delete unbinds, a side mouse button binds and any other click cancels. A key another mapping also uses
+ * shows in red, with the clash in the row's help.
  */
-public final class KeyBindButton extends Button.Plain {
-    private static final int WARN = 0xFF6B6B;
+public final class KeyBindButton extends ThemedButton {
+    public static final int H = 16;
     private final Supplier<KeyMapping> mapping;
     private final Runnable onChange;
     private boolean listening;
+    private boolean clash;
+    private String shown = "";
 
     /** @param onChange runs after every change of state or key: the screen refreshes the help line and saves */
     public KeyBindButton(int width, Supplier<KeyMapping> mapping, Runnable onChange) {
-        super(0, 0, width, 20, Component.empty(), b -> ((KeyBindButton) b).listen(), Supplier::get);
+        super(width, H, Component.empty(), b -> ((KeyBindButton) b).listen());
         this.mapping = mapping;
         this.onChange = onChange;
-        setMessage(label());
+        update();
     }
 
     public boolean listening() {
@@ -43,22 +50,43 @@ public final class KeyBindButton extends Button.Plain {
         refresh();
     }
 
-    private Component label() {
-        if (listening) return Component.translatable("skycosmetics.option.openKey.listening").withStyle(ChatFormatting.YELLOW);
+    private void update() {
         KeyMapping m = mapping.get();
-        if (m == null) return Component.empty();
-        MutableComponent name = m.getTranslatedKeyMessage().copy();
-        return conflicts().isEmpty() ? name : name.withColor(WARN);
+        clash = !listening && !conflicts().isEmpty();
+        Component label = listening ? Component.translatable("skycosmetics.option.openKey.listening")
+            : m == null ? Component.empty() : m.getTranslatedKeyMessage();
+        setMessage(label);
+        shown = Ui.clip(Minecraft.getInstance().font, label.getString(), getWidth() - 8);
+    }
+
+    @Override
+    protected void draw(GuiGraphicsExtractor g, int mouseX, int mouseY, float hover) {
+        Font font = Minecraft.getInstance().font;
+        int x = getX(), y = getY(), w = getWidth(), h = getHeight();
+        float a = active ? 1 : 0.4f;
+        Shapes.round(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hover), a));
+        int text;
+        if (listening) {
+            float pulse = 0.55f + 0.45f * (float) Math.sin(Util.getMillis() / 160.0);
+            Shapes.round(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(Theme.ACCENT_BG, 0.8f));
+            Shapes.frame(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(Theme.ACCENT, pulse));
+            text = Theme.ACCENT;
+        } else {
+            Shapes.frame(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(clash ? Theme.WARN : Theme.mix(Theme.LINE, Theme.ACCENT, hover), a));
+            text = clash ? Theme.WARN : Theme.TEXT;
+        }
+        g.centeredText(font, shown, x + w / 2, y + (h - 8) / 2, Theme.fade(text, a));
+        if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, Theme.SMALL_RADIUS);
     }
 
     /** The row's help: the usual line, what to press while listening, and a red line when the key clashes. */
     public Component help(Component usual, int helpColor) {
         MutableComponent help = (listening ? Component.translatable("skycosmetics.option.openKey.listening.tooltip")
-            : usual.copy()).withColor(helpColor);
-        List<String> clash = conflicts();
-        if (!clash.isEmpty() && !listening) {
+            : usual.copy()).withColor(helpColor & 0xFFFFFF);
+        List<String> clashes = conflicts();
+        if (!clashes.isEmpty() && !listening) {
             help.append(Component.literal("\n")).append(Component.translatable("skycosmetics.option.openKey.conflict",
-                String.join(", ", clash)).withColor(WARN));
+                String.join(", ", clashes)).withColor(Theme.WARN & 0xFFFFFF));
         }
         return help;
     }
@@ -113,7 +141,7 @@ public final class KeyBindButton extends Button.Plain {
     }
 
     public void refresh() {
-        setMessage(label());
+        update();
         onChange.run();
     }
 }

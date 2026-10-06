@@ -12,6 +12,8 @@ import java.util.function.DoubleConsumer;
 import java.util.function.DoubleFunction;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 /** What a row edits. Each kind has exactly one widget, built by {@code gui.hub.Controls}. */
@@ -29,7 +31,7 @@ public sealed interface Control {
     record Slider(DoubleSupplier get, DoubleConsumer set, double min, double max, double step,
                   DoubleFunction<Component> label) implements Control {}
 
-    /** One of a few values; a click picks the next one. */
+    /** One of several values: side by side when up to four short ones fit, else a drop-down list. */
     record Choice<T>(List<T> values, Function<T, Component> label, Supplier<T> get, Consumer<T> set) implements Control {}
 
     /** A key mapping, bound in place: click, then press a key. */
@@ -40,4 +42,16 @@ public sealed interface Control {
 
     /** A feature's own widget (a preview, preset swatches...), given the settings screen and the row width. */
     record Custom(BiFunction<Host, Integer, AbstractWidget> widget) implements Control {}
+
+    /**
+     * A color: a swatch that opens a color picker next to it. Values are ARGB. Without {@code alpha} the picker
+     * has no opacity bar and {@code set} always gets an opaque color. Every change applies live (drag through the
+     * square and a preview follows); the settings save when a drag ends and when the picker closes.
+     */
+    record Color(IntSupplier get, IntConsumer set, boolean alpha) implements Control {
+        /** An opaque color, without the opacity bar. */
+        public Color(IntSupplier get, IntConsumer set) {
+            this(get, set, false);
+        }
+    }
 }
