@@ -13,10 +13,13 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import java.time.Duration;
+
 /**
  * A section in the settings' sidebar: its icon, name and a gray line under it. The open one sits on the accent's
  * dark purple; while a search runs each tab shows how many settings it matched, and one with none dims. In a
- * narrow window only the icon shows, with the name as a tooltip. The message is the section's name.
+ * narrow window only the icon shows, with the name as a tooltip; so does a tab too narrow for its text. The message
+ * is the section's name.
  */
 public final class SectionTab extends ThemedButton {
     public static final int H = 26, RAIL_H = 22;
@@ -25,7 +28,8 @@ public final class SectionTab extends ThemedButton {
     private final boolean rail;
     private final Anim open = new Anim(120, 0);
     private String name = "", sub = "", count = "";
-    private boolean selected, dim;
+    private boolean selected, dim, tip;
+    private int found = -1;
 
     public SectionTab(Section section, int width, boolean rail, OnPress onPress) {
         super(width, rail ? RAIL_H : H, section.name(), onPress);
@@ -39,11 +43,14 @@ public final class SectionTab extends ThemedButton {
             i = ItemStack.EMPTY;
         }
         this.icon = i == null ? ItemStack.EMPTY : i;
-        if (rail) {
-            setTooltip(Tooltip.create(section.sub().getString().isEmpty() ? section.name()
-                : Component.empty().append(section.name()).append("\n").append(section.sub().copy().withColor(Theme.MUTED & 0xFFFFFF))));
-        }
+        if (!rail) setTooltipDelay(Duration.ofMillis(400)); // the text is there, cut: no rush
         clip();
+    }
+
+    /** The name and the gray line under it, for a tab that shows only its icon or cuts its text. */
+    private Tooltip fullName() {
+        return Tooltip.create(section.sub().getString().isEmpty() ? section.name()
+            : Component.empty().append(section.name()).append("\n").append(section.sub().copy().withColor(Theme.MUTED & 0xFFFFFF)));
     }
 
     public Section section() {
@@ -64,17 +71,32 @@ public final class SectionTab extends ThemedButton {
 
     /** While a search runs: how many of its settings match ({@code -1} when no search runs). */
     public void setCount(int n) {
+        found = n;
         dim = n == 0;
         count = n < 0 ? "" : Integer.toString(n);
         clip();
     }
 
+    /** How many settings the running search found here, or -1 with no search. */
+    public int count() {
+        return found;
+    }
+
+    /** Cuts the name and the gray line to the tab; a tab that cut either shows both whole as a tooltip. */
     private void clip() {
-        if (rail) return;
-        Font font = Minecraft.getInstance().font;
-        int room = getWidth() - 26 - (count.isEmpty() ? 4 : font.width(count) + 10);
-        name = Ui.clip(font, section.name().getString(), room);
-        sub = Ui.clip(font, section.sub().getString(), getWidth() - 30);
+        boolean cut = rail;
+        if (!rail) {
+            Font font = Minecraft.getInstance().font;
+            int room = getWidth() - 26 - (count.isEmpty() ? 4 : font.width(count) + 10);
+            String fullName = section.name().getString(), fullSub = section.sub().getString();
+            name = Ui.clip(font, fullName, room);
+            sub = Ui.clip(font, fullSub, getWidth() - 30);
+            cut = !name.equals(fullName) || !sub.equals(fullSub);
+        }
+        if (cut != tip) {
+            tip = cut;
+            setTooltip(cut ? fullName() : null);
+        }
     }
 
     @Override

@@ -39,6 +39,11 @@ public final class Ui {
         for (int i = 0; i < 3; i++) g.fill(x + i, y + i, x + i + 1, y + 5 - i, color);
     }
 
+    /** A right-pointing arrow head, 4 wide and 7 tall, with its top left at (x, y). */
+    public static void arrowRight(GuiGraphicsExtractor g, int x, int y, int color) {
+        for (int i = 0; i < 4; i++) g.fill(x + i, y + i, x + i + 1, y + 7 - i, color);
+    }
+
     /** An x, {@code size} across: two diagonals of 1 px squares. */
     public static void cross(GuiGraphicsExtractor g, int x, int y, int size, int color) {
         for (int i = 0; i < size; i++) {

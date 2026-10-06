@@ -7,6 +7,7 @@
     "fabric-client-gametest": [
       "io.github.terabold.skycosmetics.test.SkyCosmeticsClientTest",
       "io.github.terabold.skycosmetics.test.SettingsClientTest",
+      "io.github.terabold.skycosmetics.test.MenuClientTest",
       "io.github.terabold.skycosmetics.test.GlintRenderTest",
       "io.github.terabold.skycosmetics.test.DataSafetyTest"
     ]

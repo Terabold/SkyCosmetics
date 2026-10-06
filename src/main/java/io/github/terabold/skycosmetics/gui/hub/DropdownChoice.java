@@ -45,6 +45,13 @@ public final class DropdownChoice<T> extends ThemedButton {
         return open != null && !open.isClosed() ? open : null;
     }
 
+    /** The middle of the open list's entry for this value, for tests aiming a real click; null when not shown. */
+    public int[] entryCenter(int index) {
+        Menu m = open != null && !open.isClosed() ? open : null;
+        if (m == null || index < m.top || index >= Math.min(m.labels.length, m.top + m.show)) return null;
+        return new int[]{m.x + m.w / 2, m.y + 2 + (index - m.top) * Menu.ITEM + Menu.ITEM / 2};
+    }
+
     private void toggle() {
         if (list() != null) {
             open.close();
@@ -78,7 +85,7 @@ public final class DropdownChoice<T> extends ThemedButton {
         private static final int ITEM = 14, SHOW = 8;
         private final FormattedCharSequence[] labels;
         private final Anim appear = new Anim(110, 0);
-        private int x, y, w, h, top, cursor;
+        private int x, y, w, h, top, cursor, show;
         private boolean closed, above;
 
         Menu() {
@@ -92,15 +99,27 @@ public final class DropdownChoice<T> extends ThemedButton {
                 widest = Math.max(widest, font.width(labels[i]));
             }
             w = Math.max(getWidth(), widest + 20);
-            h = Math.min(n, SHOW) * ITEM + 4;
             cursor = Math.max(0, choice.values().indexOf(choice.get().get()));
-            top = Math.clamp(cursor - SHOW / 2, 0, Math.max(0, n - SHOW));
+            size(Math.min(n, SHOW));
         }
 
+        /** Shows {@code rows} values at a time, the chosen one among them. */
+        private void size(int rows) {
+            int n = labels.length;
+            show = Math.max(1, rows);
+            h = Math.min(n, show) * ITEM + 4;
+            top = Math.clamp(cursor - show / 2, 0, Math.max(0, n - show));
+        }
+
+        /** Under the field, else above it, else on the roomier side with fewer values at a time (three at least). */
         @Override
         public void fit(int bx, int by, int bw, int bh) {
+            int n = labels.length, need = Math.min(n, SHOW) * ITEM + 4;
+            int roomBelow = by + bh - 2 - (getBottom() + 2), roomAbove = getY() - 2 - (by + 2);
+            above = need > roomBelow && roomAbove > roomBelow;
+            int room = above ? roomAbove : roomBelow;
+            size(Math.clamp((room - 4) / ITEM, Math.min(n, 3), Math.min(n, SHOW)));
             x = Math.clamp(getX() + getWidth() - w, bx, Math.max(bx, bx + bw - w));
-            above = getBottom() + 2 + h > by + bh && getY() - 2 - h >= by;
             y = above ? getY() - 2 - h : getBottom() + 2;
         }
 
@@ -118,15 +137,15 @@ public final class DropdownChoice<T> extends ThemedButton {
             int sel = choice.values().indexOf(choice.get().get());
             int hovered = indexAt(mouseX, mouseY);
             int n = labels.length;
-            for (int i = top; i < Math.min(n, top + SHOW); i++) {
+            for (int i = top; i < Math.min(n, top + show); i++) {
                 int iy = y + 2 + (i - top) * ITEM;
                 if (i == hovered || (hovered < 0 && i == cursor)) Shapes.round(g, x + 2, iy, w - 4, ITEM, 2, Theme.SURFACE_HOVER);
                 if (i == sel) Shapes.round(g, x + 3, iy + 3, 2, ITEM - 6, 1, Theme.ACCENT);
                 g.text(font, labels[i], x + 9, iy + 3, Theme.fade(i == sel ? 0xFFFFFFFF : Theme.TEXT, t), false);
             }
-            if (n > SHOW) {
-                int track = h - 6, thumb = Math.max(8, track * SHOW / n);
-                int ty = y + 3 + (track - thumb) * top / (n - SHOW);
+            if (n > show) {
+                int track = h - 6, thumb = Math.max(8, track * show / n);
+                int ty = y + 3 + (track - thumb) * top / (n - show);
                 Shapes.round(g, x + w - 4, ty, 2, thumb, 1, Theme.MUTED);
             }
             g.disableScissor();
@@ -147,7 +166,7 @@ public final class DropdownChoice<T> extends ThemedButton {
 
         @Override
         public void mouseScrolled(double mouseX, double mouseY, double amount) {
-            top = Math.clamp(top - (int) Math.signum(amount), 0, Math.max(0, labels.length - SHOW));
+            top = Math.clamp(top - (int) Math.signum(amount), 0, Math.max(0, labels.length - show));
         }
 
         @Override
@@ -158,7 +177,7 @@ public final class DropdownChoice<T> extends ThemedButton {
             } else if (event.isUp() || event.isDown()) {
                 cursor = Math.clamp(cursor + (event.isUp() ? -1 : 1), 0, labels.length - 1);
                 if (cursor < top) top = cursor;
-                if (cursor >= top + SHOW) top = cursor - SHOW + 1;
+                if (cursor >= top + show) top = cursor - show + 1;
             } else if (event.isSelection() || k == GLFW.GLFW_KEY_KP_ENTER) {
                 pick(cursor);
             }

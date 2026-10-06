@@ -77,8 +77,8 @@ public final class CardButton extends ThemedButton {
         for (int i = 0; i < lines.size(); i++) g.text(font, lines.get(i), textX, textY + 13 + i * 10, Theme.fade(Theme.MUTED, a), false);
 
         int ax = x + w - ARROW - 10 + Math.round(hover * 2), ay = y + (h - ARROW) / 2;
-        Shapes.roundGradient(g, ax, ay, ARROW, ARROW, ARROW / 2, Theme.fade(Theme.PURPLE, a), Theme.fade(Theme.PINK, a));
-        Ui.chevronRight(g, ax + 8, ay + 6, Theme.fade(0xFFFFFFFF, a));
+        Shapes.circle(g, ax, ay, ARROW, Theme.fade(Theme.mix(Theme.PURPLE, Theme.PINK, 0.35f + 0.4f * hover), a));
+        Ui.arrowRight(g, ax + ARROW / 2 - 1, ay + (ARROW - 7) / 2, Theme.fade(0xFFFFFFFF, a));
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, Theme.RADIUS);
     }
 }

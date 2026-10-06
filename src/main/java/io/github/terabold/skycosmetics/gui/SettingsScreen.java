@@ -110,6 +110,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private FormattedCharSequence headTitle = FormattedCharSequence.EMPTY, logoTitle = FormattedCharSequence.EMPTY;
     private String headHelp = "", version = "", goTo = "";
     private Component headHelpFull = Component.empty();
+    /** The pane header's help line was cut: hovering it shows the whole line. */
+    private boolean headClipped;
     private ItemStack headIcon = ItemStack.EMPTY;
     private int contentH;
 
@@ -119,7 +121,13 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private double barGrab;
     private long lastFrame = -1;
     private float barY = -1;
-    private boolean opened, swallowChar;
+    private boolean opened;
+    /**
+     * The key just pressed was ours (a key bound, Ctrl+F): its character, which arrives right after it in the same
+     * event poll, must not type into the search. Cleared every frame, so a key without a character (F5, an arrow)
+     * never eats the next letter typed.
+     */
+    private boolean swallowChar;
     private Row flashRow;
     private long flashAt;
     private final Anim openAnim = new Anim(150, 0), switchAnim = new Anim(170, 1), barHover = new Anim(100, 0);
@@ -456,7 +464,9 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
         List<FormattedCharSequence> t = font.split(title, Math.max(20, room));
         headTitle = t.isEmpty() ? FormattedCharSequence.EMPTY : t.getFirst();
-        headHelp = Ui.clip(font, headHelpFull.getString(), room);
+        String full = headHelpFull.getString();
+        headHelp = Ui.clip(font, full, room);
+        headClipped = !headHelp.equals(full);
     }
 
     private ItemStack iconOf(Section s) {
@@ -604,12 +614,9 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         if (overlay != null && overlay != o) overlay.close();
         overlay = o;
         shown = scroll; // the widget it hangs from stays where it is
-        if (o instanceof PopupOverlay) {
-            if (rail || cw < 330) o.fit(wx, wy, ww, wh);
-            else o.fit(cx, bodyY, cw, wy + wh - bodyY);
-        } else {
-            o.fit(wx, wy, ww, wh);
-        }
+        // In the body, under the header, unless the body is too narrow: then anywhere in the window.
+        if (rail || cw < 330) o.fit(wx, wy, ww, wh);
+        else o.fit(cx, bodyY, cw, wy + wh - bodyY);
     }
 
     private void closeOverlay() {
@@ -703,6 +710,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        swallowChar = false;
         if (tooSmall) {
             g.centeredText(font, Component.translatable("skycosmetics.menu.tooSmall"), width / 2, height / 2 - 12, Theme.TEXT);
             if (done != null) done.extractRenderState(g, mouseX, mouseY, delta);
@@ -779,6 +787,11 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             int th = rail ? SectionTab.RAIL_H : SectionTab.H;
             Shapes.round(g, wx + 1, Math.round(barY) + 5, 2, th - 10, 1, Theme.ACCENT);
         }
+        // Soft edges where more sections hide.
+        if (sideShown > 1) g.fillGradient(wx + 1, sideTop, cx - 1, sideTop + 8, Theme.CHROME, Theme.CHROME & 0xFFFFFF);
+        if (sideShown < sideMax - 1) {
+            g.fillGradient(wx + 1, sideTop + sideH - 8, cx - 1, sideTop + sideH, Theme.CHROME & 0xFFFFFF, Theme.CHROME);
+        }
         g.disableScissor();
         if (sideMax > 0) {
             int track = sideH - 4, thumb = Math.max(12, (int) (track * (long) sideH / (sideH + (long) sideMax)));
@@ -794,7 +807,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         else Ui.magnifier(g, hx + 3, bodyY + (HEAD_H - 9) / 2, Theme.ACCENT);
         g.text(font, headTitle, hx + 22, hy, Theme.TEXT, false);
         g.text(font, headHelp, hx + 22, hy + 12, Theme.MUTED, false);
-        if (headHelp.length() != headHelpFull.getString().length() && mx >= hx + 22 && mx < cx + cw && my >= hy + 11 && my < hy + 21) {
+        if (headClipped && mx >= hx + 22 && mx < cx + cw && my >= hy + 11 && my < hy + 21) {
             g.setTooltipForNextFrame(font, headHelpFull, mx, my);
         }
         g.fill(cx + 8, vy - 1, cx + cw - 8, vy, Theme.LINE_SOFT);
@@ -1049,9 +1062,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             return true;
         }
         if (getFocused() == search) {
-            if (event.isEscape()) {
-                if (!search.getValue().isEmpty()) search.setValue("");
-                else setFocused(null);
+            if (event.isEscape() && !search.getValue().isEmpty()) {
+                search.setValue(""); // an empty search lets Esc through: it closes the settings
                 return true;
             }
             if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
@@ -1226,6 +1238,38 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             return true;
         });
         return sb.toString();
+    }
+
+    /** Scrolls at once so the row with this option id shows whole; false when no row has it. */
+    public boolean scrollTo(String optionId) {
+        for (Row r : rows) {
+            if (r.kind == Kind.GROUP || !r.id().equals(optionId)) continue;
+            reveal(r, false);
+            shown = scroll;
+            return true;
+        }
+        return false;
+    }
+
+    /** The right end of the row's widest text line, on screen; 0 without text. */
+    public int textRight(String optionId) {
+        for (Row r : rows) {
+            if (r.kind == Kind.GROUP || !r.id().equals(optionId)) continue;
+            int w = 0;
+            for (FormattedCharSequence l : r.title) w = Math.max(w, font.width(l));
+            for (FormattedCharSequence l : r.help) w = Math.max(w, font.width(l));
+            return w == 0 ? 0 : vx + r.textX + w;
+        }
+        return 0;
+    }
+
+    /** Where the sidebar is scrolling to, and how far it can. */
+    public double sideScroll() {
+        return sideScroll;
+    }
+
+    public double sideMax() {
+        return sideMax;
     }
 
     /** Whether the row's control sits under its text (true) or beside it. */

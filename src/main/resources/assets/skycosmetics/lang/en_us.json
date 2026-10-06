@@ -33,6 +33,7 @@
 
   "skycosmetics.option.openStudio": "Open Studio",
   "skycosmetics.option.openStudio.back": "Back to Studio",
+  "skycosmetics.option.openStudio.back.tooltip": "Returns to the item you were editing.",
   "skycosmetics.option.openStudio.tooltip": "Opens the studio for your held item, or any item in My Items.",
   "skycosmetics.option.openStudio.noWorld": "Join a world to use the studio",
   "skycosmetics.option.openKey": "Open Key",

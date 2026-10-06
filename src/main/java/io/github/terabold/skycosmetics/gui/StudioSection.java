@@ -37,8 +37,9 @@ public final class StudioSection {
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
         rows.add(Option.header("groupStudio", Component.translatable("skycosmetics.menu.group.studio")));
-        rows.add(Option.of("openStudio", Component.empty(), Component.translatable("skycosmetics.option.openStudio.tooltip"),
-            openStudio(settings)));
+        boolean fromStudio = settings instanceof SettingsScreen s && s.parent() instanceof StudioScreen;
+        rows.add(Option.of("openStudio", Component.empty(), Component.translatable(fromStudio
+            ? "skycosmetics.option.openStudio.back.tooltip" : "skycosmetics.option.openStudio.tooltip"), openStudio(settings)));
         rows.add(Option.of("openKey", Component.translatable("skycosmetics.option.openKey"),
             Component.translatable("skycosmetics.option.openKey.tooltip"), new Control.Key(SkyCosmetics::openKey))
             .search(Component.translatable("skycosmetics.option.openKey.search").getString()));

@@ -75,12 +75,22 @@ public final class ColorPopover implements Overlay {
         return new int[]{x + PAD + Math.round(a / 255f * (W - 2 * PAD - 1)), alphaY + ALPHA_H / 2};
     }
 
-    /** Next to the swatch: under it and right-aligned with it, or above when there is no room below. */
+    /**
+     * Next to the swatch, never over it: under it and right-aligned with it, else above it, else on its left as
+     * close to its height as the area allows.
+     */
     @Override
     public void fit(int bx, int by, int bw, int bh) {
-        x = Math.clamp(swatch.getX() + swatch.getWidth() - W, bx + 2, Math.max(bx + 2, bx + bw - W - 2));
         int below = swatch.getBottom() + 3, above = swatch.getY() - 3 - h;
-        y = below + h <= by + bh - 2 ? below : above >= by + 2 ? above : Math.max(by + 2, by + bh - h - 2);
+        boolean fitsBelow = below + h <= by + bh - 2, fitsAbove = above >= by + 2;
+        int maxX = Math.max(bx + 2, bx + bw - W - 2);
+        if (fitsBelow || fitsAbove) {
+            x = Math.clamp(swatch.getX() + swatch.getWidth() - W, bx + 2, maxX);
+            y = fitsBelow ? below : above;
+        } else {
+            x = Math.clamp(swatch.getX() - 4 - W, bx + 2, maxX);
+            y = Math.clamp(swatch.getY() + swatch.getHeight() / 2 - h / 2, by + 2, Math.max(by + 2, by + bh - h - 2));
+        }
         picker.setPosition(x + PAD, y + PAD + TITLE_H);
         alphaY = y + PAD + TITLE_H + PICKER_H + 6;
     }
