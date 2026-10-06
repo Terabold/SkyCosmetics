@@ -77,11 +77,11 @@ public class StudioScreen extends Screen {
     }
 
     private enum SkinFilter {
-        HELMET("Helmet", "Helmet skins and their color variants", "Search helmet skins...  e.g. knight, animated"),
-        PET("Pet", "Pet skins", "Search pet skins...  e.g. dragon, animated"),
-        ORB("Orb", "Power orb skins", "Search power orb skins...  e.g. moon"),
-        ALL("All", "Every head in SkyBlock: skins, items, minions...", "Search every head...  e.g. celestial"),
-        PASTE("Paste", "Any texture: a skin URL or a skull's Value", null);
+        HELMET("Helmet", "Helmet skins and their color variants", "Search: knight, animated…"),
+        PET("Pet", "Pet skins", "Search: dragon, animated…"),
+        ORB("Orb", "Power orb skins", "Search: moon…"),
+        ALL("All", "Every head in SkyBlock: skins, items, minions…", "Search: celestial…"),
+        PASTE("Paste", "Paste any head texture", null);
 
         final String label;
         final String help;
@@ -147,7 +147,7 @@ public class StudioScreen extends Screen {
         bullet("Always: ", "armor, held item, pet, inventory"),
         bullet("Open once: ", "Wardrobe, Equipment, Pets,"),
         Component.literal("   Ender Chest, Backpacks, Personal Vault").withStyle(ChatFormatting.GRAY),
-        bullet("Search: ", "names and item ids"),
+        bullet("Search: ", "name or item ID"),
         bullet("Right-click an item: ", "forget it"));
     /** The same while Stored Items is off: nothing comes from menus, so there is nothing to forget. */
     private static final List<Component> ITEMS_HELP_STORED_OFF = List.of(
@@ -155,7 +155,7 @@ public class StudioScreen extends Screen {
         bullet("Always: ", "armor, held item, pet, inventory"),
         Component.literal("• ").withStyle(ChatFormatting.DARK_GRAY)
             .append(Component.translatable("skycosmetics.studio.itemsHelp.storedOff").withStyle(ChatFormatting.GRAY)),
-        bullet("Search: ", "names and item ids"));
+        bullet("Search: ", "name or item ID"));
     /** Room for a gradient: every letter carries its own {@code &#RRGGBB} (plus its styles again). */
     private static final int MAX_NAME = 512;
 
@@ -170,7 +170,7 @@ public class StudioScreen extends Screen {
         {"r", "Plain", "Takes color and style off the letters"}};
     /** Minecraft's own glint purple: stored only to beat an "every item" colour, null otherwise. */
     private static final String PURPLE = "#9D5CFF";
-    private static final String[][] GLINT_COLOURS = {{"Purple (Minecraft's)", null}, {"Red", "#FF3B3B"},
+    private static final String[][] GLINT_COLOURS = {{"Purple (default)", null}, {"Red", "#FF3B3B"},
         {"Orange", "#FF8A1F"}, {"Gold", "#FFC21A"}, {"Yellow", "#FFF23B"}, {"Lime", "#9BFF3B"}, {"Green", "#2FD14A"},
         {"Aqua", "#3BF0FF"}, {"Blue", "#3B6BFF"}, {"Pink", "#FF7AC8"}, {"Magenta", "#FF3BF0"}, {"White", "#FFFFFF"}};
 
@@ -229,10 +229,12 @@ public class StudioScreen extends Screen {
     /** What the skins grid cost last frame (heads drawn, texture checks) and every texture it asked for. */
     private int gridItems, gridChecks;
     private final Set<String> asked = new HashSet<>();
-    /** Skins whose every frame was asked for, so the prefetch skips them; animated cards seen moving (tests). */
-    private final Set<String> prefetched = new HashSet<>(), moving = new HashSet<>();
-    /** Animated cards in view last frame and how many of them moved; the most textures asked for in one tick. */
-    private int gridAnimated, gridMoving, askedThisTick, mostPerTick;
+    /** Skins whose every frame was asked for, so the prefetch skips them. */
+    private final Set<String> prefetched = new HashSet<>();
+    /** The tick each animated card first showed a frame, and first moved (tests: how soon animations start). */
+    private final Map<String, Long> shownAt = new HashMap<>(), movedAt = new HashMap<>();
+    /** The cards in view last frame; the most textures asked for in one tick since the studio opened. */
+    private int gridStart, gridEnd, askedThisTick, mostPerTick;
     /** Every card in view asked for its first frame last frame: animation frames may use the spare budget. */
     private boolean firstsDone;
 
@@ -305,8 +307,9 @@ public class StudioScreen extends Screen {
     private long budgetTick = -1, scrolledAt = -100;
     private int firstBudget, frameBudget;
     private int listTop, listBottom;
-    /** Where Other Mods' one-line note is drawn. */
+    /** Where Other Mods' one-line note is drawn, and the note: which mods it lists. */
     private int otherNoteY;
+    private String otherNote = "";
 
     /**
      * @param parent screen to return to (a menu stays open underneath)
@@ -525,7 +528,7 @@ public class StudioScreen extends Screen {
         Cosmetics.Ident id = s.isEmpty() ? null : Cosmetics.identify(s);
         if (id == null) return;
         skinFilter = defaultFilter(s, id);
-        if (tab == Tab.STYLE || tab == Tab.SAVED) return; // keep the user's explicit choice
+        if (tab == Tab.STYLE || tab == Tab.SAVED || tab == Tab.OTHER) return; // keep the user's explicit choice
         Equippable eq = s.get(DataComponents.EQUIPPABLE);
         boolean body = eq != null && (eq.slot() == EquipmentSlot.CHEST || eq.slot() == EquipmentSlot.LEGS
                                      || eq.slot() == EquipmentSlot.FEET);
@@ -876,8 +879,8 @@ public class StudioScreen extends Screen {
         settings.setTooltip(Tooltip.create(Component.translatable(keyTip ? "skycosmetics.studio.settings.keyTip"
             : "skycosmetics.studio.settings.tooltip")));
 
-        EditBox items = new EditBox(font, x, PAD + 28, w - 18, 14, Component.literal("Search my items"));
-        items.setHint(Component.literal("Search my items...").withStyle(ChatFormatting.DARK_GRAY));
+        EditBox items = new EditBox(font, x, PAD + 28, w - 18, 14, Component.literal("Search My Items"));
+        items.setHint(Component.literal("Search My Items…").withStyle(ChatFormatting.DARK_GRAY));
         items.setMaxLength(48);
         items.setValue(itemQuery);
         items.setResponder(v -> {
@@ -904,13 +907,15 @@ public class StudioScreen extends Screen {
         Button scope = addRenderableWidget(new Button.Builder(scopeLabel(id), b -> toggleScope())
             .bounds(x + indent, y, w - indent, 20).build());
         scope.active = id != null && id.uuid() != null;
-        scope.setTooltip(Tooltip.create(Component.literal(
-            "This Item Only: just the piece you picked.\nEvery item of this type: all of them, e.g. every Necron's Chestplate.")));
+        String type = id != null ? Repo.get().typeName(id.type()) : null;
+        scope.setTooltip(Tooltip.create(Component.literal(type != null
+            ? "Click to switch: this item only, or every " + type : "Click to switch: this item only, or every item of its type")));
         int half = (w - 4) / 2;
         Button reset = addRenderableWidget(new Button.Builder(Component.literal("Reset").withStyle(ChatFormatting.RED),
             b -> resetItem()).bounds(x, y + 24, half, 20).build());
         reset.active = id != null;
-        reset.setTooltip(Tooltip.create(Component.literal("Put Hypixel's look back on this item")));
+        reset.setTooltip(Tooltip.create(Component.literal(byType && type != null ? "Reset every " + type + " to original"
+            : "Reset to original")));
         addRenderableWidget(new Button.Builder(Component.literal("Done").withStyle(ChatFormatting.GREEN), b -> onClose())
             .bounds(x + half + 4, y + 24, half, 20).build());
     }
@@ -953,11 +958,11 @@ public class StudioScreen extends Screen {
                 if (skinFilter == SkinFilter.PASTE) {
                     int w = Math.min(midW - 96, 360);
                     texBox = new EditBox(font, midX, y + 12, w, 16, Component.literal("Texture"));
-                    texBox.setHint(Component.literal("base64 value, textures.minecraft.net URL, or hash")
+                    texBox.setHint(Component.literal("Value, skin URL or hash")
                         .withStyle(ChatFormatting.DARK_GRAY));
                     texBox.setMaxLength(4096);
                     addRenderableWidget(texBox);
-                    addRenderableWidget(new Button.Builder(Component.literal("Use texture"), b -> useTexture())
+                    addRenderableWidget(new Button.Builder(Component.literal("Apply"), b -> useTexture())
                         .bounds(midX + w + 4, y + 10, 90, 20).build());
                     setInitialFocus(texBox);
                     y += 36;
@@ -966,9 +971,9 @@ public class StudioScreen extends Screen {
                 }
             }
             case DYES -> {
-                int bw = font.width("Custom dye...") + 12, sw = Math.min(midW - bw - 4, SEARCH_W);
-                y = search(y, "Search dyes...  e.g. aurora, warden", sw);
-                Button custom = addRenderableWidget(new Button.Builder(Component.literal("Custom dye..."),
+                int bw = font.width("Custom Dye…") + 12, sw = Math.min(midW - bw - 4, SEARCH_W);
+                y = search(y, "Search: aurora, warden…", sw);
+                Button custom = addRenderableWidget(new Button.Builder(Component.literal("Custom Dye…"),
                     b -> openDyePopup()).bounds(midX + sw + 4, y - 22, bw, 16).build());
                 custom.active = ident() != null;
                 custom.setTooltip(Tooltip.create(Component.literal("Any color, or your own animated dye")));
@@ -986,10 +991,11 @@ public class StudioScreen extends Screen {
                 y = end;
                 scrollStyle(first, y);
             }
-            case SAVED -> y = search(y, "Search saved looks...  e.g. necron, aurora", Math.min(midW, SEARCH_W));
+            case SAVED -> y = search(y, "Search: necron, aurora, glint…", Math.min(midW, SEARCH_W));
             case OTHER -> {
                 otherNoteY = y;
-                y = search(y + 12, "Search...  e.g. skyblocker, dye, necron", Math.min(midW, SEARCH_W));
+                otherNote = otherNote();
+                y = search(y + 12, "Search: skyblocker, dye, necron…", Math.min(midW, SEARCH_W));
             }
         }
         gridY = y;
@@ -1049,7 +1055,7 @@ public class StudioScreen extends Screen {
     private void openDyePopup() {
         if (ident() == null) return;
         String current = look().dye() != null ? look().dye() : inherited().dye();
-        openPopup(new ColorPopup(Component.literal("Custom dye"), current, true, this::queueDye).onClose(this::flushPending));
+        openPopup(new ColorPopup(Component.literal("Custom Dye"), current, true, this::queueDye).onClose(this::flushPending));
     }
 
     /** Shows a colour pop-up over the middle column until it is closed or the tab, item or scope changes. */
@@ -1101,11 +1107,11 @@ public class StudioScreen extends Screen {
         String typeName = inherited().name();
         nameBaseline = (typeName != null ? typeName : Names.toCodes(Cosmetics.originalName(target()))).trim();
         // Reset name sits on the "Name" title row, right-aligned over the box it resets.
-        int rw = font.width("Reset name") + 12;
-        resetName = addRenderableWidget(Button.builder(Component.literal("Reset name"), b -> resetName())
+        int rw = font.width("Reset Name") + 12;
+        resetName = addRenderableWidget(Button.builder(Component.literal("Reset Name"), b -> resetName())
             .bounds(right - rw, y0, rw, NAME_HEAD - 1).build());
         nameBox = new NameBox(font, midX, y0 + NAME_HEAD, right - midX - infoW - 4, boxH);
-        nameBox.setHint(Component.literal("Empty: Hypixel's name").withStyle(ChatFormatting.DARK_GRAY));
+        nameBox.setHint(Component.literal("Empty = original name").withStyle(ChatFormatting.DARK_GRAY));
         nameBox.setMaxLength(MAX_NAME);
         nameBox.setValue(pendingName != null ? pendingName : l.name() != null ? l.name() : nameBaseline);
         nameBox.setResponder(v -> {
@@ -1123,7 +1129,7 @@ public class StudioScreen extends Screen {
                 () -> applyCode("&" + f.getChar())));
             b.setTooltip(Tooltip.create(Component.literal(CodesTooltip.title(f)).withStyle(f)
                 .append(Component.literal("  &" + f.getChar()).withStyle(ChatFormatting.DARK_GRAY))
-                .append(Component.literal("\nColors the selected letters, or the text after the cursor")
+                .append(Component.literal("\nColors the selection, or the text after the cursor")
                     .withStyle(ChatFormatting.GRAY))));
         }
         pos = new int[]{midX, pos[1] + rowH + (roomy ? 4 : 2)};
@@ -1152,19 +1158,19 @@ public class StudioScreen extends Screen {
             syncedValue = null;
             int noteY = gradients(rx, pos[1], right - rx, rowH) + 5;
             List<FormattedCharSequence> note =
-                font.split(Component.literal("Any color for the selected letters, or the whole name"), right - rx);
+                font.split(Component.literal("Any color for the selection, or the whole name"), right - rx);
             pickerNote = noteY + note.size() * 10 - 2 <= pos[1] + PICKER_H ? note : List.of(); // whole, or not at all
             pickerNoteAt = new int[]{rx, noteY};
             pos[1] += PICKER_H;
         } else {
             pos[1] = gradients(midX, pos[1], right - midX, 16) + 2;
-            place(pos, right, 2, keepFocus(Component.literal("Custom color..."), font.width("Custom color...") + 12, 16,
-                this::openNameColour)).setTooltip(Tooltip.create(Component.literal("Any color for the selected letters")));
+            place(pos, right, 2, keepFocus(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, 16,
+                this::openNameColour)).setTooltip(Tooltip.create(Component.literal("Any color for the selection")));
             pos[1] += 16;
         }
         resetName.active = l.name() != null || pendingName != null;
         resetName.setTooltip(Tooltip.create(Component.literal(typeName != null
-            ? "Back to the name every " + Repo.get().typeName(ident().type()) + " has" : "Back to Hypixel's name")));
+            ? "Reset to the name for every " + Repo.get().typeName(ident().type()) : "Reset to the original name")));
         return initGlint(pos[1] + (roomy ? 10 : 8), right);
     }
 
@@ -1177,11 +1183,12 @@ public class StudioScreen extends Screen {
         int rowH = roomy ? 18 : 16, step = rowH + (roomy ? 3 : 4);
         int cx = midX + glintIcon + 4, cw = Math.min(right - cx - 16, roomy ? 240 : 150);
         boolean on = glintOn();
-        Button toggle = addRenderableWidget(Button.builder(Component.literal("Enchant glint: " + (on ? "On" : "Off")),
+        Button toggle = addRenderableWidget(Button.builder(Component.literal("Glint: " + (on ? "On" : "Off")),
             b -> toggleGlint()).bounds(cx, glintIconY, cw, rowH).build());
-        toggle.setTooltip(Tooltip.create(Component.literal("Click to turn the shimmer " + (on ? "off" : "on"))));
-        reset(cx + cw + 2, glintIconY, rowH, l.glint() != null, "Back to " + (t.glint() != null
-            ? "the look for every item" : "Hypixel's") + " (" + (glintDefault() ? "on" : "off") + ")", () -> {
+        toggle.setTooltip(Tooltip.create(Component.literal("Click to turn " + (on ? "off" : "on"))));
+        reset(cx + cw + 2, glintIconY, rowH, l.glint() != null, (t.glint() != null
+            ? "Reset to every " + Repo.get().typeName(widgetsFor.type()) : "Reset to original")
+            + " (" + (glintDefault() ? "On" : "Off") + ")", () -> {
                 edit(look -> look.withGlint(null));
                 rebuildWidgets();
             });
@@ -1191,8 +1198,8 @@ public class StudioScreen extends Screen {
             queueGlint(look -> look.withGlintSpeed(s));
             speedReset.active = true;
         }, this::flushPending));
-        slider.setTooltip(Tooltip.create(Component.literal("How fast the shimmer moves: 0.1x to 4x")));
-        speedReset = reset(cx + cw + 2, glintIconY + step, rowH, l.glintSpeed() != null, "Back to Minecraft's own speed",
+        slider.setTooltip(Tooltip.create(Component.literal("Glint speed, 0.1x to 4x")));
+        speedReset = reset(cx + cw + 2, glintIconY + step, rowH, l.glintSpeed() != null, "Reset to default (1.0x)",
             () -> {
                 pendingGlint = null;
                 edit(look -> look.withGlintSpeed(null));
@@ -1204,9 +1211,9 @@ public class StudioScreen extends Screen {
             queueGlint(look -> look.withGlintStrength(s));
             strengthReset.active = true;
         }, this::flushPending));
-        bright.setTooltip(Tooltip.create(Component.literal("How bright the shimmer is: 0.25x to 3x")));
+        bright.setTooltip(Tooltip.create(Component.literal("Glint strength, 0.25x to 3x")));
         strengthReset = reset(cx + cw + 2, glintIconY + 2 * step, rowH, l.glintStrength() != null,
-            "Back to the glint's own strength", () -> {
+            "Reset to default (1.0x)", () -> {
                 pendingGlint = null;
                 edit(look -> look.withGlintStrength(null));
                 rebuildWidgets();
@@ -1229,9 +1236,9 @@ public class StudioScreen extends Screen {
             if (Objects.equals(colour, c[1]) || c[1] == null && PURPLE.equals(colour)) glintPick = b;
         }
         pos[0] += 1; // the usual 2 px before a button
-        place(pos, right, 2, Button.builder(Component.literal("Custom color..."), b -> openGlintColour())
-            .size(font.width("Custom color...") + 12, sq).build())
-            .setTooltip(Tooltip.create(Component.literal("Any color for the shimmer")));
+        place(pos, right, 2, Button.builder(Component.literal("Custom Color…"), b -> openGlintColour())
+            .size(font.width("Custom Color…") + 12, sq).build())
+            .setTooltip(Tooltip.create(Component.literal("Any glint color")));
         Button undo = undoButton(b -> {
             pendingGlint = null;
             edit(look -> look.withGlintColor(null));
@@ -1240,7 +1247,7 @@ public class StudioScreen extends Screen {
         undo.setHeight(sq);
         colourReset = place(pos, right, 2, undo);
         colourReset.active = l.glintColor() != null;
-        colourReset.setTooltip(Tooltip.create(Component.literal("Back to Minecraft's purple")));
+        colourReset.setTooltip(Tooltip.create(Component.literal("Reset to default (purple)")));
         return pos[1] + sq;
     }
 
@@ -1361,20 +1368,20 @@ public class StudioScreen extends Screen {
     private void openGlintColour() {
         flushPending();
         String current = look().glintColor() != null ? look().glintColor() : inherited().glintColor();
-        openPopup(new ColorPopup(Component.literal("Glint color"), current != null ? current : PURPLE, false, hex -> {
+        openPopup(new ColorPopup(Component.literal("Glint Color"), current != null ? current : PURPLE, false, hex -> {
             queueGlint(l -> l.withGlintColor(hex));
             colourReset.active = true;
             glintPick = null;
         }).onClose(this::flushPending));
     }
 
-    /** "Custom color..." for the name: the pop-up's colour goes on the letters selected when it opened, live. */
+    /** "Custom Color…" for the name: the pop-up's colour goes on the letters selected when it opened, live. */
     private void openNameColour() {
         if (nameBox == null) return;
         String base = nameBox.getValue();
         int from = nameBox.selectionStart(), to = nameBox.selectionEnd();
         String start = Names.colourAt(base, from);
-        openPopup(new ColorPopup(Component.literal("Name color"), start != null ? start : "#FFFFFF", false, hex -> {
+        openPopup(new ColorPopup(Component.literal("Name Color"), start != null ? start : "#FFFFFF", false, hex -> {
             if (nameBox != null) setName(Names.format(base, from, to, "&" + hex), true);
         }).onClose(this::flushPending));
     }
@@ -1478,7 +1485,7 @@ public class StudioScreen extends Screen {
     /** Shows an edited name with the same letters selected; {@code focus} gives the box the keyboard. */
     private boolean setName(Names.Edit e, boolean focus) {
         if (e.text().length() > MAX_NAME) {
-            flash("The name is too long for more codes", 0xFFFF6666);
+            flash("Name too long for more codes", 0xFFFF6666);
             return false;
         }
         nameBox.setValue(e.text());
@@ -1598,8 +1605,8 @@ public class StudioScreen extends Screen {
         pendingDye = null;
         pendingGlint = null;
         Looks.put(byType, key(id), null);
-        flash(inherited().empty() ? "Back to Hypixel's look"
-            : "Cleared - the look for every " + Repo.get().typeName(id.type()) + " still applies", 0xFFFFAA66);
+        flash(inherited().empty() ? "Reset to original"
+            : "Reset. The look for every " + Repo.get().typeName(id.type()) + " still applies.", 0xFFFFAA66);
         rebuildWidgets();
     }
 
@@ -1614,11 +1621,11 @@ public class StudioScreen extends Screen {
     private void useTexture() {
         String tex = Textures.normalise(texBox.getValue());
         if (tex == null) {
-            flash("Not a Minecraft skin texture", 0xFFFF6666);
+            flash("Not a skin texture: paste a Value, URL or hash", 0xFFFF6666);
             return;
         }
         setSkin(Textures.CUSTOM_PREFIX + tex);
-        flash("Custom texture applied (downloading if new)", 0xFF66DD88);
+        flash("Texture applied", 0xFF66DD88);
     }
 
     /** A message in the footer for a few seconds; then the footer shows its count again. */
@@ -1687,8 +1694,8 @@ public class StudioScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         if (tooSmall) {
             super.extractRenderState(g, mouseX, mouseY, delta);
-            g.centeredText(font, "This window is too small for SkyCosmetics.", width / 2, height / 2 - 14, TEXT);
-            g.centeredText(font, "Make it bigger or lower the GUI scale.", width / 2, height / 2 - 2, MUTED);
+            g.centeredText(font, "Window too small", width / 2, height / 2 - 14, TEXT);
+            g.centeredText(font, "Make it bigger or lower GUI Scale.", width / 2, height / 2 - 2, MUTED);
             return;
         }
         if (shownCatalog != Repo.get()) {
@@ -1754,7 +1761,7 @@ public class StudioScreen extends Screen {
 
         String foot;
         Catalog c = Repo.get();
-        if (c.skins.isEmpty()) foot = Repo.loading() ? "Loading skins..." : "No skin data yet - retrying";
+        if (c.skins.isEmpty()) foot = Repo.loading() ? "Loading skins…" : "No skin data yet. Retrying…";
         else foot = switch (tab) {
             case DYES -> Names.count(dyeResults.size(), "dye") + dyeNote();
             case SKINS -> skinFilter == SkinFilter.PASTE ? "" : Names.count(skinResults.size(), "skin");
@@ -1787,8 +1794,8 @@ public class StudioScreen extends Screen {
     private String dyeNote() {
         ItemStack s = target();
         if (s.isEmpty()) return "";
-        if (s.get(DataComponents.EQUIPPABLE) == null || s.is(Items.PLAYER_HEAD)) return " - armor only";
-        return s.getItem().toString().contains("leather") ? "" : " - shown as leather";
+        if (s.get(DataComponents.EQUIPPABLE) == null || s.is(Items.PLAYER_HEAD)) return " · this item can't be dyed";
+        return s.getItem().toString().contains("leather") ? "" : " · shown as leather armor";
     }
 
     // -------------------------------------------------------------- left ---
@@ -1802,8 +1809,8 @@ public class StudioScreen extends Screen {
     private void drawList(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         int x = PAD + 4, w = leftW - 8;
         if (rows.isEmpty()) {
-            g.textWithWordWrap(font, Component.literal("No items yet. Wear or hold a SkyBlock item, or open your "
-                + "wardrobe, pets or ender chest once."), x + 2, listTop + 4, w - 4, MUTED);
+            g.textWithWordWrap(font, Component.literal("No items yet. Hold or wear a SkyBlock item, or open your "
+                + "Wardrobe, Pets or Ender Chest."), x + 2, listTop + 4, w - 4, MUTED);
             return;
         }
         int maxScroll = Math.max(0, rowsHeight() - (listBottom - listTop));
@@ -1843,7 +1850,7 @@ public class StudioScreen extends Screen {
             tip.add(hovered.stack().get().getStyledHoverName());
             if (!hovered.sub().isEmpty()) tip.add(Component.literal(hovered.sub()).withStyle(ChatFormatting.GRAY));
             if (hovered.role().startsWith("uuid:")) {
-                tip.add(Component.literal("Right-click to remove from this list").withStyle(ChatFormatting.DARK_GRAY));
+                tip.add(Component.literal("Right-click to forget").withStyle(ChatFormatting.DARK_GRAY));
             }
             g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
         }
@@ -1980,7 +1987,7 @@ public class StudioScreen extends Screen {
         String name = l.name() != null ? l.name() : t.name();
         g.text(font, "Name", x, y, MUTED);
         if (name == null) {
-            g.text(font, "Hypixel's", x + 30, y, MUTED);
+            g.text(font, "Original", x + 30, y, MUTED);
         } else {
             g.text(font, styledName(name + all(l.name(), t.name()), right - x - 42), x + 30, y, TEXT);
         }
@@ -2001,7 +2008,7 @@ public class StudioScreen extends Screen {
         if (dye != null) dyeLine.append(Component.literal("■ ").withColor(dye.rgbAt(tick, 0)));
         return List.of(label("Skin").append(Component.literal(skin.text()).withColor(skin.color() & 0xFFFFFF)),
             dyeLine.append(Component.literal(dv.text()).withColor(dv.color() & 0xFFFFFF)),
-            label("Name").append(name == null ? Component.literal("Hypixel's").withColor(MUTED & 0xFFFFFF)
+            label("Name").append(name == null ? Component.literal("Original").withColor(MUTED & 0xFFFFFF)
                 : Names.parse(name + all(l.name(), t.name()))),
             label("Glint").append(Component.literal(glint.text()).withColor(glint.color() & 0xFFFFFF)));
     }
@@ -2016,7 +2023,7 @@ public class StudioScreen extends Screen {
     private static Value skinValue(Looks.Look l, Looks.Look t) {
         String id = l.skin() != null ? l.skin() : t.skin();
         SkinEntry e = Repo.get().skin(id);
-        return new Value((e != null ? e.name : id != null ? "Unknown" : "Hypixel's") + all(l.skin(), t.skin()),
+        return new Value((e != null ? e.name : id != null ? "Unknown skin" : "Original") + all(l.skin(), t.skin()),
             e != null ? e.color : MUTED, l.skin() != null);
     }
 
@@ -2026,7 +2033,7 @@ public class StudioScreen extends Screen {
 
     private static Value dyeValue(Looks.Look l, Looks.Look t, DyeEntry dye) {
         String id = l.dye() != null ? l.dye() : t.dye();
-        return new Value((dye != null ? dye.name : id != null ? "Unknown" : "Hypixel's") + all(l.dye(), t.dye()),
+        return new Value((dye != null ? dye.name : id != null ? "Unknown dye" : "Original") + all(l.dye(), t.dye()),
             dye != null ? dye.nameColor : MUTED, l.dye() != null);
     }
 
@@ -2035,7 +2042,7 @@ public class StudioScreen extends Screen {
         String colour = l.glintColor() != null ? l.glintColor() : t.glintColor();
         Float speed = l.glintSpeed() != null ? l.glintSpeed() : t.glintSpeed();
         Float strength = l.glintStrength() != null ? l.glintStrength() : t.glintStrength();
-        StringBuilder text = new StringBuilder(glint == null ? "Hypixel's" : "on".equals(glint) ? "On" : "Off");
+        StringBuilder text = new StringBuilder(glint == null ? "Original" : "on".equals(glint) ? "On" : "Off");
         if (colour != null) text.append("  ").append(colour);
         if (speed != null) text.append("  speed ").append(SpeedSlider.format(speed));
         if (strength != null) text.append("  strength ").append(SpeedSlider.format(strength));
@@ -2163,7 +2170,8 @@ public class StudioScreen extends Screen {
         }
         firstsDone = firsts;
         if (still && firsts) prefetch(list, start, end, tick);
-        int animated = 0, moved = 0;
+        gridStart = start;
+        gridEnd = end;
         g.enableScissor(midX, gridY, midX + midW, gridY + gridH);
         for (int i = start; i < end; i++) {
             SkinEntry e = list.get(i);
@@ -2176,10 +2184,9 @@ public class StudioScreen extends Screen {
                 drawIcon(g, e.icon(frame), cx, cy);
                 gridItems++;
             }
-            if (e.animated()) {
-                animated++;
-                if (frame > 0) moving.add(e.id);
-                if (moving.contains(e.id)) moved++;
+            if (e.animated() && frame >= 0 && !movedAt.containsKey(e.id)) {
+                if (!shownAt.containsKey(e.id)) shownAt.put(e.id, tick);
+                if (frame > 0) movedAt.put(e.id, tick);
             }
             drawCardName(g, cx, cy, e.id, e.name, e.color);
             if (e.animated() || e.missingFrames) animatedBadge(g, cx + cardW - 8, cy + 3, e.animated() ? ACCENT : MUTED);
@@ -2190,8 +2197,6 @@ public class StudioScreen extends Screen {
             if (hover) hovered = e;
         }
         g.disableScissor();
-        gridAnimated = animated;
-        gridMoving = moved;
         // Warm the next rows with what the budget leaves, so scrolling down rarely shows empty cards.
         for (int i = end; i < Math.min(list.size(), end + cols * 2); i++) ask(list.get(i).textures[0]);
         if (list.isEmpty() && !Repo.get().skins.isEmpty()) {
@@ -2201,9 +2206,9 @@ public class StudioScreen extends Screen {
             List<Component> tip = new ArrayList<>();
             tip.add(Component.literal(hovered.name).withColor(hovered.color & 0xFFFFFF));
             if (hovered.animated()) {
-                tip.add(Component.literal("Animated: " + hovered.textures.length + " frames").withStyle(ChatFormatting.LIGHT_PURPLE));
+                tip.add(Component.literal("Animated · " + hovered.textures.length + " frames").withStyle(ChatFormatting.LIGHT_PURPLE));
             } else if (hovered.missingFrames) {
-                tip.add(Component.literal("Animated on Hypixel; frames not known yet").withStyle(ChatFormatting.GRAY));
+                tip.add(Component.literal("Animated on Hypixel · preview it once to learn its frames").withStyle(ChatFormatting.GRAY));
             }
             if (hovered.learned) tip.add(Component.literal("Learned in game").withStyle(ChatFormatting.GREEN));
             tip.add(Component.literal(hovered.id.equals(current) ? "Click to remove" : "Click to apply")
@@ -2304,7 +2309,7 @@ public class StudioScreen extends Screen {
             tip.add(Component.literal(hovered.name).withColor(hovered.nameColor & 0xFFFFFF));
             tip.add(Component.literal(String.format(Locale.ROOT, "#%06X", rgb)).withColor(rgb));
             if (hovered.animated()) {
-                tip.add(Component.literal("Animated: " + hovered.colors.length + " colors, ripples boots to helmet")
+                tip.add(Component.literal("Animated · " + hovered.colors.length + " colors")
                     .withStyle(ChatFormatting.LIGHT_PURPLE));
             }
             tip.add(Component.literal(hovered.id.equals(current) ? "Click to remove" : "Click to apply")
@@ -2341,8 +2346,8 @@ public class StudioScreen extends Screen {
     }
 
     private void drawPaste(GuiGraphicsExtractor g) {
-        g.textWithWordWrap(font, Component.literal("Paste a texture from minecraft-heads.com, a skin URL, or any "
-            + "skull's Value. Works on any item, not only helmets."), midX, gridY + 4, Math.min(midW, 360), MUTED);
+        g.textWithWordWrap(font, Component.literal("Paste a head's Value (e.g. from minecraft-heads.com), a skin URL "
+            + "or a texture hash. Works on any item."), midX, gridY + 4, Math.min(midW, 360), MUTED);
     }
 
     private void drawStyle(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -2354,7 +2359,7 @@ public class StudioScreen extends Screen {
         boolean inView = mouseY >= top && mouseY < bottom;
         g.enableScissor(midX, top, midX + midW, bottom);
         g.text(font, "Name", midX, nameTop + 3 - dy, TEXT);
-        g.text(font, "Enchant glint", midX, glintTop - dy, TEXT);
+        g.text(font, "Enchant Glint", midX, glintTop - dy, TEXT);
         // Live: the glint shows here. 3x in the roomy layout, 2x in the compact one.
         bigItem(g, target(), glintIconX, glintIconY - dy, glintIcon, inView ? mouseX : -1, mouseY, null);
         if (glintPick != null && glintPick.visible) {
@@ -2389,15 +2394,18 @@ public class StudioScreen extends Screen {
         }
     }
 
+    /** "Looks saved in other mods: Skyblocker, SkyOcean", once per layout. */
+    private static String otherNote() {
+        List<String> names = new ArrayList<>();
+        for (OtherLooks.Source src : OtherLooks.sources()) if (!names.contains(src.name())) names.add(src.name());
+        return Component.translatable("skycosmetics.other.about", String.join(", ", names)).getString();
+    }
+
     /** Other Mods: what other mods change on your items, with their mod's chip (see {@link OtherModsTab}). */
     private void drawOther(GuiGraphicsExtractor g, int mouseX, int mouseY, long tick) {
-        List<String> names = new ArrayList<>();
-        for (OtherLooks.Source src : OtherLooks.sources()) names.add(src.name());
-        Component note = Component.translatable("skycosmetics.other.about", String.join(", ", names));
-        String text = note.getString();
-        g.text(font, clip(text, midW), midX, otherNoteY + 1, MUTED);
+        g.text(font, clip(otherNote, midW), midX, otherNoteY + 1, MUTED);
         if (mouseX >= midX && mouseX < midX + midW && mouseY >= otherNoteY && mouseY < otherNoteY + 10) {
-            g.setComponentTooltipForNextFrame(font, List.of(Component.literal(text),
+            g.setComponentTooltipForNextFrame(font, List.of(Component.literal(otherNote),
                 Component.translatable("skycosmetics.other.aboutHelp").withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
         }
         boolean any = otherTab.render(g, midX, gridY, midW, gridH, mouseX, mouseY, tick);
@@ -2676,11 +2684,65 @@ public class StudioScreen extends Screen {
     }
 
     /**
-     * The skins grid's animations last frame: animated cards in view, how many of them moved yet, and the most
-     * textures it asked for in one game tick since the studio opened.
+     * The animated cards in view: for each, the ticks from its first frame to its first move (-1: not moved yet,
+     * -2: no frame yet).
      */
-    public int[] animationStart() {
-        return new int[]{gridAnimated, gridMoving, mostPerTick};
+    public int[] startDelays() {
+        List<Integer> out = new ArrayList<>();
+        for (int i = gridStart; i < Math.min(gridEnd, skinResults.size()); i++) {
+            SkinEntry e = skinResults.get(i);
+            if (!e.animated()) continue;
+            Long shown = shownAt.get(e.id), moved = movedAt.get(e.id);
+            out.add(shown == null ? -2 : moved == null ? -1 : (int) (moved - shown));
+        }
+        return out.stream().mapToInt(Integer::intValue).toArray();
+    }
+
+    /** The most textures the grid asked for in one game tick since the studio opened. */
+    public int mostAskedPerTick() {
+        return mostPerTick;
+    }
+
+    /**
+     * What the grid in view may ask for while it sits still: every frame of its cards and the first frames of
+     * the next two rows. It must never ask for more (every frame of every skin).
+     */
+    public int gridWanted() {
+        int n = 0;
+        for (int i = gridStart; i < Math.min(gridEnd, skinResults.size()); i++) n += skinResults.get(i).textures.length;
+        return n + Math.max(0, Math.min(skinResults.size(), gridEnd + cols * 2) - gridEnd);
+    }
+
+    /** What the Saved tab lists: section titles, rows ("> " closed, "v " open) and their changes. */
+    public List<String> savedRows() {
+        return savedTab == null ? List.of() : savedTab.describe();
+    }
+
+    /** Opens or closes a Saved row: "I" + UUID or "T" + type. */
+    public void setSavedOpen(String key, boolean open) {
+        savedTab.setOpen(key, open);
+    }
+
+    /** Where a Saved row's × was drawn, then each of its open changes' × (x, y pairs); null if not listed. */
+    public int[] savedButtons(String key) {
+        return savedTab.buttons(key);
+    }
+
+    /** What the Other Mods tab lists: section titles, items and each change. */
+    public List<String> otherRows() {
+        return otherTab == null ? List.of() : otherTab.describe();
+    }
+
+    /** Where the × and "Move Here" of a change on Other Mods were drawn (x, y, x, y); null if not listed. */
+    public int[] otherButtons(String item, String mod, OtherLooks.Kind kind) {
+        return otherTab.buttons(item, mod, kind);
+    }
+
+    /** The other mods' chips over the summary: their labels, and where each one's center is (x, y). */
+    public Map<String, int[]> chips() {
+        Map<String, int[]> out = new java.util.LinkedHashMap<>();
+        for (OtherChip c : chips) out.put(c.getMessage().getString(), new int[]{c.getX() + c.getWidth() / 2, c.getY() + c.getHeight() / 2});
+        return out;
     }
 
     /** The player model's box last frame: top, bottom, scale; null when it was not drawn. */

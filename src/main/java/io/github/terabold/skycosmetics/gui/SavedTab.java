@@ -228,7 +228,7 @@ final class SavedTab extends RowList {
         Looks.Look before = e.look();
         Looks.Look next = p.without(before);
         put(e, next.empty() ? null : next);
-        host.removed(Component.translatable("skycosmetics.saved.removedPart", p.label(), e.title()).getString(),
+        host.removed(Component.translatable("skycosmetics.saved.removedPart", p.label().toLowerCase(Locale.ROOT), e.title()).getString(),
             () -> put(e, before));
     }
 

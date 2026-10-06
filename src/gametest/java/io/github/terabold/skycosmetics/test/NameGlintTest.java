@@ -255,7 +255,7 @@ final class NameGlintTest {
         ctx.runOnClient(mc -> screen(mc).nameBox().setValue("&dPink Blade"));
         ctx.waitTicks(10);
         check("&dPink Blade".equals(name(ctx)), "typing sets a custom name");
-        ctx.clickScreenButton("Reset name");
+        ctx.clickScreenButton("Reset Name");
         ctx.waitTicks(2);
         check(name(ctx) == null && ctx.computeOnClient(NameGlintTest::value).equals(HYPIXEL),
             "Reset name removes the custom name and refills Hypixel's");
@@ -264,7 +264,7 @@ final class NameGlintTest {
     /**
      * Any colour on the selected letters, live. Where the tab has room the picker is open under the style
      * buttons: a click or a drag recolours the selection without piling up codes, and with the box not being
-     * typed in it colours the whole name. Elsewhere "Custom color..." opens the shared pop-up.
+     * typed in it colours the whole name. Elsewhere "Custom Color…" opens the shared pop-up.
      */
     private static void nameColour(ClientGameTestContext ctx) {
         ColorPicker inline = ctx.computeOnClient(mc -> screen(mc).namePicker());
@@ -273,7 +273,7 @@ final class NameGlintTest {
             return;
         }
         ctx.runOnClient(mc -> screen(mc).nameBox().select(2, 8)); // "Aspect"
-        press(ctx, mc -> labelled(mc, "Custom color...").getFirst());
+        press(ctx, mc -> labelled(mc, "Custom Color…").getFirst());
         ColorPopup p = ctx.computeOnClient(mc -> screen(mc).popup());
         check(p != null && !p.isAnimated(), "Custom color... opens the single-color pop-up");
         click(ctx, p.picker().x() + 30, p.picker().y() + 12);
@@ -285,7 +285,7 @@ final class NameGlintTest {
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> screen(mc).popup() == null) && v.equals(name(ctx)),
             "closing the pop-up saves the name: " + name(ctx));
-        ctx.clickScreenButton("Reset name");
+        ctx.clickScreenButton("Reset Name");
         ctx.waitTicks(2);
     }
 
@@ -327,21 +327,21 @@ final class NameGlintTest {
         String whole = ctx.computeOnClient(NameGlintTest::value);
         check(whole.equals("&" + ColorPicker.hex(p.rgb()) + "Aspect of the End"), "with the box unfocused, the whole name: " + whole);
         check(ctx.computeOnClient(mc -> !screen(mc).nameBox().isFocused()), "and the box shows the styled name");
-        ctx.clickScreenButton("Reset name");
+        ctx.clickScreenButton("Reset Name");
         ctx.waitTicks(2);
         check(name(ctx) == null, "Reset name after the picker");
     }
 
     /** Glint on/off, colour, speed and strength land in the look; each reset puts null back. */
     private static void glint(ClientGameTestContext ctx) {
-        check(label(ctx, "Enchant glint: On"), "Hypixel's sword already glints: the toggle says On");
-        ctx.clickScreenButton("Enchant glint: On");
+        check(label(ctx, "Glint: On"), "Hypixel's sword already glints: the toggle says On");
+        ctx.clickScreenButton("Glint: On");
         ctx.waitTicks(2);
-        check("off".equals(look(ctx).glint()) && label(ctx, "Enchant glint: Off"), "the toggle turns the glint off");
-        ctx.clickScreenButton("Enchant glint: Off");
+        check("off".equals(look(ctx).glint()) && label(ctx, "Glint: Off"), "the toggle turns the glint off");
+        ctx.clickScreenButton("Glint: Off");
         ctx.waitTicks(2);
-        check(look(ctx).glint() == null && label(ctx, "Enchant glint: On"), "back on Hypixel's glint stores nothing");
-        ctx.clickScreenButton("Enchant glint: On");
+        check(look(ctx).glint() == null && label(ctx, "Glint: On"), "back on Hypixel's glint stores nothing");
+        ctx.clickScreenButton("Glint: On");
         ctx.waitTicks(2);
         press(ctx, mc -> resets(mc).get(0));
         check(look(ctx).glint() == null, "the glint reset");
@@ -349,10 +349,10 @@ final class NameGlintTest {
         press(ctx, mc -> screen(mc).glintSquare("Red"));
         check("#FF3B3B".equals(look(ctx).glintColor()), "Red glint: " + look(ctx).glintColor());
         ctx.takeScreenshot("skycosmetics-36-glint-red");
-        press(ctx, mc -> screen(mc).glintSquare("Purple (Minecraft's)"));
+        press(ctx, mc -> screen(mc).glintSquare("Purple (default)"));
         check(look(ctx).glintColor() == null, "Purple is Minecraft's own color: nothing stored");
 
-        press(ctx, mc -> labelled(mc, "Custom color...").getLast());
+        press(ctx, mc -> labelled(mc, "Custom Color…").getLast());
         ColorPopup p = ctx.computeOnClient(mc -> screen(mc).popup());
         check(p != null, "the glint Custom color... opens the pop-up");
         click(ctx, p.picker().x() + 40, p.picker().y() + 20);

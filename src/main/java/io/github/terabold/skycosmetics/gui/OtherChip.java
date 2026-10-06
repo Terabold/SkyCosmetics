@@ -25,6 +25,8 @@ final class OtherChip extends AbstractWidget {
     private final Font font;
     private final Change change;
     private final Consumer<Change> remove, move;
+    private String label;
+    private int labelFor = -1;
 
     OtherChip(Font font, int x, int y, Change change, Consumer<Change> remove, Consumer<Change> move) {
         super(x, y, width(font, change), HEIGHT, change.chip());
@@ -60,7 +62,18 @@ final class OtherChip extends AbstractWidget {
         boolean over = isHoveredOrFocused() && change.live();
         g.fill(getX(), getY(), getRight(), getBottom(), (col & 0x00FFFFFF) | (over ? 0x90000000 : 0x50000000));
         g.outline(getX(), getY(), getWidth(), getHeight(), col);
-        g.text(font, getMessage(), getX() + 4, getY() + 2, change.live() ? 0xFFFFFFFF : 0xFFB0B0B8);
+        g.text(font, label(), getX() + 4, getY() + 2, change.live() ? 0xFFFFFFFF : 0xFFB0B0B8);
+    }
+
+    /** The label, cut with "…" when the chip is narrower than it; worked out once per width. */
+    private String label() {
+        int room = getWidth() - 8;
+        if (room != labelFor) {
+            labelFor = room;
+            String full = getMessage().getString();
+            label = font.width(full) <= room ? full : font.plainSubstrByWidth(full, Math.max(0, room - font.width("…"))) + "…";
+        }
+        return label;
     }
 
     @Override

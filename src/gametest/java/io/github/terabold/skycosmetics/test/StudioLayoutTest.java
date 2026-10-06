@@ -374,10 +374,10 @@ final class StudioLayoutTest {
         ctx.clickScreenButton("Paste");
         ctx.waitTicks(2);
         ctx.getInput().typeChars("not a texture");
-        ctx.clickScreenButton("Use texture");
+        ctx.clickScreenButton("Apply");
         ctx.waitTicks(2);
         String message = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).footer());
-        check(message.equals("Not a Minecraft skin texture"), "the message takes the footer: " + message);
+        check(message.equals("Not a skin texture: paste a Value, URL or hash"), "the message takes the footer: " + message);
         ctx.clickScreenButton("Helmet");
         ctx.waitTicks(90);
         String back = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).footer());
@@ -409,13 +409,13 @@ final class StudioLayoutTest {
         });
     }
 
-    /** "Custom dye..." opens one pop-up with both modes; it applies live and closes every way it should. */
+    /** "Custom Dye…" opens one pop-up with both modes; it applies live and closes every way it should. */
     private static void dyePopup(ClientGameTestContext ctx) {
         Looks.Look chest = ctx.computeOnClient(mc -> Looks.byUuid("t-chest"));
         open(ctx, mc -> mc.player.getItemBySlot(EquipmentSlot.CHEST));
         check(ctx.computeOnClient(mc -> widget(mc, "Custom color") == null && widget(mc, "Custom animated") == null
             && widget(mc, "Hypixel dyes") == null), "no dye mode buttons any more");
-        ctx.clickScreenButton("Custom dye...");
+        ctx.clickScreenButton("Custom Dye…");
         ctx.waitTicks(3);
         ColorPopup p = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).popup());
         check(p != null && p.isAnimated(), "the pop-up opens on Animated for the inherited Aurora dye");
@@ -455,21 +455,21 @@ final class StudioLayoutTest {
         });
 
         // Esc closes the pop-up, not the studio.
-        ctx.clickScreenButton("Custom dye...");
+        ctx.clickScreenButton("Custom Dye…");
         ctx.waitTicks(2);
         ctx.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         ctx.waitTicks(2);
         ctx.runOnClient(mc -> check(mc.screen instanceof StudioScreen s && s.popup() == null, "Esc closes only the pop-up"));
 
         // Its x button closes it too.
-        ctx.clickScreenButton("Custom dye...");
+        ctx.clickScreenButton("Custom Dye…");
         ctx.waitTicks(2);
         ColorPopup x = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).popup());
         click(ctx, x.x() + x.width() - 12, x.y() + 12);
         check(ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).popup() == null), "x closes the pop-up");
 
         // Changing the tab drops it: no hidden editor keeps taking input.
-        ctx.clickScreenButton("Custom dye...");
+        ctx.clickScreenButton("Custom Dye…");
         ctx.waitTicks(2);
         ctx.clickScreenButton("Saved");
         ctx.waitTicks(2);
