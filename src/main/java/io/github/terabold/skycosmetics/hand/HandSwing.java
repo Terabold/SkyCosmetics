@@ -34,8 +34,6 @@ public final class HandSwing {
     private static InteractionHand arm = InteractionHand.MAIN_HAND;
     /** A restart cut the old arc here; the first tick of the new swing plays it out to its end. */
     private static float tailFrom = 1;
-    /** Last game tick seen, so a paused game doesn't advance the timer. */
-    private static boolean paused;
     /** Swings seen, for tests. */
     private static int seen;
 
@@ -65,7 +63,7 @@ public final class HandSwing {
      * swing restarts follows Minecraft's rule on SkyCosmetics' own timer; with Full Swings, never mid-swing.
      */
     public static void swung(InteractionHand hand) {
-        if (!Hand.enabled() || hand == null) return;
+        if (!Hand.active() || hand == null) return;
         seen++;
         if (pending) {
             pendingHand = hand;
@@ -93,8 +91,8 @@ public final class HandSwing {
 
     private static void tick(Minecraft mc) {
         LocalPlayer p = mc.player;
-        if (p == null) {
-            reset();
+        if (p == null || !Hand.active()) {
+            if (running || pending) reset();
             return;
         }
         if (mc.isPaused()) return; // the player's own swing stands still too

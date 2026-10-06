@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.Settings;
+import io.github.terabold.skycosmetics.SkyCosmetics;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.ByteArrayOutputStream;
@@ -60,17 +61,39 @@ public final class HandImport {
     }
 
     public static Found find(Source s, Path configDir) {
-        Path f = configDir.resolve(s.file);
         try {
+            Path f = file(s, configDir);
             if (!Files.isRegularFile(f) || Files.size(f) > MAX_FILE) return null;
-            String text = Files.readString(f, StandardCharsets.UTF_8);
-            return parse(s, JsonParser.parseString(text));
+            return parse(s, JsonParser.parseString(Files.readString(f, StandardCharsets.UTF_8)));
         } catch (Exception e) {
             // Another mod's file mid-write or in a format we don't know: no import offered, nothing logged loudly.
-            SkyCosmeticsLog.debug("Could not read " + f + ": " + e);
+            SkyCosmetics.LOG.debug("Could not read {}'s config: {}", s.name, e.toString());
             return null;
         }
     }
+
+    /**
+     * The file a mod keeps its settings in now. NoammAddons can switch between named configs: its current one is
+     * named in {@code currentConfig.json} and kept in {@code configs/<name>.json}, the default in {@code config.json}.
+     */
+    static Path file(Source s, Path configDir) {
+        if (s != Source.NOAMM) return configDir.resolve(s.file);
+        Path base = configDir.resolve("NoammAddons");
+        try {
+            Path current = base.resolve("currentConfig.json");
+            if (Files.isRegularFile(current) && Files.size(current) < 1024
+                && JsonParser.parseString(Files.readString(current, StandardCharsets.UTF_8)) instanceof JsonPrimitive p
+                && p.isString() && NOAMM_NAME.matcher(p.getAsString()).matches() && !p.getAsString().equals("default")) {
+                Path named = base.resolve("configs").resolve(p.getAsString() + ".json");
+                if (Files.isRegularFile(named)) return named;
+            }
+        } catch (Exception e) {
+            SkyCosmetics.LOG.debug("Could not read NoammAddons' current config name: {}", e.toString());
+        }
+        return configDir.resolve(s.file);
+    }
+
+    private static final java.util.regex.Pattern NOAMM_NAME = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,32}");
 
     /** The conversion alone, for tests and for files already read. */
     public static Found parse(Source s, JsonElement root) {
@@ -237,13 +260,6 @@ public final class HandImport {
             return null;
         } finally {
             inf.end();
-        }
-    }
-
-    /** Quiet logging for other mods' files: only with debug logging on. */
-    private static final class SkyCosmeticsLog {
-        static void debug(String msg) {
-            io.github.terabold.skycosmetics.SkyCosmetics.LOG.debug(msg);
         }
     }
 }

@@ -23,7 +23,9 @@ public final class HandPose {
         SIZE("size", 0.1, 4, 0, 1), SIZE_X("sizeX", 0.25, 4, 0, 1), SIZE_Y("sizeY", 0.25, 4, 0, 1),
         SIZE_Z("sizeZ", 0.25, 4, 0, 1),
         SWING_X("swingX", 0, 2, 0.05, 1), SWING_Y("swingY", 0, 2, 0.05, 1), SWING_Z("swingZ", 0, 2, 0.05, 1),
-        SPEED("speed", 0.25, 4, 0, 1);
+        SPEED("speed", 0.25, 4, 0, 1),
+        /** How far the item tilts during a swing: 0 keeps it level, 2 doubles Minecraft's tilt. */
+        SWING_TURN("swingTurn", 0, 2, 0.05, 1);
 
         public final String key;
         public final float min, max, step, vanilla;
@@ -101,6 +103,9 @@ public final class HandPose {
     public final float scaleX, scaleY, scaleZ;
     /** Swing distance per axis, 0 for In Place. */
     public final float swingDX, swingDY, swingDZ;
+    /** Swing tilt multiplier; {@link #swingTurned} when it isn't Minecraft's. */
+    public final float swingTurn;
+    public final boolean swingTurned;
 
     private HandPose(float[] values, Pivot pivot, Swing swing) {
         this.v = values;
@@ -121,6 +126,8 @@ public final class HandPose {
         swingDY = inPlace ? 0 : get(Field.SWING_Y);
         swingDZ = inPlace ? 0 : get(Field.SWING_Z);
         swingScaled = swingDX != 1 || swingDY != 1 || swingDZ != 1;
+        swingTurn = get(Field.SWING_TURN);
+        swingTurned = swingTurn != 1;
     }
 
     private static float[] defaults() {

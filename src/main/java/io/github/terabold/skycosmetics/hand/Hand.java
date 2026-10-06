@@ -77,6 +77,8 @@ public final class Hand {
     private static final List<Preset> PRESETS = new ArrayList<>();
 
     private static int version;
+    /** On, and something differs from Minecraft's hand (or the editor is previewing): what every hook checks. */
+    private static boolean active;
 
     /** Set while the editor is open: the main hand shows this rule's pose (and maybe a sample item). */
     private static String previewKey;
@@ -153,6 +155,15 @@ public final class Hand {
     /** After any change: poses are looked up again on the next frame. Saving is the caller's (once per edit). */
     static void changed() {
         version++;
+        active = enabled && (previewKey != null || !isVanillaSetup());
+    }
+
+    /**
+     * Whether the hooks change anything. False when the feature is off or nothing differs from Minecraft, so a
+     * default install draws (and times swings) exactly as Minecraft, at the cost of one boolean per hook.
+     */
+    public static boolean active() {
+        return active;
     }
 
     public static void save() {
@@ -181,8 +192,10 @@ public final class Hand {
         return key == null ? null : RULES.get(key);
     }
 
+    /** The pose a rule key has, or null; allocates nothing (the editor's preview reads it every frame). */
     public static HandPose pose(String key) {
-        Rule r = rule(key);
+        if (EVERYTHING.equals(key)) return everything;
+        Rule r = key == null ? null : RULES.get(key);
         return r == null ? null : r.pose();
     }
 
@@ -222,6 +235,22 @@ public final class Hand {
         if (RULES.remove(key) != null) changed();
     }
 
+    /** Puts a removed rule back as it was (Undo). */
+    public static void restoreRule(Rule r) {
+        if (r == null || !validKey(r.key()) || RULES.containsKey(r.key()) || RULES.size() >= MAX_RULES) return;
+        RULES.put(r.key(), r);
+        changed();
+    }
+
+    /** What a rule is called in the menus: "Everything", "Sword", or the item's name. */
+    public static net.minecraft.network.chat.Component label(String key) {
+        if (EVERYTHING.equals(key)) return net.minecraft.network.chat.Component.translatable("skycosmetics.hand.rule.everything");
+        HandCategory c = HandCategory.byKey(key);
+        if (c != null) return c.label();
+        Rule r = key == null ? null : RULES.get(key);
+        return net.minecraft.network.chat.Component.literal(r != null ? r.name() : cleanName(null, key));
+    }
+
     /** A rule key: a kind's ("sword") or an item's ("item:TERMINATOR"). */
     static boolean validKey(String key) {
         if (key == null) return false;
@@ -231,21 +260,24 @@ public final class Hand {
         return !id.isEmpty() && id.length() <= MAX_ID && id.chars().noneMatch(Character::isWhitespace);
     }
 
-    /** "Terminator" for item:TERMINATOR when no name was given. */
+    /** "Aspect of the Dragons" for item:ASPECT_OF_THE_DRAGONS when no name was given. */
     static String cleanName(String name, String key) {
-        String n = name == null ? "" : name.strip();
+        String n = name == null ? "" : name.strip().replaceAll("\\p{Cntrl}", "");
         if (n.length() > MAX_NAME) n = n.substring(0, MAX_NAME);
         if (!n.isEmpty()) return n;
-        if (!key.startsWith(ITEM)) return "";
-        String[] words = key.substring(ITEM.length()).toLowerCase(Locale.ROOT).split("_");
+        if (key == null || !key.startsWith(ITEM)) return "";
+        String[] words = key.substring(ITEM.length()).toLowerCase(Locale.ROOT).split("[_:]");
         StringBuilder b = new StringBuilder();
         for (String w : words) {
             if (w.isEmpty()) continue;
+            boolean small = !b.isEmpty() && SMALL_WORDS.contains(w);
             if (!b.isEmpty()) b.append(' ');
-            b.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+            b.append(small ? w : Character.toUpperCase(w.charAt(0)) + w.substring(1));
         }
         return b.toString();
     }
+
+    private static final java.util.Set<String> SMALL_WORDS = java.util.Set.of("of", "the", "and", "a", "an", "in", "on");
 
     private static HandCategory categoryOfHeld(String id) {
         try {
@@ -338,8 +370,18 @@ public final class Hand {
         }
     }
 
-    public static void removePreset(String name) {
-        PRESETS.removeIf(p -> p.name().equals(name));
+    /** Removes a saved preset; returns it (for Undo), or null when there was none by that name. */
+    public static Preset removePreset(String name) {
+        for (int i = 0; i < PRESETS.size(); i++) {
+            if (PRESETS.get(i).name().equals(name)) return PRESETS.remove(i);
+        }
+        return null;
+    }
+
+    /** Puts a removed preset back (Undo); one saved since under the same name wins. */
+    public static void restorePreset(Preset p) {
+        if (p == null || PRESETS.size() >= MAX_PRESETS || PRESETS.stream().anyMatch(x -> x.name().equals(p.name()))) return;
+        PRESETS.add(p);
     }
 
     /**
@@ -351,6 +393,7 @@ public final class Hand {
         boolean saved = isVanillaSetup() || PRESETS.stream().anyMatch(p -> p.setup().equals(now));
         if (!saved && !now.equals(setup)) savePreset(PREVIOUS);
         readSetup(setup);
+        enabled = true; // what was picked shows at once
         changed();
     }
 

@@ -47,9 +47,9 @@ public final class HandRender {
 
     private HandRender() {}
 
-    /** The feature is on: every hook checks this first, so with it off the cost is one boolean. */
+    /** Something to change: every hook checks this first, so with nothing to do the cost is one boolean. */
     public static boolean active() {
-        return Hand.enabled();
+        return Hand.active();
     }
 
     // ------------------------------------------------------------- lookup ---
@@ -171,9 +171,13 @@ public final class HandRender {
         return p == null ? z : z * p.swingDZ;
     }
 
-    public static boolean swingScaled() {
+    /**
+     * A swing's tilt in {@code applyItemArmAttackTransform}: {@code angle} is Minecraft's, {@code rest} what it is
+     * with no swing (the first turn rests at 45 degrees). Scaled around the rest angle, so 0 keeps the item level.
+     */
+    public static float swingTurn(float angle, float rest) {
         HandPose p = pose;
-        return p != null && p.swingScaled;
+        return p == null || !p.swingTurned ? angle : rest + (angle - rest) * p.swingTurn;
     }
 
     /** The arm translate's three numbers, reused (render thread only). */

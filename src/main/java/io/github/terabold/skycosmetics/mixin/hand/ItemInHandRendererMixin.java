@@ -118,7 +118,39 @@ public abstract class ItemInHandRendererMixin {
         original.call(pose, HandRender.swingX(x), HandRender.swingY(y), HandRender.swingZ(z));
     }
 
+    /** The swing's tilt: three turns scaled by Swing Turn; the fourth (a fixed -45 degrees) is not part of it. */
+    @ModifyArg(method = "applyItemArmAttackTransform", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 0))
+    private float skycosmetics$swingTurnY(float angle) {
+        return HandRender.swingTurn(angle, Math.copySign(45, angle)); // side * (45 - 20 sin(p^2 pi)): rests at 45
+    }
+
+    @ModifyArg(method = "applyItemArmAttackTransform", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 1))
+    private float skycosmetics$swingTurnZ(float angle) {
+        return HandRender.swingTurn(angle, 0);
+    }
+
+    @ModifyArg(method = "applyItemArmAttackTransform", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 2))
+    private float skycosmetics$swingTurnX(float angle) {
+        return HandRender.swingTurn(angle, 0);
+    }
+
     // ------------------------------------------------------------- empty hand ---
+
+    /** The bare arm's swing turns (the first rotation is its fixed 45 degrees). */
+    @ModifyArg(method = "renderPlayerArm", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 1))
+    private float skycosmetics$armTurnY(float angle) {
+        return HandRender.swingTurn(angle, 0);
+    }
+
+    @ModifyArg(method = "renderPlayerArm", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 2))
+    private float skycosmetics$armTurnZ(float angle) {
+        return HandRender.swingTurn(angle, 0);
+    }
 
     @WrapOperation(method = "renderPlayerArm", require = 0,
         at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(FFF)V", ordinal = 0))
@@ -142,6 +174,24 @@ public abstract class ItemInHandRendererMixin {
         at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(FFF)V", ordinal = 0))
     private void skycosmetics$mapsSwing(PoseStack pose, float x, float y, float z, Operation<Void> original) {
         original.call(pose, HandRender.swingX(x), HandRender.swingY(y), HandRender.swingZ(z));
+    }
+
+    @ModifyArg(method = "renderOneHandedMap", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 1))
+    private float skycosmetics$mapTurnX(float angle) {
+        return HandRender.swingTurn(angle, 0);
+    }
+
+    @ModifyArg(method = "renderOneHandedMap", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 2))
+    private float skycosmetics$mapTurnY(float angle) {
+        return HandRender.swingTurn(angle, 0);
+    }
+
+    @ModifyArg(method = "renderTwoHandedMap", require = 0, index = 0,
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 2))
+    private float skycosmetics$mapsTurn(float angle) {
+        return HandRender.swingTurn(angle, 0);
     }
 
     @Inject(method = "renderMap", at = @At("HEAD"), require = 0)
