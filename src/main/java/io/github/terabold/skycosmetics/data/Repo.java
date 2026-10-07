@@ -381,13 +381,13 @@ public final class Repo {
     }
 
     /**
-     * What {@link BlinkGuesser} found for {@code id} with frames {@code sig}: blink ticks, or null for no blink.
-     * Saved and merged in a batch like learned timings.
+     * What {@link BlinkGuesser} found for {@code id} with frames {@code sig}: blink ticks, or null for no blink;
+     * {@code family}: a blink only if its sibling variants are. Saved and merged in a batch like learned timings.
      */
-    static void guessTiming(String id, String sig, int[] ticks) {
+    static void guessTiming(String id, String sig, int[] ticks, boolean family) {
         EXEC.execute(() -> guarded(() -> {
             if (guesses == null) guesses = BlinkGuesser.Store.load();
-            if (!guesses.put(id, sig, ticks, Looks.usedSkins())) return;
+            if (!guesses.put(id, sig, ticks, family, Looks.usedSkins())) return;
             guessesDirty = true;
             queue(null);
         }));

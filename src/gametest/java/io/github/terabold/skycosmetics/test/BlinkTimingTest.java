@@ -30,15 +30,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Blink timing without the repo's help, and learning in menus. Synthetic skins: eyes that close (a blink) get a
  * long open frame and short closed ones; a color cycle, a moving dot, and five frames do not. Then real files:
  * blink frames written where Minecraft caches skins are found and estimated for a learned skin the repo would
- * time evenly, never for one timed per frame; the sources layer learned over shipped over estimated over repo,
- * and an estimate is dropped when the frames change. Last, menu slots: a skin is learned from a slot, an open
+ * time evenly, never for one timed per frame; eyes that close into a line without losing detail count only
+ * once two sibling variants blink; the sources layer learned over shipped over estimated over repo, and an
+ * estimate is dropped when the frames change. Last, menu slots: a skin is learned from a slot, an open
  * frame that varies per round is learned by its median, another item in the slot starts over, and a new menu
  * forgets every menu slot but the player's inventory.
  */
 final class BlinkTimingTest {
+    private static final String PARENT = "SKYCOSMETICS_TEST";
     private static final String BLINK = "SKYCOSMETICS_TEST_BLINK";
     private static final String CYCLE = "SKYCOSMETICS_TEST_CYCLE";
     private static final String MEASURED = "SKYCOSMETICS_TEST_MEASURED";
+    /** Eyes that close into a line as detailed as the open eyes, and two plain two-frame blinks beside it. */
+    private static final String LINE = "SKYCOSMETICS_TEST_LINE";
+    private static final String TWO_A = "SKYCOSMETICS_TEST_TWO_A";
+    private static final String TWO_B = "SKYCOSMETICS_TEST_TWO_B";
     private static final int SKIN = 0xFFE0B080;
     private static final int LID = 0xFFC89868;
     private static final long MS = 1_000_000L;
@@ -68,6 +74,10 @@ final class BlinkTimingTest {
         check(BlinkGuesser.guess(heads(face(Eyes.OPEN), face(Eyes.HALF), face(Eyes.CLOSED), face(Eyes.HALF), face(Eyes.OPEN))) == null,
             "five frames are no blink");
         check(BlinkGuesser.guess(heads(face(Eyes.OPEN), face(Eyes.OPEN))) == null, "frames that look the same are no blink");
+        check(BlinkGuesser.guess(heads(lineEyes(true), lineEyes(false))) == null, "eyes that keep their detail are no sure blink");
+        int[] loose = BlinkGuesser.guessLoosely(heads(lineEyes(true), lineEyes(false)));
+        check(Arrays.equals(loose, new int[]{49, 4}), "but would be one beside blinking variants: " + Arrays.toString(loose));
+        check(BlinkGuesser.guessLoosely(heads(fill(0xFFFF4040), fill(0xFF40FF40))) == null, "a color cycle is not even loosely a blink");
 
         // A 64x32 skin: an outer area with no see-through pixel is not drawn (Minecraft's rule), one with any is.
         int[] legacy = new int[64 * 32];
@@ -106,6 +116,21 @@ final class BlinkTimingTest {
         return px;
     }
 
+    /** A light face whose purple eyes close into a gray line: as much detail closed as open. */
+    private static int[] lineEyes(boolean open) {
+        int[] px = fill(0xFFF0F0F0);
+        for (int eye : new int[]{9, 13}) {
+            if (open) {
+                set(px, eye, 11, 0xFF8040B0);
+                set(px, eye + 1, 11, 0xFF8040B0);
+            } else {
+                set(px, eye, 12, 0xFF707070);
+                set(px, eye + 1, 12, 0xFF707070);
+            }
+        }
+        return px;
+    }
+
     private static int[] dot(int x) {
         int[] px = fill(SKIN);
         for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) set(px, 9 + x + dx, 11 + dy, 0xFF101010);
@@ -135,7 +160,8 @@ final class BlinkTimingTest {
         List<Path> written = new ArrayList<>();
         try {
             String[] blink = values(0, 3), cycle = values(10, 3), measured = values(20, 3);
-            write(captured, capturedJson(blink, cycle, measured));
+            String[] line = values(40, 2), twoA = values(50, 2), twoB = values(60, 2);
+            write(captured, capturedJson(blink, cycle, measured, line, twoA, twoB));
             delete(timings);
             delete(estimated);
             Repo.useBundledTimings("{\"skins\": {}}");
@@ -144,6 +170,7 @@ final class BlinkTimingTest {
                 SkinEntry e = Repo.get().skin(BLINK);
                 check(e != null && e.timing == SkinEntry.Timing.REPO && !e.perFrame && Arrays.equals(e.frameTicks, new int[]{10, 10, 10}),
                     "the test blink plays the even timing first");
+                check(PARENT.equals(Repo.get().skin(LINE).parent), "the test skins are variants of one skin");
                 check(Repo.get().skin(MEASURED).perFrame, "ticksPerTexture marks a skin timed per frame");
                 check(BlinkGuesser.skinFile(blink[0]) != null, "the skin folder is known");
             });
@@ -153,6 +180,7 @@ final class BlinkTimingTest {
                 written.addAll(writeSkins(blink, face(Eyes.CLOSED), face(Eyes.OPEN), face(Eyes.HALF)));
                 written.addAll(writeSkins(cycle, fill(0xFFFF4040), fill(0xFF40FF40), fill(0xFF4040FF)));
                 written.addAll(writeSkins(measured, face(Eyes.OPEN), face(Eyes.HALF), face(Eyes.CLOSED)));
+                written.addAll(writeSkins(line, lineEyes(true), lineEyes(false)));
                 BlinkGuesser.nudge();
             });
             ctx.waitFor(mc -> Repo.get().skin(BLINK).timing == SkinEntry.Timing.GUESSED, 20 * 15);
@@ -166,8 +194,20 @@ final class BlinkTimingTest {
                 check(c.timing == SkinEntry.Timing.REPO && Arrays.equals(c.frameTicks, new int[]{10, 10, 10}), "a color cycle keeps its timing");
                 SkinEntry m = Repo.get().skin(MEASURED);
                 check(m.timing == SkinEntry.Timing.REPO && Arrays.equals(m.frameTicks, new int[]{10, 10, 10}), "a skin timed per frame is not estimated");
-                System.out.println("[SkyCosmeticsTest] " + BlinkGuesser.status());
             });
+            ctx.waitFor(mc -> String.valueOf(readOrNull(estimated)).contains(LINE), 20 * 10);
+            ctx.waitTicks(20);
+            expect(ctx, LINE, SkinEntry.Timing.REPO, 10, 10);
+            // Two sibling variants turn out to blink: so does the one whose closed eyes kept their detail.
+            ctx.runOnClient(mc -> {
+                written.addAll(writeSkins(twoA, face(Eyes.CLOSED), face(Eyes.OPEN)));
+                written.addAll(writeSkins(twoB, face(Eyes.OPEN), face(Eyes.CLOSED)));
+                BlinkGuesser.nudge();
+            });
+            ctx.waitFor(mc -> Repo.get().skin(LINE).timing == SkinEntry.Timing.GUESSED, 20 * 15);
+            expect(ctx, LINE, SkinEntry.Timing.GUESSED, 49, 4);
+            expect(ctx, TWO_A, SkinEntry.Timing.GUESSED, 4, 49);
+            ctx.runOnClient(mc -> System.out.println("[SkyCosmeticsTest] " + BlinkGuesser.status()));
             String saved = read(estimated);
             check(saved.contains(BLINK) && saved.contains("49") && saved.contains(CYCLE) && !saved.contains(MEASURED),
                 "estimated-timings.json holds both answers: " + saved);
@@ -190,7 +230,7 @@ final class BlinkTimingTest {
             Repo.useBundledTimings("{\"skins\": {}}");
             reload(ctx);
             expect(ctx, BLINK, SkinEntry.Timing.GUESSED, 4, 49, 2);
-            write(captured, capturedJson(new String[]{blink[0], blink[1], values(30, 1)[0]}, cycle, measured));
+            write(captured, capturedJson(new String[]{blink[0], blink[1], values(30, 1)[0]}, cycle, measured, line, twoA, twoB));
             reload(ctx);
             expect(ctx, BLINK, SkinEntry.Timing.REPO, 10, 10, 10);
         } finally {
@@ -224,11 +264,16 @@ final class BlinkTimingTest {
         return v;
     }
 
-    private static String capturedJson(String[] blink, String[] cycle, String[] measured) {
-        return "{\"version\": 1, \"skins\": {}, \"animated\": {"
+    /** A still test skin and its animated variants, as learned skins. */
+    private static String capturedJson(String[] blink, String[] cycle, String[] measured, String[] line, String[] twoA, String[] twoB) {
+        return "{\"version\": 1, \"skins\": {\"" + PARENT + "\": {\"name\": \"Test Skin\", \"texture\": \"" + values(90, 1)[0] + "\"}},"
+            + " \"animated\": {"
             + "\"" + BLINK + "\": {\"ticks\": 10, \"textures\": " + array(blink) + ", \"name\": \"Test Blink\"},"
             + "\"" + CYCLE + "\": {\"ticks\": 10, \"textures\": " + array(cycle) + ", \"name\": \"Test Cycle\"},"
-            + "\"" + MEASURED + "\": {\"ticks\": 10, \"ticksPerTexture\": [10, 10, 10], \"textures\": " + array(measured) + "}}}";
+            + "\"" + MEASURED + "\": {\"ticks\": 10, \"ticksPerTexture\": [10, 10, 10], \"textures\": " + array(measured) + "},"
+            + "\"" + LINE + "\": {\"ticks\": 10, \"textures\": " + array(line) + "},"
+            + "\"" + TWO_A + "\": {\"ticks\": 10, \"textures\": " + array(twoA) + "},"
+            + "\"" + TWO_B + "\": {\"ticks\": 10, \"textures\": " + array(twoB) + "}}}";
     }
 
     private static String array(String[] v) {

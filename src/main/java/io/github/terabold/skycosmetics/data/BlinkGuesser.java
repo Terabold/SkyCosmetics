@@ -44,6 +44,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * values of the repo's measured blinks, whose pattern this finds in 77 of 80 (the rest are a tick off).
  * Moving or color-cycling animations, and any with more than four frames, keep the repo's timing.
  *
+ * Eyes that close into a dark line on a light face can keep as much detail as open ones. Such a skin counts
+ * as a blink only when it is a color variant of a skin whose other variants (at least two, and more than
+ * those that are not) are blinks: variants share their animation.
+ *
  * An estimate only replaces even repo timing; a timing measured in game or shipped with the mod replaces it.
  * Each skin is looked at once: the answer (blink or not) goes to {@code estimated-timings.json} with a
  * signature of the frames, so a repo update that changes them is looked at again.
@@ -143,6 +147,18 @@ public final class BlinkGuesser {
      * Ticks per frame if {@code heads} (from {@link #head}) are a blink, else null. Pure, for the gametest too.
      */
     public static int[] guess(int[][] heads) {
+        return guess(heads, true);
+    }
+
+    /**
+     * The same, but without asking that a frame lose detail: what the frames would be timed as if they are a
+     * blink, for a skin whose sibling variants are. Null if they cannot be one (size, frames, change).
+     */
+    public static int[] guessLoosely(int[][] heads) {
+        return guess(heads, false);
+    }
+
+    private static int[] guess(int[][] heads, boolean strict) {
         int n = heads.length;
         if (n < MIN_FRAMES || n > MAX_FRAMES) return null;
         for (int[] h : heads) if (h == null || h.length != ROWS * COLS) return null;
@@ -168,7 +184,7 @@ public final class BlinkGuesser {
         if (detail[open] <= 0) return null;
         double least = Double.MAX_VALUE;
         for (int i = 0; i < n; i++) if (i != open) least = Math.min(least, detail[i]);
-        if (least > detail[open] * MAX_DETAIL_LEFT) return null; // nothing closes: something moves or glows
+        if (strict && least > detail[open] * MAX_DETAIL_LEFT) return null; // nothing closes: something moves or glows
 
         int closed = -1, most = -1;
         for (int i = 0; i < n; i++) {
@@ -353,8 +369,9 @@ public final class BlinkGuesser {
                 continue; // looked at again next session
             }
             int[] ticks = guess(heads);
+            int[] loose = ticks == null ? guessLoosely(heads) : null;
             if (ticks != null) SkyCosmetics.LOG.debug("{} looks like a blink: {}", c.id, Arrays.toString(ticks));
-            Repo.guessTiming(c.id, c.sig, ticks);
+            Repo.guessTiming(c.id, c.sig, ticks != null ? ticks : loose, ticks == null && loose != null);
         }
         waiting = wait;
     }
@@ -377,14 +394,16 @@ public final class BlinkGuesser {
 
     /**
      * What was found per skin, kept in {@code config/skycosmetics/estimated-timings.json}: {@code "skins": {"<id>":
-     * {"frames": 3, "sig": "...", "ticksPerTexture": [49, 2, 4]}}}, without ticks for a skin that is no blink.
+     * {"frames": 3, "sig": "...", "ticksPerTexture": [49, 2, 4]}}}, without ticks for a skin that is no blink, and
+     * with {@code "ifVariantsBlink": true} for one that is a blink only if its sibling variants are.
      * Only touched on the repo thread.
      */
     static final class Store {
         static final int MAX = 2000;
         private static final long MAX_FILE = 1L << 20;
 
-        record Guess(String sig, int[] ticks, long at) {}
+        /** {@code ticks} null: no blink; {@code family}: a blink only if its sibling variants are. */
+        record Guess(String sig, int[] ticks, boolean family, long at) {}
 
         final Map<String, Guess> skins = new LinkedHashMap<>();
 
@@ -415,12 +434,13 @@ public final class BlinkGuesser {
         }
 
         /** Records an answer for {@code id}; false if it is the one saved already. */
-        boolean put(String id, String sig, int[] ticks, Set<String> inUse) {
+        boolean put(String id, String sig, int[] ticks, boolean family, Set<String> inUse) {
             if (!SkinLearner.validId(id) || sig == null || ticks != null && !Timings.valid(id, ticks)) return false;
+            family &= ticks != null;
             Guess had = skins.get(id);
-            if (had != null && had.sig.equals(sig) && Arrays.equals(had.ticks, ticks)) return false;
+            if (had != null && had.sig.equals(sig) && Arrays.equals(had.ticks, ticks) && had.family == family) return false;
             skins.remove(id);
-            skins.put(id, new Guess(sig, ticks == null ? null : ticks.clone(), System.currentTimeMillis()));
+            skins.put(id, new Guess(sig, ticks == null ? null : ticks.clone(), family, System.currentTimeMillis()));
             if (skins.size() > MAX) {
                 skins.entrySet().stream().filter(e -> !inUse.contains(e.getKey()))
                     .sorted(Comparator.comparingLong(e -> e.getValue().at)).limit(skins.size() - MAX)
@@ -429,14 +449,31 @@ public final class BlinkGuesser {
             return true;
         }
 
-        /** Estimated blinks into {@code skins}, for skins the repo times evenly whose frames are still the ones looked at. */
+        /**
+         * Estimated blinks into {@code skins}, for skins the repo times evenly whose frames are still the ones looked
+         * at. A blink only if its variants are needs at least two sibling variants (same parent, as many frames) that
+         * are blinks, and more of them than ones that are not.
+         */
         void apply(Map<String, SkinEntry> skins) {
+            Map<String, int[]> votes = new java.util.HashMap<>(); // parent and frames -> {blinks, not blinks}
+            List<Map.Entry<SkinEntry, Guess>> current = new ArrayList<>();
             for (Map.Entry<String, Guess> g : this.skins.entrySet()) {
-                int[] ticks = g.getValue().ticks;
                 SkinEntry e = skins.get(g.getKey());
-                if (ticks == null || e == null || !maybe(e) || e.timing != SkinEntry.Timing.REPO
-                    || e.textures.length != ticks.length || !g.getValue().sig.equals(sig(e.textures))) continue;
-                skins.put(e.id, e.withTicks(ticks, SkinEntry.Timing.GUESSED));
+                Guess guess = g.getValue();
+                if (e == null || !maybe(e) || e.timing != SkinEntry.Timing.REPO || guess.ticks != null && e.textures.length != guess.ticks.length
+                    || !guess.sig.equals(sig(e.textures))) continue;
+                current.add(Map.entry(e, guess));
+                if (e.parent != null && !guess.family) votes.computeIfAbsent(e.parent + "#" + e.textures.length, k -> new int[2])[guess.ticks != null ? 0 : 1]++;
+            }
+            for (Map.Entry<SkinEntry, Guess> c : current) {
+                SkinEntry e = c.getKey();
+                Guess guess = c.getValue();
+                if (guess.ticks == null) continue;
+                if (guess.family) {
+                    int[] v = e.parent == null ? null : votes.get(e.parent + "#" + e.textures.length);
+                    if (v == null || v[0] < 2 || v[0] <= v[1]) continue;
+                }
+                skins.put(e.id, e.withTicks(guess.ticks, SkinEntry.Timing.GUESSED));
             }
         }
 
@@ -455,7 +492,8 @@ public final class BlinkGuesser {
                     }
                     if (!SkinLearner.validId(e.getKey())) continue;
                     long at = o.get("at") instanceof JsonPrimitive p && p.isNumber() ? p.getAsLong() : 0L;
-                    s.skins.put(e.getKey(), new Guess(sig.getAsString(), ticks, at));
+                    boolean family = ticks != null && o.get("ifVariantsBlink") instanceof JsonPrimitive f && f.isBoolean() && f.getAsBoolean();
+                    s.skins.put(e.getKey(), new Guess(sig.getAsString(), ticks, family, at));
                 } catch (RuntimeException ex) {
                     SkyCosmetics.LOG.warn("Skipping estimated timing {}: {}", e.getKey(), ex.toString());
                 }
@@ -469,7 +507,8 @@ public final class BlinkGuesser {
             root.addProperty("version", 1);
             root.addProperty("method", METHOD);
             root.addProperty("about", "Animations SkyCosmetics looked at for a blink the NEU repo times evenly. "
-                + "With ticksPerTexture: the estimated ticks per frame; without: not a blink.");
+                + "With ticksPerTexture: the estimated ticks per frame (ifVariantsBlink: only used if other variants "
+                + "of the skin are blinks); without: not a blink.");
             JsonObject skins = new JsonObject();
             for (Map.Entry<String, Guess> e : this.skins.entrySet()) {
                 Guess g = e.getValue();
@@ -480,6 +519,7 @@ public final class BlinkGuesser {
                     JsonArray per = new JsonArray();
                     for (int t : g.ticks) per.add(t);
                     o.add("ticksPerTexture", per);
+                    if (g.family) o.addProperty("ifVariantsBlink", true);
                 }
                 o.addProperty("at", g.at);
                 skins.add(e.getKey(), o);
