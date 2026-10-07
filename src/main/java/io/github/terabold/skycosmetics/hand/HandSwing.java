@@ -70,7 +70,7 @@ public final class HandSwing {
             return;
         }
         if (running && elapsed < duration) {
-            if (Hand.fullSwings()) return;
+            if (HandRender.options() && Hand.fullSwings()) return;
             if (elapsed >= (float) Math.floor(duration / 2)) start(hand);
             return;
         }
@@ -119,7 +119,7 @@ public final class HandSwing {
     static float durationFor(LocalPlayer p, InteractionHand hand) {
         ItemStack held = p.getItemInHand(hand);
         int base = held.getSwingAnimation().duration();
-        if (!Hand.ignoreEffects()) {
+        if (!(HandRender.options() && Hand.ignoreEffects())) {
             if (MobEffectUtil.hasDigSpeed(p)) {
                 base -= 1 + MobEffectUtil.getDigSpeedAmplification(p);
             } else {

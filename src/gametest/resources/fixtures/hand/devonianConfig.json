@@ -1,0 +1,22 @@
+{
+  "config": {
+    "someOtherFeature": true,
+    "itemAnimations": true,
+    "itemAnimations$xOffset": 0.3,
+    "itemAnimations$yOffset": -0.1,
+    "itemAnimations$zOffset": -0.2,
+    "itemAnimations$yawOffset": 15.0,
+    "itemAnimations$pitchOffset": 0.0,
+    "itemAnimations$rollOffset": -5.0,
+    "itemAnimations$scale": -1.0,
+    "itemAnimations$changeHand": true,
+    "itemAnimations$changeMap": false,
+    "itemAnimations$swingSpeed": 1.0,
+    "itemAnimations$ignoreEffects": true,
+    "itemAnimations$noReequipReset": true,
+    "itemAnimations$inplaceSwing": true,
+    "itemAnimations$noSwing": false,
+    "itemAnimations$noSwingTerm": true,
+    "itemAnimations$noHandSway": true
+  }
+}

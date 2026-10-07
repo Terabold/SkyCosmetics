@@ -132,6 +132,7 @@
   "skycosmetics.hand.editor.previous": "Previous pose",
   "skycosmetics.hand.editor.next": "Next pose",
   "skycosmetics.hand.editor.hint": "Right-click a slider to reset it.",
+  "skycosmetics.hand.editor.off": "Hand Poses is off: only this editor shows the pose.",
   "skycosmetics.hand.editor.group.position": "Position",
   "skycosmetics.hand.editor.group.rotation": "Rotation",
   "skycosmetics.hand.editor.group.size": "Size",

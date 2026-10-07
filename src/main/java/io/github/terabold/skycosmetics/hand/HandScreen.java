@@ -6,6 +6,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.MultiLineTextWidget;
 import net.minecraft.client.gui.components.ScrollableLayout;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.Tooltip;
@@ -77,6 +78,10 @@ public final class HandScreen extends Screen {
         int top = PAD + HEAD + 2, bottom = height - PAD - FOOT;
         int rw = inner - 8; // room for the scrollbar
         LinearLayout rows = LinearLayout.vertical().spacing(2);
+        if (!Hand.enabled()) {
+            rows.addChild(new MultiLineTextWidget(
+                Component.translatable("skycosmetics.hand.editor.off").withColor(0xFFC94A), font).setMaxWidth(rw));
+        }
         rows.addChild(label(Component.translatable("skycosmetics.hand.editor.hint"), rw, MUTED));
         group(rows, "position", rw, HandPose.Field.X, HandPose.Field.Y, HandPose.Field.Z);
         group(rows, "rotation", rw, HandPose.Field.ROT_X, HandPose.Field.ROT_Y, HandPose.Field.ROT_Z);

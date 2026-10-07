@@ -1,0 +1,24 @@
+{
+  "otherFeature": {"enabled": true},
+  "viewmodel": {
+    "enabled": false,
+    "speed": 3,
+    "offsetX": 0.25,
+    "offsetY": 0.05,
+    "offsetZ": -0.4,
+    "scaleX": 0.5,
+    "scaleY": 1.5,
+    "scaleZ": 1.0,
+    "rotX": 10.0,
+    "rotY": -20.0,
+    "rotZ": 0.0,
+    "swingX": 0.5,
+    "swingY": 0.0,
+    "swingZ": 2.0,
+    "noHaste": false,
+    "noEquipAnim": true,
+    "noBowSwing": true,
+    "noSwingReset": true,
+    "applyToHand": false
+  }
+}

@@ -155,12 +155,13 @@ public final class Hand {
     /** After any change: poses are looked up again on the next frame. Saving is the caller's (once per edit). */
     static void changed() {
         version++;
-        active = enabled && (previewKey != null || !isVanillaSetup());
+        active = previewKey != null || enabled && !isVanillaSetup();
     }
 
     /**
      * Whether the hooks change anything. False when the feature is off or nothing differs from Minecraft, so a
-     * default install draws (and times swings) exactly as Minecraft, at the cost of one boolean per hook.
+     * default install draws (and times swings) exactly as Minecraft, at the cost of one boolean per hook. The
+     * editor's preview counts even with the feature off: the pose being edited shows on the main hand only.
      */
     public static boolean active() {
         return active;

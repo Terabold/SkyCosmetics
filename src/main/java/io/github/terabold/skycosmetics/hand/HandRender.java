@@ -64,13 +64,14 @@ public final class HandRender {
         return slot.pose;
     }
 
-    /** The pose for a hand this frame, the editor's preview first. */
+    /** The pose for a hand this frame, the editor's preview first; with the feature off, only the preview. */
     private static HandPose poseFor(InteractionHand hand, ItemStack s) {
         String preview = Hand.previewKey();
         if (preview != null && hand == InteractionHand.MAIN_HAND) {
             HandPose p = Hand.pose(preview);
             return p == null || p.isVanilla() ? null : p;
         }
+        if (!Hand.enabled()) return null;
         return cached(hand == InteractionHand.MAIN_HAND ? MAIN : OFF, s);
     }
 
@@ -79,8 +80,14 @@ public final class HandRender {
         String preview = Hand.previewKey();
         HandPose p;
         if (preview != null) p = Hand.pose(preview);
+        else if (!Hand.enabled()) return 1;
         else p = cached(SWING, held);
         return p == null ? 1 : p.speed();
+    }
+
+    /** The options for every pose apply: the feature is on (not only the editor's preview). */
+    static boolean options() {
+        return Hand.active() && Hand.enabled();
     }
 
     // -------------------------------------------------------------- hooks ---
@@ -236,7 +243,7 @@ public final class HandRender {
 
     /** Hand sway: Minecraft's lag angle times the setting. */
     public static float sway(float angle) {
-        return angle * Hand.sway();
+        return options() ? angle * Hand.sway() : angle;
     }
 
     private static void fail(RuntimeException e) {
@@ -271,7 +278,7 @@ public final class HandRender {
 
     /** The renderer may show the new item at once, with no dip. */
     public static boolean instantSwap(boolean vanilla) {
-        if (vanilla || !active()) return vanilla;
+        if (vanilla || !options()) return vanilla;
         return switch (Hand.equip()) {
             case NORMAL -> false;
             case SLOTS -> !switching;
@@ -281,7 +288,7 @@ public final class HandRender {
 
     /** The dip after an attack or a swap, as the renderer reads it: none outside a slot switch unless Normal. */
     public static float swapScale(float vanilla) {
-        if (!active()) return vanilla;
+        if (!options()) return vanilla;
         return switch (Hand.equip()) {
             case NORMAL -> vanilla;
             case SLOTS -> switching ? vanilla : 1;
@@ -291,7 +298,7 @@ public final class HandRender {
 
     /** The dip when you use an ability: kept only with Normal. */
     public static boolean keepUseDip() {
-        return !active() || Hand.equip() == Hand.Equip.NORMAL;
+        return !options() || Hand.equip() == Hand.Equip.NORMAL;
     }
 
     // -------------------------------------------------------------- tests ---

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "config": [
+    {"name": "Animations", "enabled": false, "configSettings": {"Item Scale": 0.0, "X": 0.0}}
+  ],
+  "hud": {}
+}
