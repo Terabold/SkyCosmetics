@@ -33,7 +33,7 @@ public final class ToggleSwitch extends ThemedButton {
     @Override
     protected void draw(GuiGraphicsExtractor g, int mouseX, int mouseY, float hover) {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
-        float p = Anim.easeOut(slide.to(isOn() ? 1 : 0));
+        float p = slide.to(isOn() ? 1 : 0);
         float a = active ? 1 : 0.4f;
         Shapes.round(g, x, y, w, h, h / 2, Theme.fade(Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hover), a));
         if (p > 0) {

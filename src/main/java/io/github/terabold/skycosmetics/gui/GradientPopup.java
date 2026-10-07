@@ -157,7 +157,7 @@ public final class GradientPopup implements StudioPopup {
     public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Font font = Minecraft.getInstance().font;
         g.nextStratum();
-        float t = Anim.easeOut(appear.to(1));
+        float t = appear.to(1);
         Shapes.shadow(g, x, y, w, h, Theme.RADIUS, 6);
         Shapes.round(g, x, y, w, h, Theme.RADIUS, Theme.BODY);
         Shapes.frame(g, x, y, w, h, Theme.RADIUS, Theme.mix(Theme.LINE, Theme.ACCENT, 0.5f * t));

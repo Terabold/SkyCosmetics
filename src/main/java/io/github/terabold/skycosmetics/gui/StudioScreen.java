@@ -20,6 +20,7 @@ import io.github.terabold.skycosmetics.gui.hub.SwatchButton;
 import io.github.terabold.skycosmetics.gui.hub.SwitchButton;
 import io.github.terabold.skycosmetics.gui.hub.TabButton;
 import io.github.terabold.skycosmetics.gui.hub.TextField;
+import io.github.terabold.skycosmetics.gui.ui.Anim;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.gui.ui.Tips;
@@ -234,6 +235,11 @@ public class StudioScreen extends Screen {
     private String status = "";
     private int statusColor = MUTED;
     private long statusAt;
+    /** The open tab's button, where its accent bar is drawn now (gliding after a switch), and the content's fade-in. */
+    private TabButton openTab;
+    private float tabBarX = -1, tabBarW;
+    private long tabBarAt = -1;
+    private final Anim tabIn = new Anim(120, 1);
     /** What the item list, the grids and Other Mods' note have under the mouse: their tooltips wait for a rest. */
     private final Tips.Hover listHover = new Tips.Hover(), gridHover = new Tips.Hover(), noteHover = new Tips.Hover();
     /** The footer line as drawn last frame. */
@@ -1011,8 +1017,9 @@ public class StudioScreen extends Screen {
         for (int i = 0; i < tabs.length; i++) {
             Tab t = tabs[i];
             String label = font.width(t.label) + 8 <= tw ? t.label : t.shortLabel;
-            addRenderableWidget(new TabButton(Component.literal(label), tw, 18, t == tab, btn -> switchTab(t)))
-                .setPosition(midX + i * (tw + 2), y);
+            TabButton b = addRenderableWidget(new TabButton(Component.literal(label), tw, 18, t == tab, btn -> switchTab(t)).slidingBar());
+            b.setPosition(midX + i * (tw + 2), y);
+            if (t == tab) openTab = b;
         }
         y += 22;
 
@@ -1641,6 +1648,7 @@ public class StudioScreen extends Screen {
     private void switchTab(Tab t) {
         flushPending();
         tab = t;
+        tabIn.set(0);
         scroll = 0;
         if (savedTab != null) {
             savedTab.resetScroll();
@@ -1807,6 +1815,7 @@ public class StudioScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        Anim.frame();
         if (tooSmall) {
             super.extractRenderState(g, mouseX, mouseY, delta);
             g.centeredText(font, "Window too small", width / 2, height / 2 - 14, TEXT);
@@ -1875,6 +1884,7 @@ public class StudioScreen extends Screen {
                 else drawSkins(g, mx, my, tick);
             }
         }
+        tabSwitch(g);
 
         String foot;
         Catalog c = Repo.get();
@@ -1923,6 +1933,28 @@ public class StudioScreen extends Screen {
     private ClientTooltipPositioner columnTip(AbstractWidget w) {
         int[] c = columnOf(w.getX());
         return Tips.beside(c[0], c[1], c[2], c[3], w.getX(), w.getY());
+    }
+
+    /**
+     * A tab switch, on the same clock and easing as the settings' section switch: the accent bar glides to the
+     * open tab, and the new tab's content fades in from the panel.
+     */
+    private void tabSwitch(GuiGraphicsExtractor g) {
+        if (openTab != null && openTab.visible) {
+            long now = Anim.now(), dt = tabBarAt < 0 ? Long.MAX_VALUE : now - tabBarAt;
+            tabBarAt = now;
+            float tx = openTab.getX() + 6, tw = openTab.getWidth() - 12;
+            boolean jump = tabBarX < 0 || dt > 250 || Math.abs(tabBarX - tx) > midW;
+            tabBarX = jump ? tx : Anim.glide(tabBarX, tx, dt);
+            tabBarW = jump ? tw : Anim.glide(tabBarW, tw, dt);
+            if (Math.abs(tabBarX - tx) < 0.3f) tabBarX = tx;
+            Shapes.round(g, Math.round(tabBarX), openTab.getY() + openTab.getHeight() - 3, Math.round(tabBarW), 2, 1, Theme.ACCENT);
+        }
+        float in = tabIn.to(1);
+        if (in < 1) {
+            g.nextStratum(); // over the content's items and text too
+            g.fill(midX - 2, PAD + 22, midX + midW + 4, height - PAD - 11, Theme.fade(Theme.BODY, 1 - in));
+        }
     }
 
     /** Only leather takes dye: other armour is drawn as the leather piece for its slot, heads not at all. */
@@ -2387,8 +2419,10 @@ public class StudioScreen extends Screen {
         Integer last = lastFrame.get(e.id); // a card that showed a frame had its first one ready then
         if (last == null && !ready(e.textures[0], true)) return -1;
         if (!e.animated()) return 0;
-        int want = animate ? e.frameAt(tick) : -1;
-        if (want == 0 || want > 0 && ready(e.textures[want], false)) {
+        // The frame the preview, the model and My Items show at this tick (one clock for all), once it is loaded;
+        // while scrolling only frames asked for already, so a scroll never starts downloads.
+        int want = e.frameAt(tick);
+        if (want == 0 || (animate || asked.contains(e.textures[want])) && ready(e.textures[want], false)) {
             lastFrame.put(e.id, want);
             return want;
         }

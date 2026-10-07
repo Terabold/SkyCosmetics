@@ -131,7 +131,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private double scroll, shown, maxScroll, sideScroll, sideShown, sideMax;
     private boolean draggingBar;
     private double barGrab;
-    private long lastFrame = -1;
+    private long lastFrame = -1, frameDt;
     private float barY = -1;
     private boolean opened;
     /**
@@ -767,6 +767,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        Anim.frame();
         swallowChar = false;
         if (tooSmall) {
             g.centeredText(font, Component.translatable("skycosmetics.menu.tooSmall"), width / 2, height / 2 - 12, Theme.TEXT);
@@ -778,7 +779,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         // Under an open overlay nothing is hovered: no highlights, no tooltips.
         int mx = overlay != null ? -10000 : mouseX, my = overlay != null ? -10000 : mouseY;
         step();
-        float open = Anim.easeOut(openAnim.to(1));
+        float open = openAnim.to(1);
         if (open >= 1) opened = true;
         int lift = opened ? 0 : Math.round((1 - open) * 8);
         g.pose().pushMatrix();
@@ -814,10 +815,11 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
 
     /** Moves the scrolls toward their targets by the time since the last frame. */
     private void step() {
-        long now = Util.getMillis();
+        long now = Anim.now();
         long dt = lastFrame < 0 ? 1000 : Math.min(250, now - lastFrame);
         lastFrame = now;
-        double k = 1 - Math.exp(-dt / 55.0);
+        frameDt = dt;
+        double k = 1 - Math.exp(-dt / Anim.GLIDE_MS);
         shown = draggingBar || Math.abs(scroll - shown) < 0.5 ? scroll : shown + (scroll - shown) * k;
         sideShown = Math.abs(sideScroll - sideShown) < 0.5 ? sideScroll : sideShown + (sideScroll - sideShown) * k;
     }
@@ -861,7 +863,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
         if (target != Integer.MIN_VALUE) {
             // The accent bar glides to the open section.
-            barY = barY < 0 || Math.abs(barY - target) > sideH ? target : barY + (target - barY) * 0.35f;
+            barY = barY < 0 || Math.abs(barY - target) > sideH ? target : Anim.glide(barY, target, frameDt);
             if (Math.abs(barY - target) < 0.5f) barY = target;
             int th = rail ? SectionTab.RAIL_H : SectionTab.H;
             Shapes.round(g, wx + 1, Math.round(barY) + 5, 2, th - 10, 1, Theme.ACCENT);
@@ -892,7 +894,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
         g.fill(cx + 8, vy - 1, cx + cw - 8, vy, Theme.LINE_SOFT);
 
-        float sw = Anim.easeOut(switchAnim.to(1));
+        float sw = switchAnim.to(1);
         int slide = Math.round((1 - sw) * 10);
         boolean inView = inPane(mx, my);
         int pmx = inView ? mx : -10000, pmy = inView ? my : -10000;

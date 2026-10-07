@@ -16,6 +16,7 @@ import net.minecraft.network.chat.Component;
 public final class TabButton extends ThemedButton {
     private final boolean open;
     private final String shown;
+    private boolean bar = true;
 
     public TabButton(Component label, int width, int height, boolean open, OnPress onPress) {
         super(width, height, label, onPress);
@@ -28,6 +29,12 @@ public final class TabButton extends ThemedButton {
         return open;
     }
 
+    /** The screen draws the accent bar itself, so it can glide from tab to tab. */
+    public TabButton slidingBar() {
+        bar = false;
+        return this;
+    }
+
     @Override
     protected void draw(GuiGraphicsExtractor g, int mouseX, int mouseY, float hover) {
         Font font = Minecraft.getInstance().font;
@@ -36,7 +43,7 @@ public final class TabButton extends ThemedButton {
         if (open) {
             Shapes.round(g, x, y, w, h, r, Theme.ACCENT_BG);
             Shapes.frame(g, x, y, w, h, r, Theme.fade(Theme.ACCENT, 0.45f));
-            Shapes.round(g, x + 6, y + h - 3, w - 12, 2, 1, Theme.ACCENT);
+            if (bar) Shapes.round(g, x + 6, y + h - 3, w - 12, 2, 1, Theme.ACCENT);
             text = 0xFFFFFFFF;
         } else {
             Shapes.round(g, x, y, w, h, r, Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hover));

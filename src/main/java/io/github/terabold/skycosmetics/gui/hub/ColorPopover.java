@@ -102,7 +102,7 @@ public final class ColorPopover implements Overlay {
     public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Font font = Minecraft.getInstance().font;
         g.nextStratum();
-        float t = Anim.easeOut(appear.to(1));
+        float t = appear.to(1);
         Shapes.shadow(g, x, y, W, h, Theme.RADIUS, 5);
         Shapes.round(g, x, y, W, h, Theme.RADIUS, Theme.BODY);
         Shapes.frame(g, x, y, W, h, Theme.RADIUS, Theme.mix(Theme.LINE, Theme.ACCENT, 0.5f * t));

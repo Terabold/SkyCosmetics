@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.gui.hub;
 
+import io.github.terabold.skycosmetics.gui.ui.Anim;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
@@ -16,7 +17,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import net.minecraft.util.Util;
 
 /**
  * A {@link Control.Choice} with few, short values: every value side by side, the chosen one on an accent pill
@@ -86,9 +86,9 @@ public final class SegmentedChoice<T> extends AbstractWidget {
         float a = active ? 1 : 0.4f;
         Shapes.round(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(Theme.SURFACE, a));
         int sel = selected();
-        long now = Util.getMillis();
+        long now = Anim.now();
         if (pill < 0 || sel < 0 || now - last > 250) pill = Math.max(sel, 0);
-        else pill += (sel - pill) * (1 - (float) Math.exp(-(now - last) / 45.0));
+        else pill = Anim.glide(pill, sel, now - last);
         if (Math.abs(sel - pill) < 0.01f) pill = sel;
         last = now;
         int hovered = isHovered() && active ? segmentAt(mouseX) : -1;

@@ -42,6 +42,11 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   (Custom Dye…, Custom Color…, Reset Name), and shorter search hints and messages.
 
 ### Changed
+- **Smoother, synced animations.** Hover fades, switches, tabs, sliders and pop-ups in the studio and the settings
+  share one clock and one easing, so they move together at any frame rate. The studio's tab bar glides to the open
+  tab and the new tab fades in. Animated skins in the grid keep playing while you scroll and show the same frame as
+  the preview and My Items at the same moment; a frame that is not loaded yet holds the last one and catches up as
+  soon as it is.
 - **Tooltips never cover what you are about to click.** In lists and grids (My Items, Saved, Other Mods, skins, dyes)
   a tooltip waits until the mouse rests a moment, then shows beside the list, level with the row, instead of over the
   next rows. Button tooltips do the same beside their column, the (i) help opens beside its column, and tooltips

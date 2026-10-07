@@ -297,12 +297,12 @@ final class NameGlintTest {
         window(ctx, 1280, 720, 2);
         GradientPopup again = ctx.computeOnClient(mc -> screen(mc).gradientPopup());
         check(again == gp, "the builder stays open through a resize");
-        int[] apply = gp.applyAt();
+        int[] apply = ctx.computeOnClient(mc -> gp.applyAt());
         click(ctx, apply[0], apply[1]);
         ctx.waitTicks(2);
         String v = ctx.computeOnClient(NameGlintTest::value);
         check(v.equals(Names.token(gp.stops()) + "Aspect &9of the End"), "Apply puts one gradient code on 'Aspect': " + v);
-        int[] save = gp.saveAt();
+        int[] save = ctx.computeOnClient(mc -> gp.saveAt());
         click(ctx, save[0], save[1]);
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> GradientPresets.list().size()) == saved + 1, "Save Preset keeps it");

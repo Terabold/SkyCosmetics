@@ -127,7 +127,7 @@ public final class DropdownChoice<T> extends ThemedButton {
         public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
             Font font = Minecraft.getInstance().font;
             g.nextStratum();
-            float t = Anim.easeOut(appear.to(1));
+            float t = appear.to(1);
             int shownH = Math.max(ITEM, Math.round(h * (0.6f + 0.4f * t)));
             int sy = above ? y + h - shownH : y;
             Shapes.shadow(g, x, sy, w, shownH, Theme.SMALL_RADIUS, 4);
