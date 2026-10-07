@@ -180,6 +180,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
         check(ctx.computeOnClient(mc -> Repo.get().skin(BLINK).timing != SkinEntry.Timing.LEARNED
             && Arrays.equals(Repo.get().skin(BLINK).frameTicks, new int[]{51, 2, 4, 2})), "without timings.json the repo timing is back");
         System.out.println("[SkyCosmeticsTest] timing learner checks passed");
+        BlinkTimingTest.run(ctx);
     }
 
     /**

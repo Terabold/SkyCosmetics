@@ -94,7 +94,7 @@ public final class BlinkGuesser {
      * where it covers, else the inner one; -1 outside the six faces. Null for any other size. Like Minecraft, a
      * 64x32 skin whose outer area has no see-through pixel at all has no outer layer.
      */
-    static int[] head(int[] argb, int width, int height) {
+    public static int[] head(int[] argb, int width, int height) {
         if (width != 64 || height != 64 && height != 32 || argb.length < width * height) return null;
         boolean hat = true;
         if (height == 32) {
@@ -127,7 +127,7 @@ public final class BlinkGuesser {
     /**
      * Ticks per frame if {@code heads} (from {@link #head}) are a blink, else null. Pure, for the gametest too.
      */
-    static int[] guess(int[][] heads) {
+    public static int[] guess(int[][] heads) {
         int n = heads.length;
         if (n < MIN_FRAMES || n > MAX_FRAMES) return null;
         for (int[] h : heads) if (h == null || h.length != ROWS * COLS) return null;
@@ -231,6 +231,12 @@ public final class BlinkGuesser {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /** Where the skin of texture value {@code value} is (or would be) cached on disk; null while unknown. */
+    public static Path skinFile(String value) {
+        Path skins = root;
+        return skins == null ? null : file(skins, value);
     }
 
     /** A short signature of an animation's frames, or null if a frame has no skin texture. */

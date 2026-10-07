@@ -2235,6 +2235,8 @@ public class StudioScreen extends Screen {
             tip.add(Component.literal(hovered.name).withColor(hovered.color & 0xFFFFFF));
             if (hovered.animated()) {
                 tip.add(Component.literal("Animated · " + hovered.textures.length + " frames").withStyle(ChatFormatting.LIGHT_PURPLE));
+                if (hovered.timing == SkinEntry.Timing.GUESSED) tip.add(Component.literal("Timing estimated").withStyle(ChatFormatting.GRAY));
+                else if (hovered.timing == SkinEntry.Timing.LEARNED) tip.add(Component.literal("Timing learned in game").withStyle(ChatFormatting.GRAY));
             } else if (hovered.missingFrames) {
                 tip.add(Component.literal("Animated on Hypixel · preview it once to learn its frames").withStyle(ChatFormatting.GRAY));
             }
