@@ -118,8 +118,9 @@ public final class RarityBackgrounds {
         if (!on || !(inventory || menus || armor)) return;
         try {
             if (ruleScreen.get() != screen) {
+                String source = OwnedItems.menuSource(screen.getTitle().getString());
+                rule = source != null && GEAR_MENUS.contains(source) ? ownMenus : OwnMenus.ALL;
                 ruleScreen = new WeakReference<>(screen); // a menu's title never changes while it is open
-                rule = GEAR_MENUS.contains(OwnedItems.menuSource(screen.getTitle().getString())) ? ownMenus : OwnMenus.ALL;
             }
             Identifier tex = texture();
             for (Slot slot : screen.getMenu().slots) {

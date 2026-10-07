@@ -287,7 +287,8 @@ public class SlotsTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, false, true, RarityBackgrounds.OwnMenus.ALL, true));
         int noArmor = drawnInFrame(ctx);
         ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, true));
-        check(drawnInFrame(ctx) == noArmor + 5, "the four armor slots and the off-hand have their own switch");
+        int withArmor = drawnInFrame(ctx);
+        check(withArmor == noArmor + 5, "the four armor slots and the off-hand have their own switch: " + noArmor + " -> " + withArmor);
         ctx.getInput().resizeWindow(854, 480);
         setScale(ctx, 2);
         ctx.takeScreenshot("skycosmetics-63-rarity-inventory-854x480-guiscale-2");
