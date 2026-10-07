@@ -126,6 +126,7 @@ public class SkyCosmetics implements ClientModInitializer {
                     ctx.getSource().sendFeedback(prefix().append(Component.literal("Usage: /skycosmetics debug pet|orb"
                         + " - what the pet or orb reskin sees near you").withStyle(ChatFormatting.GRAY)));
                     ctx.getSource().sendFeedback(prefix().append(Component.literal(TimingLearner.status()).withStyle(ChatFormatting.GRAY)));
+                    ctx.getSource().sendFeedback(prefix().append(Component.literal(io.github.terabold.skycosmetics.data.BlinkGuesser.status()).withStyle(ChatFormatting.GRAY)));
                     return 1;
                 }))));
 

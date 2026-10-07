@@ -9,6 +9,7 @@ import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,6 +69,20 @@ final class Timings {
     }
 
     /**
+     * The timings shipped with the mod ({@code assets/skycosmetics/timings.json}, the same format): ones players
+     * measured and shared, so everyone gets them without seeing the skin animate first. Empty if unreadable.
+     */
+    static Timings bundled() {
+        try (InputStream in = Timings.class.getResourceAsStream("/assets/skycosmetics/timings.json")) {
+            if (in == null) return new Timings();
+            return fromJson(JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject());
+        } catch (IOException | RuntimeException e) {
+            SkyCosmetics.LOG.warn("Could not read the timings shipped with SkyCosmetics: {}", e.toString());
+            return new Timings();
+        }
+    }
+
+    /**
      * Records {@code ticks} for {@code id}; false if they are not a timing or are what is saved already.
      * Past {@link #MAX}, the oldest timing no look in {@code inUse} wears makes room.
      */
@@ -87,17 +102,15 @@ final class Timings {
     }
 
     /**
-     * Puts every timing whose skin has that many frames into {@code skins}, as a copy of the entry marked
-     * {@link SkinEntry#timed}. Skins without a timing stay the same objects.
+     * Puts every timing whose skin has that many frames into {@code skins}, as a copy of the entry marked as
+     * coming from {@code source}. Skins without a timing stay the same objects.
      */
-    void apply(Map<String, SkinEntry> skins) {
+    void apply(Map<String, SkinEntry> skins, SkinEntry.Timing source) {
         for (Map.Entry<String, Timing> t : this.skins.entrySet()) {
             SkinEntry e = skins.get(t.getKey());
             int[] ticks = t.getValue().ticks;
             if (e == null || e.textures.length != ticks.length || e.textures.length < 2) continue;
-            SkinEntry timed = e.withTicks(ticks);
-            timed.timed = true;
-            skins.put(e.id, timed);
+            skins.put(e.id, e.withTicks(ticks, source));
         }
     }
 

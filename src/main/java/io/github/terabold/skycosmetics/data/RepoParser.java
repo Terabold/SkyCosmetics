@@ -151,6 +151,7 @@ final class RepoParser {
             String[] frames = frames(o.getAsJsonArray("textures"));
             if (frames == null) continue;
             int[] ticks = ticks(o, frames.length);
+            boolean perFrame = o.get("ticksPerTexture") instanceof JsonArray;
             if (frames.length > 1) {
                 framed.add(id);
                 for (int i = id.indexOf('_'); i > 0; i = id.indexOf('_', i + 1)) framed.add(id.substring(0, i));
@@ -160,6 +161,7 @@ final class RepoParser {
             if (existing != null) {
                 SkinEntry entry = new SkinEntry(id, existing.name, existing.color, existing.kind, frames, ticks, null);
                 entry.use = existing.use;
+                entry.perFrame = perFrame;
                 skins.put(id, entry);
                 continue;
             }
@@ -178,7 +180,9 @@ final class RepoParser {
                 name = Catalog.title(id);
                 color = 0xFFFF55FF;
             }
-            skins.put(id, new SkinEntry(id, name, color, SkinEntry.Kind.VARIANT, frames, ticks, parent));
+            SkinEntry entry = new SkinEntry(id, name, color, SkinEntry.Kind.VARIANT, frames, ticks, parent);
+            entry.perFrame = perFrame;
+            skins.put(id, entry);
         }
 
         int missing = 0;

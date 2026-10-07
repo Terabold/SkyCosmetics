@@ -76,6 +76,14 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   around you (your own items, other players, pets and orbs) and keeps the timing in `timings.json`. **Learn Animation
   Timing** in the settings turns it off; `/skycosmetics debug` shows what was learned.
 - A blink frame is no longer skipped the first time an animated skin is drawn again after minutes out of view.
+- **Blinks look right before Hypixel ever shows them to you.** For an animated skin the repo times evenly, SkyCosmetics
+  compares its frames once they are downloaded: when only the eyes change and close, the open frame stays up about
+  2.5 s and the blink takes a few ticks, like the blinks the repo does time. Moving and color-cycling skins keep
+  their timing. The studio tooltip says "Timing estimated" for these and "Timing learned in game" once measured.
+- Timing is learned in menus too (pets, wardrobe, skin previews), per item: another item in the same slot, or a new
+  menu, starts over. A blink whose open eyes last a different time each round is learned by its typical length.
+- Timings players measured can ship with the mod (`assets/skycosmetics/timings.json`). To help, share your
+  `config/skycosmetics/timings.json` on the issue tracker.
 
 ## 1.4.0-beta — unreleased
 

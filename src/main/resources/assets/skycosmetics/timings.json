@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "about": "Frame timings players measured in game and shared, shipped with SkyCosmetics. Same format as config/skycosmetics/timings.json. Used instead of the NEU repo's timing and of estimated blinks; a timing learned in your own game still wins.",
+  "skins": {}
+}

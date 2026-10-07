@@ -21,6 +21,7 @@
     "RecipeBookComponentAccessor",
     "RecipeBookScreenAccessor",
     "RenderTypeAccessor",
+    "SkinManagerMixin",
     "slots.ContainerSlotsMixin",
     "slots.HeadSizeMixin",
     "slots.HotbarSlotMixin",

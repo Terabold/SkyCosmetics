@@ -11,15 +11,28 @@ import java.util.Locale;
  * One selectable head look: a single texture, or an animation of several.
  *
  * Every Hypixel skull in the repo becomes one of these. Animated skins keep all
- * their frames and the per-frame tick count from {@code animatedskulls.json} (or
- * the timing {@link TimingLearner} measured in game, where the two differ), so
- * they cycle at the same speed as on Hypixel.
+ * their frames and a tick count per frame, so they cycle at the same speed as on
+ * Hypixel: measured in game by {@link TimingLearner}, else shipped with the mod,
+ * else the repo's per-frame timing, else (for a blink the repo times evenly)
+ * estimated by {@link BlinkGuesser}, else the repo's even timing.
  */
 public final class SkinEntry {
     public enum Kind { SKIN, PET_SKIN, VARIANT, HEAD, CUSTOM }
 
     /** What a cosmetic skin goes on, from its "can be applied to" lore line: the Helmet and Orb filters. */
     public enum Use { HELMET, ORB, OTHER }
+
+    /** Where {@link #frameTicks} came from, weakest first: a later source replaces an earlier one. */
+    public enum Timing {
+        /** {@code animatedskulls.json} (or a recorded preview). */
+        REPO,
+        /** {@link BlinkGuesser} found a blink in the frames themselves. */
+        GUESSED,
+        /** {@code assets/skycosmetics/timings.json}: timings players measured, shipped with the mod. */
+        BUNDLED,
+        /** {@link TimingLearner} measured it in this game ({@code timings.json}). */
+        LEARNED
+    }
 
     public final String id;
     public final String name;
@@ -44,8 +57,13 @@ public final class SkinEntry {
     public boolean missingFrames;
     /** Learned in game ({@code captured.json}) rather than read from the repo. */
     public boolean learned;
-    /** {@link #frameTicks} were measured in game ({@code timings.json}) rather than read from the repo. */
-    public boolean timed;
+    /** Where {@link #frameTicks} came from. */
+    public Timing timing = Timing.REPO;
+    /**
+     * The repo (or a recorded preview) times every frame on its own ({@code ticksPerTexture}): measured, so
+     * {@link BlinkGuesser} leaves it alone. Without it, every frame has the same {@code ticks}.
+     */
+    public boolean perFrame;
     /** Helmet unless the lore says power orbs, backpacks, or nothing you wear (minion and barn skins). */
     public Use use = Use.HELMET;
 
@@ -77,13 +95,15 @@ public final class SkinEntry {
             .toLowerCase(Locale.ROOT);
     }
 
-    /** This skin with other frame timings, everything else the same. */
-    SkinEntry withTicks(int[] ticks) {
+    /** This skin with other frame timings from {@code source}, everything else the same. */
+    SkinEntry withTicks(int[] ticks, Timing source) {
         SkinEntry e = new SkinEntry(id, name, color, kind, textures, ticks, parent);
         e.listed = listed;
         e.missingFrames = missingFrames;
         e.learned = learned;
         e.use = use;
+        e.perFrame = perFrame;
+        e.timing = source;
         return e;
     }
 
