@@ -14,7 +14,8 @@ import java.util.List;
 
 /**
  * The (i) beside the name: one usage line, then every code with its name
- * drawn in the colour or style it gives, and a swatch before each colour.
+ * drawn in the colour or style it gives, and a swatch before each colour
+ * (a colour too dark to read on black names itself in light gray).
  * Two columns when one would not fit the screen. Built once; only the column
  * choice depends on the screen.
  */
@@ -24,8 +25,8 @@ final class CodesTooltip implements ClientTooltipComponent {
     /** The swatch between a colour's code and its name; every name starts at {@code NAME_X} (the hex code is longer). */
     private static final int SWATCH = 7, NAME_X = 26;
     private static final int SWATCH_EDGE = 0xFF8C8C9A;
-    /** Around the names of colours too dark for the tooltip's black (Black, Dark Blue), so they stay readable. */
-    private static final int OUTLINE = 0xFF9A9AA6;
+    /** The name of a colour too dark for the tooltip's black (Black, Dark Blue); its swatch shows the real one. */
+    private static final int DARK_NAME = 0xFFB4B4BE;
 
     /** {@code rgb} is the colour's, or -1 for a style. */
     private record Entry(String code, Component name, int rgb, boolean dark) {}
@@ -87,14 +88,8 @@ final class CodesTooltip implements ClientTooltipComponent {
                 g.fill(sx, ey, sx + SWATCH, ey + SWATCH, SWATCH_EDGE);
                 g.fill(sx + 1, ey + 1, sx + SWATCH - 1, ey + SWATCH - 1, 0xFF000000 | e.rgb);
             }
-            if (e.dark) { // the plain text, so the outline is not drawn in the dark colour too
-                String plain = e.name.getString();
-                g.text(font, plain, nx - 1, ey, OUTLINE, false);
-                g.text(font, plain, nx + 1, ey, OUTLINE, false);
-                g.text(font, plain, nx, ey - 1, OUTLINE, false);
-                g.text(font, plain, nx, ey + 1, OUTLINE, false);
-            }
-            g.text(font, e.name, nx, ey, 0xFFFFFFFF, !e.dark);
+            if (e.dark) g.text(font, e.name.getString(), nx, ey, DARK_NAME, true);
+            else g.text(font, e.name, nx, ey, 0xFFFFFFFF, true);
         }
     }
 

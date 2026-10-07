@@ -5,6 +5,7 @@ import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.gui.ColorPicker;
 import io.github.terabold.skycosmetics.gui.ColorPopup;
 import io.github.terabold.skycosmetics.gui.NameBox;
+import io.github.terabold.skycosmetics.gui.SpeedSlider;
 import io.github.terabold.skycosmetics.gui.StudioScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -365,13 +366,13 @@ final class NameGlintTest {
 
         check(label(ctx, "Glint speed: Default"), "the speed starts on Minecraft's own");
         int[] slider = ctx.computeOnClient(mc -> {
-            AbstractWidget w = labelled(mc, "Glint speed: Default").getFirst();
-            return new int[]{w.getX(), w.getY(), w.getWidth(), w.getHeight()};
+            SpeedSlider w = (SpeedSlider) labelled(mc, "Glint speed: Default").getFirst();
+            return new int[]{w.getX(), w.getY(), w.getWidth(), w.getHeight(), w.trackX(), w.trackW()};
         });
-        int x = slider[0] + 4 + (slider[2] - 8) * 3 / 4;
+        int x = slider[4] + slider[5] * 3 / 4;
         click(ctx, x, slider[1] + slider[3] / 2);
         ctx.waitTicks(1);
-        float want = Math.round((0.1f + (x - slider[0] - 4) / (float) (slider[2] - 8) * 3.9f) * 10) / 10f;
+        float want = Math.round((0.1f + (x - slider[4]) / (float) slider[5] * 3.9f) * 10) / 10f;
         Float speed = look(ctx).glintSpeed();
         check(speed != null && Math.abs(speed - want) < 0.11f && label(ctx, String.format(Locale.ROOT, "Glint speed: %.1fx", speed)),
             "the slider sets the speed when released: " + speed + ", want ~" + want);

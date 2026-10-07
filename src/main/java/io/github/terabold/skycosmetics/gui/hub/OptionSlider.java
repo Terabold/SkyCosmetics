@@ -68,7 +68,7 @@ public final class OptionSlider extends AbstractWidget {
 
     /** The track's left end and width, for tests aiming a real click. */
     public int trackX() {
-        return getX() + labelW + 6 + KNOB / 2;
+        return getX() + labelW + KNOB_ROOM;
     }
 
     public int trackW() {
@@ -79,20 +79,32 @@ public final class OptionSlider extends AbstractWidget {
     protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         Font font = Minecraft.getInstance().font;
         float a = active ? 1 : 0.4f;
-        g.text(font, label, getX() + labelW - font.width(label), getY() + (H - 8) / 2, Theme.fade(Theme.TEXT, a), false);
-        int tx = trackX(), tw = trackW(), ty = getY() + H / 2 - 2;
+        // The value sits left of the track, cut to its column: the knob never runs over it.
+        String shown = font.width(label) <= labelW ? label : font.plainSubstrByWidth(label, labelW);
+        g.text(font, shown, getX() + labelW - font.width(shown), getY() + (H - 8) / 2, Theme.fade(Theme.TEXT, a), false);
         double span = slider.max() - slider.min();
         float p = span <= 0 ? 0 : (float) ((current - slider.min()) / span);
-        int kx = tx + Math.round(p * tw);
-        Shapes.round(g, tx - 2, ty, tw + 4, 4, 2, Theme.fade(Theme.SURFACE_HOVER, a));
-        Shapes.roundGradient(g, tx - 2, ty, kx - tx + 4, 4, 2, Theme.fade(Theme.GRADIENT_START, a), Theme.fade(Theme.GRADIENT_END, a));
-        float hv = knobHover.to(active && (dragging || isHovered()) ? 1 : 0);
-        int d = KNOB + Math.round(hv * 2);
-        if (hv > 0) Shapes.circle(g, kx - d / 2 - 2, getY() + H / 2 - d / 2 - 2, d + 4, Theme.fade(Theme.ACCENT, 0.3f * hv * a));
-        Shapes.circle(g, kx - d / 2, getY() + H / 2 - d / 2, d, Theme.fade(0xFFFFFFFF, a));
+        track(g, trackX(), trackW(), getY() + H / 2, p, knobHover.to(active && (dragging || isHovered()) ? 1 : 0), a);
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, getX(), getY(), getWidth(), getHeight(), 3);
         if (isHovered() && active) g.requestCursor(CursorTypes.RESIZE_EW);
     }
+
+    /**
+     * The track from {@code tx} ({@code tw} wide) centred on {@code cy}, filled with the accent gradient up to the
+     * knob at {@code p} (0 to 1); {@code hover} (0 to 1) grows the knob and rings it; {@code a} fades it all.
+     * The studio's sliders share it, so every slider looks the same.
+     */
+    public static void track(GuiGraphicsExtractor g, int tx, int tw, int cy, float p, float hover, float a) {
+        int kx = tx + Math.round(Math.clamp(p, 0f, 1f) * tw), ty = cy - 2;
+        Shapes.round(g, tx - 2, ty, tw + 4, 4, 2, Theme.fade(Theme.SURFACE_HOVER, a));
+        Shapes.roundGradient(g, tx - 2, ty, kx - tx + 4, 4, 2, Theme.fade(Theme.GRADIENT_START, a), Theme.fade(Theme.GRADIENT_END, a));
+        int d = KNOB + Math.round(hover * 2);
+        if (hover > 0) Shapes.circle(g, kx - d / 2 - 2, cy - d / 2 - 2, d + 4, Theme.fade(Theme.ACCENT, 0.3f * hover * a));
+        Shapes.circle(g, kx - d / 2, cy - d / 2, d, Theme.fade(0xFFFFFFFF, a));
+    }
+
+    /** Room left of a track's start for its knob, grown and ringed: the value column ends this far before it. */
+    public static final int KNOB_ROOM = KNOB / 2 + 6;
 
     @Override
     public void onClick(MouseButtonEvent event, boolean doubleClick) {
