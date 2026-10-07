@@ -86,7 +86,6 @@ public final class BlinkGuesser {
     private static final AtomicBoolean DIRTY = new AtomicBoolean();
     private static ScheduledExecutorService exec;
     private static long lastSweep;
-    private static volatile int estimated;
     private static volatile int waiting;
 
     /** An animation that may be a blink, waiting for all its frames to be on disk. */
@@ -292,9 +291,7 @@ public final class BlinkGuesser {
     /** Which animations of {@code c} may be blinks that are not looked at yet. Repo thread, with each new catalog. */
     static void index(Catalog c, Store store) {
         List<Candidate> list = new ArrayList<>();
-        int guessed = 0;
         for (SkinEntry e : c.skins.values()) {
-            if (e.timing == SkinEntry.Timing.GUESSED) guessed++;
             if (!maybe(e) || e.timing != SkinEntry.Timing.REPO) continue;
             String sig = sig(e.textures);
             if (sig == null) continue;
@@ -303,7 +300,6 @@ public final class BlinkGuesser {
             if (!DONE.contains(key)) list.add(new Candidate(e.id, sig, e.textures.clone()));
         }
         candidates = List.copyOf(list);
-        estimated = guessed;
         if (!list.isEmpty()) start();
         nudge();
     }
@@ -385,6 +381,8 @@ public final class BlinkGuesser {
 
     /** One line for {@code /skycosmetics debug}. */
     public static String status() {
+        int estimated = 0;
+        for (SkinEntry e : Repo.get().skins.values()) if (e.timing == SkinEntry.Timing.GUESSED) estimated++;
         return "Blink timing: estimated for " + Names.count(estimated, "skin") + "; "
             + Names.count(waiting, "animation") + " waiting for frames"
             + (root == null ? "; skin folder unknown" : "");
