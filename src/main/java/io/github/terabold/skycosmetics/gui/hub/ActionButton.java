@@ -9,18 +9,27 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 /**
- * A themed push button. Primary is filled with the accent gradient (the one thing a section is for); secondary
- * is a dark field that lights its frame on hover. A label too long for the button is cut with "...".
+ * A themed push button. Primary is filled with the accent gradient (the one thing a section or screen is for, like
+ * Done); secondary is a dark field that lights its frame on hover; danger is a dark red one, for Reset. A label too
+ * long for the button is cut with "...". The label is drawn in the button's own colors, whatever formatting the
+ * message has.
  */
 public class ActionButton extends ThemedButton {
     public static final int H = 16;
-    private final boolean primary;
+
+    public enum Kind { PRIMARY, SECONDARY, DANGER }
+
+    private final Kind kind;
     private String shown;
 
     public ActionButton(Component label, int width, boolean primary, OnPress onPress) {
-        super(width, H, label, onPress);
-        this.primary = primary;
-        this.shown = Ui.clip(Minecraft.getInstance().font, label.getString(), width - 10);
+        this(label, width, H, primary ? Kind.PRIMARY : Kind.SECONDARY, onPress);
+    }
+
+    public ActionButton(Component label, int width, int height, Kind kind, OnPress onPress) {
+        super(width, height, label, onPress);
+        this.kind = kind;
+        this.shown = Ui.clip(Minecraft.getInstance().font, label.getString(), width - 8);
     }
 
     /** The width that shows the whole label, with padding: what a row's button asks for. */
@@ -31,25 +40,41 @@ public class ActionButton extends ThemedButton {
     @Override
     public void setMessage(Component message) {
         super.setMessage(message);
-        this.shown = Ui.clip(Minecraft.getInstance().font, message.getString(), getWidth() - 10);
+        this.shown = Ui.clip(Minecraft.getInstance().font, message.getString(), getWidth() - 8);
+    }
+
+    @Override
+    public void setWidth(int width) {
+        super.setWidth(width);
+        this.shown = Ui.clip(Minecraft.getInstance().font, getMessage().getString(), width - 8);
     }
 
     @Override
     protected void draw(GuiGraphicsExtractor g, int mouseX, int mouseY, float hover) {
         Font font = Minecraft.getInstance().font;
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
+        int r = Math.min(Theme.SMALL_RADIUS + 1, h / 2);
         float a = active ? 1 : 0.45f;
         int text;
-        if (primary) {
-            int left = Theme.mix(Theme.PURPLE, 0xFFB57BFF, hover), right = Theme.mix(Theme.PINK, 0xFFFF9AD6, hover);
-            Shapes.roundGradient(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(left, a), Theme.fade(right, a));
-            text = 0xFFFFFFFF;
-        } else {
-            Shapes.round(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hover), a));
-            Shapes.frame(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(Theme.mix(Theme.LINE, Theme.ACCENT, hover), a));
-            text = Theme.TEXT;
+        switch (kind) {
+            case PRIMARY -> {
+                int left = Theme.mix(Theme.GRADIENT_START, Theme.GRADIENT_START_HOVER, hover);
+                int right = Theme.mix(Theme.GRADIENT_END, Theme.GRADIENT_END_HOVER, hover);
+                Shapes.roundGradient(g, x, y, w, h, r, Theme.fade(left, a), Theme.fade(right, a));
+                text = Theme.ON_ACCENT;
+            }
+            case DANGER -> {
+                Shapes.round(g, x, y, w, h, r, Theme.fade(Theme.mix(Theme.DANGER, Theme.DANGER_HOVER, hover), a));
+                Shapes.frame(g, x, y, w, h, r, Theme.fade(Theme.mix(Theme.DANGER_LINE, Theme.WARN, hover), a));
+                text = Theme.mix(Theme.WARN, 0xFFFFFFFF, hover);
+            }
+            default -> {
+                Shapes.round(g, x, y, w, h, r, Theme.fade(Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hover), a));
+                Shapes.frame(g, x, y, w, h, r, Theme.fade(Theme.mix(Theme.LINE, Theme.ACCENT, hover), a));
+                text = Theme.TEXT;
+            }
         }
-        g.centeredText(font, shown, x + w / 2, y + (h - 8) / 2, Theme.fade(text, a));
-        if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, Theme.SMALL_RADIUS);
+        g.centeredText(font, shown, x + w / 2, y + (h - 7) / 2, Theme.fade(text, a));
+        if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, r);
     }
 }

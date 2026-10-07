@@ -85,7 +85,7 @@ public final class OptionSlider extends AbstractWidget {
         float p = span <= 0 ? 0 : (float) ((current - slider.min()) / span);
         int kx = tx + Math.round(p * tw);
         Shapes.round(g, tx - 2, ty, tw + 4, 4, 2, Theme.fade(Theme.SURFACE_HOVER, a));
-        Shapes.roundGradient(g, tx - 2, ty, kx - tx + 4, 4, 2, Theme.fade(Theme.PURPLE, a), Theme.fade(Theme.PINK, a));
+        Shapes.roundGradient(g, tx - 2, ty, kx - tx + 4, 4, 2, Theme.fade(Theme.GRADIENT_START, a), Theme.fade(Theme.GRADIENT_END, a));
         float hv = knobHover.to(active && (dragging || isHovered()) ? 1 : 0);
         int d = KNOB + Math.round(hv * 2);
         if (hv > 0) Shapes.circle(g, kx - d / 2 - 2, getY() + H / 2 - d / 2 - 2, d + 4, Theme.fade(Theme.ACCENT, 0.3f * hv * a));

@@ -17,7 +17,7 @@ import java.time.Duration;
 
 /**
  * A section in the settings' sidebar: its icon, name and a gray line under it. The open one sits on the accent's
- * dark purple; while a search runs each tab shows how many settings it matched, and one with none dims. In a
+ * dark background; while a search runs each tab shows how many settings it matched, and one with none dims. In a
  * narrow window only the icon shows, with the name as a tooltip; so does a tab too narrow for its text. The message
  * is the section's name.
  */
@@ -116,8 +116,8 @@ public final class SectionTab extends ThemedButton {
             g.text(font, sub, x + 24, y + 14, Theme.fade(selected ? Theme.mix(Theme.MUTED, Theme.TEXT, 0.4f) : Theme.MUTED, a), false);
             if (!count.isEmpty()) {
                 int cw = font.width(count) + 6, cx = x + w - cw - 4, cy = y + 4;
-                Shapes.round(g, cx, cy, cw, 10, 5, dim ? Theme.SURFACE : Theme.fade(Theme.PURPLE, 0.85f));
-                g.text(font, count, cx + 3, cy + 1, dim ? Theme.DIM : 0xFFFFFFFF, false);
+                Shapes.round(g, cx, cy, cw, 10, 5, dim ? Theme.SURFACE : Theme.GRADIENT_START);
+                g.text(font, count, cx + 3, cy + 1, dim ? Theme.DIM : Theme.ON_ACCENT, false);
             }
         }
         if (dim && rail && !selected) Shapes.round(g, x, y, w, h, Theme.SMALL_RADIUS + 1, 0x99111116);

@@ -37,11 +37,13 @@ public final class ToggleSwitch extends ThemedButton {
         float a = active ? 1 : 0.4f;
         Shapes.round(g, x, y, w, h, h / 2, Theme.fade(Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hover), a));
         if (p > 0) {
-            Shapes.roundGradient(g, x, y, w, h, h / 2, Theme.fade(Theme.PURPLE, p * a), Theme.fade(Theme.PINK, p * a));
+            Shapes.roundGradient(g, x, y, w, h, h / 2, Theme.fade(Theme.GRADIENT_START, p * a), Theme.fade(Theme.GRADIENT_END, p * a));
         }
         int d = h - 4;
         int kx = x + 2 + Math.round(p * (w - 4 - d));
-        Shapes.circle(g, kx, y + 2, d, Theme.fade(Theme.mix(Theme.MUTED, 0xFFFFFFFF, Math.max(p, hover * 0.5f)), a));
+        // Off: a gray knob that brightens on hover. On: the color text has on the accent, so it stands out on any accent.
+        int knob = Theme.mix(Theme.mix(Theme.MUTED, 0xFFFFFFFF, hover * 0.5f), Theme.ON_ACCENT, p);
+        Shapes.circle(g, kx, y + 2, d, Theme.fade(knob, a));
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, h / 2);
     }
 

@@ -98,12 +98,12 @@ public final class SegmentedChoice<T> extends AbstractWidget {
         }
         if (sel >= 0) {
             int px = x + Math.round(w * pill / n), pw = w / n;
-            Shapes.roundGradient(g, px + 1, y + 1, pw - 2, h - 2, Theme.SMALL_RADIUS - 1, Theme.fade(Theme.PURPLE, a), Theme.fade(Theme.PINK, a));
+            Shapes.roundGradient(g, px + 1, y + 1, pw - 2, h - 2, Theme.SMALL_RADIUS - 1, Theme.fade(Theme.GRADIENT_START, a), Theme.fade(Theme.GRADIENT_END, a));
         }
         for (int i = 0; i < n; i++) {
             int sx = x + w * i / n, sw = x + w * (i + 1) / n - sx;
-            int color = i == sel ? 0xFFFFFFFF : i == hovered ? Theme.TEXT : Theme.MUTED;
-            g.text(font, labels[i], sx + (sw - widths[i]) / 2, y + (h - 8) / 2, Theme.fade(color, a), i == sel);
+            int color = i == sel ? Theme.ON_ACCENT : i == hovered ? Theme.TEXT : Theme.MUTED;
+            g.text(font, labels[i], sx + (sw - widths[i]) / 2, y + (h - 8) / 2, Theme.fade(color, a), false);
         }
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, Theme.SMALL_RADIUS);
     }

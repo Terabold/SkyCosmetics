@@ -56,12 +56,12 @@ public final class CardButton extends ThemedButton {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
         float a = active ? 1 : 0.5f;
         Shapes.roundGradient(g, x, y, w, h, Theme.RADIUS, Theme.mix(Theme.SURFACE, Theme.ACCENT_BG, 0.55f + 0.45f * hover),
-            Theme.mix(Theme.SURFACE, 0xFF3A2238, 0.35f + 0.4f * hover));
+            Theme.mix(Theme.SURFACE, Theme.ACCENT_BG_END, 0.35f + 0.4f * hover));
         Shapes.frame(g, x, y, w, h, Theme.RADIUS, Theme.fade(Theme.ACCENT, (0.35f + 0.65f * hover) * a));
 
         int tx = x + 8, ty = y + (h - TILE) / 2;
-        Shapes.round(g, tx, ty, TILE, TILE, Theme.RADIUS, Theme.fade(0xFF120E18, 0.9f));
-        Shapes.frame(g, tx, ty, TILE, TILE, Theme.RADIUS, Theme.fade(Theme.PURPLE, 0.6f * a));
+        Shapes.round(g, tx, ty, TILE, TILE, Theme.RADIUS, Theme.fade(0xFF101015, 0.9f));
+        Shapes.frame(g, tx, ty, TILE, TILE, Theme.RADIUS, Theme.fade(Theme.GRADIENT_START, 0.6f * a));
         if (!icon.isEmpty()) {
             g.pose().pushMatrix();
             g.pose().translate(tx + 2, ty + 2);
@@ -77,8 +77,8 @@ public final class CardButton extends ThemedButton {
         for (int i = 0; i < lines.size(); i++) g.text(font, lines.get(i), textX, textY + 13 + i * 10, Theme.fade(Theme.MUTED, a), false);
 
         int ax = x + w - ARROW - 10 + Math.round(hover * 2), ay = y + (h - ARROW) / 2;
-        Shapes.circle(g, ax, ay, ARROW, Theme.fade(Theme.mix(Theme.PURPLE, Theme.PINK, 0.35f + 0.4f * hover), a));
-        Ui.arrowRight(g, ax + ARROW / 2 - 1, ay + (ARROW - 7) / 2, Theme.fade(0xFFFFFFFF, a));
+        Shapes.circle(g, ax, ay, ARROW, Theme.fade(Theme.mix(Theme.GRADIENT_START, Theme.GRADIENT_END, 0.35f + 0.4f * hover), a));
+        Ui.arrowRight(g, ax + ARROW / 2 - 1, ay + (ARROW - 7) / 2, Theme.fade(Theme.ON_ACCENT, a));
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, Theme.RADIUS);
     }
 }

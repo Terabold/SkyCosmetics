@@ -124,6 +124,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private String toastLine;
     private long toastAt;
     private int contentH;
+    /** The accent the rows' text was built with. */
+    private int themeVersion;
 
     // ------------------------------------------------------------- motion
     private double scroll, shown, maxScroll, sideScroll, sideShown, sideMax;
@@ -326,9 +328,23 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             }
             if (results == 0) rows.add(message(Component.translatable("skycosmetics.menu.search.none.help")));
         }
+        themeVersion = Theme.version();
         layoutRows();
         head();
         refresh();
+    }
+
+    /** The accent changed (General's color): search results carry it in their highlights, so they are built again. */
+    private void retheme() {
+        themeVersion = Theme.version();
+        if (words.length == 0) return;
+        for (Row r : rows) {
+            if (!r.setting() || r.option == null) continue;
+            r.titleText = highlight(r.option.title().getString(), words);
+            if (r.key == null) r.helpText = highlight(r.option.help().getString(), words);
+            wrap(r);
+        }
+        layoutRows();
     }
 
     /** Adds a row for this option; false for a header or when it could not be built (logged, and left out). */
@@ -401,7 +417,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     /** In search results: the section (and group) the rows under it come from; a click jumps there. */
     private Row group(Section s, Option groupHeader) {
         Row r = new Row(Kind.GROUP, s, groupHeader);
-        MutableComponent text = s.name().copy().withColor(Theme.ACCENT & 0xFFFFFF);
+        MutableComponent text = s.name().copy(); // drawn in the accent, so it follows an accent change
         if (groupHeader != null) {
             text.append(Component.literal("  »  ").withColor(Theme.DIM & 0xFFFFFF))
                 .append(groupHeader.title().copy().withColor(Theme.MUTED & 0xFFFFFF));
@@ -522,7 +538,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         return true;
     }
 
-    /** The text with every typed word in gold. Built when the search changes, never per frame. */
+    /** The text with every typed word in the accent. Built when the search or the accent changes, never per frame. */
     private static Component highlight(String text, String[] words) {
         String low = text.toLowerCase(Locale.ROOT);
         if (low.length() != text.length()) return Component.literal(text);
@@ -540,7 +556,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         for (int i = 1; i <= text.length(); i++) {
             if (i == text.length() || hit[i] != hit[start]) {
                 MutableComponent part = Component.literal(text.substring(start, i));
-                out.append(hit[start] ? part.withColor(Theme.GOLD & 0xFFFFFF) : part);
+                out.append(hit[start] ? part.withColor(Theme.ACCENT & 0xFFFFFF) : part);
                 start = i;
             }
         }
@@ -759,6 +775,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             return;
         }
         if (overlay != null && overlay.isClosed()) overlay = null;
+        if (themeVersion != Theme.version()) retheme();
         // Under an open overlay nothing is hovered: no highlights, no tooltips.
         int mx = overlay != null ? -10000 : mouseX, my = overlay != null ? -10000 : mouseY;
         step();
@@ -800,7 +817,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         g.fill(cx, bodyY, cx + cw, bodyY + r, Theme.BODY);
         g.fill(cx, bodyY, cx + r, bodyY + bh, Theme.BODY);
         g.fill(cx - 1, bodyY, cx, wy + wh - 1, Theme.LINE_SOFT);
-        Shapes.gradient(g, wx + 1, bodyY - 1, wx + ww - 1, bodyY, Theme.PURPLE, Theme.PINK);
+        Shapes.gradient(g, wx + 1, bodyY - 1, wx + ww - 1, bodyY, Theme.GRADIENT_START, Theme.GRADIENT_END);
         Shapes.frame(g, wx, wy, ww, wh, r, Theme.LINE);
     }
 
@@ -914,7 +931,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
                 g.pose().scale(0.75f, 0.75f);
                 g.item(r.icon, 0, 0);
                 g.pose().popMatrix();
-                if (!r.title.isEmpty()) g.text(font, r.title.getFirst(), vx + r.textX, ry + r.textY, Theme.TEXT, false);
+                if (!r.title.isEmpty()) g.text(font, r.title.getFirst(), vx + r.textX, ry + r.textY, Theme.ACCENT, false);
                 if (hv > 0) {
                     int gx = vx + vw - ROW_X - 6 - font.width(goTo), color = Theme.fade(Theme.ACCENT, hv);
                     g.text(font, goTo, gx, ry + r.textY, color, false);
