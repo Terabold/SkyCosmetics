@@ -10,7 +10,8 @@
       "io.github.terabold.skycosmetics.test.MenuClientTest",
       "io.github.terabold.skycosmetics.test.GlintRenderTest",
       "io.github.terabold.skycosmetics.test.DataSafetyTest",
-      "io.github.terabold.skycosmetics.test.StudioTabsClientTest"
+      "io.github.terabold.skycosmetics.test.StudioTabsClientTest",
+      "io.github.terabold.skycosmetics.test.TimingLearnerTest"
     ]
   },
   "depends": { "skycosmetics": "*" }

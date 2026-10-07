@@ -4,6 +4,7 @@ import com.google.gson.JsonPrimitive;
 import com.mojang.authlib.GameProfile;
 import com.mojang.datafixers.util.Pair;
 import io.github.terabold.skycosmetics.Looks;
+import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -70,7 +71,7 @@ public final class TimingLearner {
     private static final int MAX_LAGS = 16;
     /** Real texture values are a few hundred characters; longer ones are not looked at. */
     private static final int MAX_VALUE = 2048;
-    private static final int MAX_SEEN = 4096;
+    private static final int MAX_SEEN = 2048;
 
     /** "Learn Animation Timing" in the studio settings. */
     public static boolean enabled = true;
@@ -253,7 +254,11 @@ public final class TimingLearner {
         long[] at = new long[16];
         int n;
 
+        /** Null when every animation showing {@code hash} was measured this session already. */
         static Track start(Anim[] anims, String hash, long now) {
+            boolean open = false;
+            for (Anim a : anims) open |= !SETTLED.contains(a.skin.id);
+            if (!open) return null;
             Track t = new Track();
             for (Anim a : anims) {
                 if (SETTLED.contains(a.skin.id)) continue;
@@ -262,7 +267,6 @@ public final class TimingLearner {
                 t.anims.add(a);
                 t.offsets.add(o);
             }
-            if (t.anims.isEmpty()) return null;
             t.tex[0] = hash;
             t.at[0] = now;
             t.n = 1;
@@ -411,7 +415,7 @@ public final class TimingLearner {
         }
         learned++;
         if (RECENT.size() == 3) RECENT.removeFirst();
-        RECENT.addLast(s.name + " " + Arrays.toString(ticks));
+        RECENT.addLast(s.name + " " + String.join("/", Arrays.stream(ticks).mapToObj(String::valueOf).toList()));
         SkyCosmetics.LOG.info("Learned the animation timing of {}: {} ticks per frame, was {}", s.id,
             Arrays.toString(ticks), Arrays.toString(s.frameTicks));
         Component news = !Looks.usedSkins().contains(s.id) ? null
@@ -505,11 +509,11 @@ public final class TimingLearner {
     /** One line for {@code /skycosmetics debug}. */
     public static String status() {
         Index idx = index;
-        StringBuilder b = new StringBuilder("Animation timing: ").append(enabled ? "learning" : "off")
-            .append(", ").append(timedSkins).append(" skins use a timing learned in game");
-        if (learned > 0) b.append(" (").append(learned).append(" this session: ").append(String.join(", ", RECENT)).append(')');
-        b.append(", watching ").append(TRACKS.size()).append(TRACKS.size() == 1 ? " head" : " heads");
-        if (idx != null) b.append(" for ").append(idx.animations).append(" animations");
+        StringBuilder b = new StringBuilder("Animation timing: ").append(enabled ? "learning" : "off").append("; ")
+            .append("timing learned in game for ").append(Names.count(timedSkins, "skin"));
+        if (learned > 0) b.append(" (this session: ").append(String.join(", ", RECENT)).append(learned > RECENT.size() ? ", ..." : "").append(')');
+        b.append("; watching ").append(Names.count(TRACKS.size(), "head"));
+        if (idx != null) b.append(" (").append(idx.animations).append(" animations known)");
         return b.toString();
     }
 

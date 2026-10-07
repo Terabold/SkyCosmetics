@@ -42,4 +42,5 @@ Some behavior can only be confirmed on the live server. Reports are welcome:
 
 - Summoned pets and deployed power orbs pick up their skins for every pet and orb type.
 - Learning skins from Elizabeth's previews for animated skins the repo has no frames for.
+- Learning animation timing from the heads Hypixel animates (blinking pet skins, Necron Diamond Knight colors).
 - Dyed helmets that are not skulls, with Hypixel's resource pack.
