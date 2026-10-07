@@ -69,8 +69,11 @@ public final class BlinkGuesser {
     /** The head's visible area in a skin: six 8x8 faces in the top 16 rows and 32 columns. */
     private static final int ROWS = 16;
     private static final int COLS = 32;
-    private static final int PER_SWEEP = 32;
-    private static final long FULL_SWEEP_MS = 60_000;
+    /** Animations read per sweep: all of them at once, so one catalog rebuild takes every answer. */
+    private static final int PER_SWEEP = 256;
+    /** Downloads finishing ask for a sweep at most this often; without any, one runs every minute. */
+    private static final long BUSY_SWEEP_MS = 2_000;
+    private static final long IDLE_SWEEP_MS = 60_000;
 
     private static volatile Path root;
     private static volatile List<Candidate> candidates = List.of();
@@ -78,12 +81,24 @@ public final class BlinkGuesser {
     private static final Set<String> DONE = ConcurrentHashMap.newKeySet();
     private static final AtomicBoolean DIRTY = new AtomicBoolean();
     private static ScheduledExecutorService exec;
-    private static long lastFull;
+    private static long lastSweep;
     private static volatile int estimated;
     private static volatile int waiting;
 
     /** An animation that may be a blink, waiting for all its frames to be on disk. */
-    private record Candidate(String id, String sig, String[] values) {}
+    private static final class Candidate {
+        final String id;
+        final String sig;
+        final String[] values;
+        /** Where its frames are cached; worked out on the blink thread once the skin folder is known. */
+        Path[] files;
+
+        Candidate(String id, String sig, String[] values) {
+            this.id = id;
+            this.sig = sig;
+            this.values = values;
+        }
+    }
 
     private BlinkGuesser() {}
 
@@ -293,8 +308,10 @@ public final class BlinkGuesser {
         exec.scheduleWithFixedDelay(() -> {
             try {
                 long now = System.currentTimeMillis();
-                if (!DIRTY.getAndSet(false) && now - lastFull < FULL_SWEEP_MS) return;
-                lastFull = now;
+                long since = now - lastSweep;
+                if (since < IDLE_SWEEP_MS && !(since >= BUSY_SWEEP_MS && DIRTY.get())) return;
+                DIRTY.set(false);
+                lastSweep = now;
                 sweep();
             } catch (Throwable e) {
                 SkyCosmetics.LOG.error("Looking for blinks failed", e);
@@ -315,12 +332,13 @@ public final class BlinkGuesser {
                 wait++;
                 continue;
             }
-            Path[] files = new Path[c.values.length];
-            boolean all = true;
-            for (int i = 0; i < files.length && all; i++) {
-                files[i] = file(skins, c.values[i]);
-                all = files[i] != null && Files.isRegularFile(files[i]);
+            if (c.files == null) {
+                c.files = new Path[c.values.length];
+                for (int i = 0; i < c.files.length; i++) c.files[i] = file(skins, c.values[i]);
             }
+            Path[] files = c.files;
+            boolean all = true;
+            for (int i = 0; i < files.length && all; i++) all = files[i] != null && Files.isRegularFile(files[i]);
             if (!all) {
                 wait++;
                 continue;
