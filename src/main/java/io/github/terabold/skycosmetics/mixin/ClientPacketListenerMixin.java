@@ -6,6 +6,7 @@ import io.github.terabold.skycosmetics.data.TimingLearner;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPlayerInventoryPacket;
@@ -43,6 +44,15 @@ public class ClientPacketListenerMixin {
     private void skycosmetics$slot(ClientboundContainerSetSlotPacket packet, CallbackInfo ci) {
         try {
             TimingLearner.onSlot(packet);
+        } catch (RuntimeException e) {
+            Io.failed("Timing an animated head", e);
+        }
+    }
+
+    @Inject(method = "handleOpenScreen", at = @At("TAIL"))
+    private void skycosmetics$openScreen(ClientboundOpenScreenPacket packet, CallbackInfo ci) {
+        try {
+            TimingLearner.onOpenScreen(packet);
         } catch (RuntimeException e) {
             Io.failed("Timing an animated head", e);
         }

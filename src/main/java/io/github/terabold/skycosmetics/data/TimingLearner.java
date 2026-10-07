@@ -7,12 +7,15 @@ import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
+import io.github.terabold.skycosmetics.mixin.CustomDataAccessor;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPlayerInventoryPacket;
@@ -20,6 +23,7 @@ import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
@@ -48,7 +52,13 @@ import java.util.function.LongSupplier;
  * least twice in a row, and in most rounds each frame lasted within a tick (or 10%) of the median of all
  * rounds, those medians are the timing. It goes to timings.json and replaces the repo's for that skin
  * everywhere; each skin is measured once per game session, so a wrong timing heals itself next time.
- * Rounds during server lag (time updates falling behind the clock) never count.
+ * Rounds during server lag (time updates falling behind the clock) never count. A blink's open frame may
+ * last a different time each round, so a frame much longer than all others only has to be within half of
+ * its median, and then three rounds must agree.
+ *
+ * A head is followed per slot or entity while the same item shows there (its name and SkyBlock uuid):
+ * another item in the slot, even with a frame of the same skin, starts over, and so does every menu slot
+ * when a new menu opens (menus reuse their slot numbers and, in time, their ids).
  *
  * Frames that repeat a texture are handled by matching the order seen against the skin's frame order;
  * frames in a row with the same texture are timed together, since nothing changes on screen between them.
@@ -61,6 +71,10 @@ public final class TimingLearner {
     private static final long TICK_NS = 50_000_000L;
     /** Rounds that must agree before a timing is trusted. */
     private static final int MIN_ROUNDS = 2;
+    /** Rounds that must agree when the open frame of a blink varied between them. */
+    private static final int MIN_ROUNDS_VARIED = 3;
+    /** A frame at least this long and 4 times as long as any other is the open frame of a blink. */
+    private static final double LONG_TICKS = 20;
     /** Rounds kept per head while they disagree; older ones make room. */
     private static final int KEEP_ROUNDS = 6;
     private static final int MAX_TRACKS = 64;
@@ -137,6 +151,11 @@ public final class TimingLearner {
         if (enabled) observe(key(2, p.getContainerId(), p.getSlot()), p.getItem(), clock.getAsLong());
     }
 
+    /** A new menu: what its slots show has nothing to do with what any menu slot showed before. */
+    public static void onOpenScreen(ClientboundOpenScreenPacket p) {
+        if (!TRACKS.isEmpty()) TRACKS.keySet().removeIf(k -> k >>> 56 == 2 && (k >>> 16 & 0xFFFFFFFFL) != 0);
+    }
+
     public static void onContent(ClientboundContainerSetContentPacket p) {
         if (!enabled) return;
         long now = clock.getAsLong();
@@ -190,18 +209,28 @@ public final class TimingLearner {
             if (t != null) TRACKS.remove(key); // something else is shown there now
             return;
         }
-        if (t != null) {
+        Who who = who(stack);
+        if (t != null && t.who.equals(who)) {
             if (hash.equals(t.tex[t.n - 1])) return; // sent again: same frame
             if (t.add(hash, now)) {
                 if (t.check()) TRACKS.remove(key);
                 return;
             }
-        } else if (TRACKS.size() >= MAX_TRACKS) {
+        } else if (t == null && TRACKS.size() >= MAX_TRACKS) {
             return;
         }
-        Track fresh = Track.start(anims, hash, now); // not the next frame of what was there: start over
+        Track fresh = Track.start(anims, hash, now, who); // another item, or not the next frame: start over
         if (fresh != null) TRACKS.put(key, fresh);
         else if (t != null) TRACKS.remove(key);
+    }
+
+    /** Which item shows a head, beyond its texture: menus put another item with the same skin in a slot. */
+    private record Who(Component name, String uuid) {}
+
+    private static Who who(ItemStack s) {
+        CustomData data = s.get(DataComponents.CUSTOM_DATA);
+        String uuid = data == null ? null : ((CustomDataAccessor) (Object) data).skycosmetics$tag().getStringOr("uuid", null);
+        return new Who(s.get(DataComponents.CUSTOM_NAME), uuid);
     }
 
     private static String texture(ItemStack s) {
@@ -249,16 +278,21 @@ public final class TimingLearner {
         /** Animations the frames seen so far fit, each with the run the first frame may have been. */
         final List<Anim> anims = new ArrayList<>(2);
         final List<BitSet> offsets = new ArrayList<>(2);
+        final Who who;
         String[] tex = new String[16];
         long[] at = new long[16];
         int n;
 
+        private Track(Who who) {
+            this.who = who;
+        }
+
         /** Null when every animation showing {@code hash} was measured this session already. */
-        static Track start(Anim[] anims, String hash, long now) {
+        static Track start(Anim[] anims, String hash, long now, Who who) {
             boolean open = false;
             for (Anim a : anims) open |= !SETTLED.contains(a.skin.id);
             if (!open) return null;
-            Track t = new Track();
+            Track t = new Track(who);
             for (Anim a : anims) {
                 if (SETTLED.contains(a.skin.id)) continue;
                 BitSet o = new BitSet(a.runs.length);
@@ -333,8 +367,10 @@ public final class TimingLearner {
      * ({@code at[0]}, maybe just when the head came into view) as run {@code offset}, each next one as the next
      * run. Whole rounds of {@code r} frame durations are compared from the second frame on; a round must be
      * {@code clean} (no server lag), and of those, at least two and more than half must have every frame within
-     * a tick or 10% of that frame's median. The medians of those rounds, rounded, are the result; null while
-     * there is no such agreement, or a frame lasts over a minute. Pure, for the gametest too.
+     * a tick or 10% of that frame's median. A frame of {@link #LONG_TICKS} or more and 4 times as long as any
+     * other (a blink's open eyes) only has to be within half of its median; if it varied by more than 10%,
+     * three rounds must agree. The medians of those rounds, rounded, are the result; null while there is no
+     * such agreement, or a frame lasts over a minute. Pure, for the gametest too.
      */
     static int[] fit(long[] at, int n, int r, int offset, Clean clean) {
         int rounds = (n - 2) / r;
@@ -351,16 +387,24 @@ public final class TimingLearner {
         if (usable < MIN_ROUNDS) return null;
         double[] med = new double[r];
         for (int k = 0; k < r; k++) med[k] = median(d, use, k);
+        int open = 0;
+        for (int k = 1; k < r; k++) if (med[k] > med[open]) open = k;
+        double next = 0;
+        for (int k = 0; k < r; k++) if (k != open) next = Math.max(next, med[k]);
+        if (r < 2 || med[open] < LONG_TICKS || med[open] < next * 4) open = -1;
         boolean[] good = new boolean[rounds];
         int agree = 0;
+        boolean varied = false;
         for (int c = 0; c < rounds; c++) {
             if (!use[c]) continue;
             boolean ok = true;
-            for (int k = 0; k < r && ok; k++) ok = Math.abs(d[c][k] - med[k]) <= Math.max(1.0, med[k] / 10);
+            for (int k = 0; k < r && ok; k++) ok = Math.abs(d[c][k] - med[k]) <= (k == open ? med[k] / 2 : Math.max(1.0, med[k] / 10));
             good[c] = ok;
-            if (ok) agree++;
+            if (!ok) continue;
+            agree++;
+            varied |= open >= 0 && Math.abs(d[c][open] - med[open]) > Math.max(1.0, med[open] / 10);
         }
-        if (agree < MIN_ROUNDS || agree * 2 <= usable) return null;
+        if (agree < (varied ? MIN_ROUNDS_VARIED : MIN_ROUNDS) || agree * 2 <= usable) return null;
         int[] ticks = new int[r];
         for (int k = 0; k < r; k++) {
             double m = median(d, good, k);
