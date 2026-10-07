@@ -67,7 +67,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> {
             for (String id : List.of(BLINK, UNIFORM, SAME, LAGGED)) {
                 SkinEntry e = before.skin(id);
-                check(e != null && e.animated() && !e.timed, id + " is an animated repo skin");
+                check(e != null && e.animated() && e.timing != SkinEntry.Timing.LEARNED, id + " is an animated repo skin");
             }
             check(Arrays.equals(before.skin(BLINK).frameTicks, new int[]{51, 2, 4, 2}), "the repo times " + BLINK + " per frame");
             TimingLearner.useClock(() -> NOW[0]);
@@ -80,7 +80,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
             play(s -> TimingLearner.onEquipment(new ClientboundSetEquipmentPacket(5001, List.of(Pair.of(EquipmentSlot.HEAD, s)))),
                 frames, new int[]{40, 2, 6, 2}, 1, 5, 0);
         });
-        ctx.waitFor(mc -> Repo.get().skin(BLINK).timed, 20 * 10);
+        ctx.waitFor(mc -> Repo.get().skin(BLINK).timing == SkinEntry.Timing.LEARNED, 20 * 10);
         ctx.runOnClient(mc -> {
             SkinEntry e = Repo.get().skin(BLINK);
             check(Arrays.equals(e.frameTicks, new int[]{40, 2, 6, 2}), "learned blink timing: " + Arrays.toString(e.frameTicks));
@@ -98,7 +98,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
             String[] frames = Arrays.stream(before.skin(UNIFORM).textures).map(TimingLearnerTest::rewrap).toArray(String[]::new);
             play(s -> TimingLearner.onSlot(new ClientboundContainerSetSlotPacket(0, 0, 5, s)), frames, new int[]{50, 2, 4}, 0, 3, -1);
         });
-        ctx.waitFor(mc -> Repo.get().skin(UNIFORM).timed, 20 * 10);
+        ctx.waitFor(mc -> Repo.get().skin(UNIFORM).timing == SkinEntry.Timing.LEARNED, 20 * 10);
         check(ctx.computeOnClient(mc -> Arrays.equals(Repo.get().skin(UNIFORM).frameTicks, new int[]{50, 2, 4})),
             "learned flash timing from rewrapped textures");
 
@@ -118,7 +118,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
             playLagging(s -> TimingLearner.onEquipment(new ClientboundSetEquipmentPacket(5005, List.of(Pair.of(EquipmentSlot.HEAD, s)))),
                 frames, new int[]{30, 3, 6}, 7, 3);
         });
-        ctx.waitFor(mc -> Repo.get().skin(LAGGED).timed, 20 * 10);
+        ctx.waitFor(mc -> Repo.get().skin(LAGGED).timing == SkinEntry.Timing.LEARNED, 20 * 10);
         check(ctx.computeOnClient(mc -> Arrays.equals(Repo.get().skin(LAGGED).frameTicks, new int[]{30, 3, 6})),
             "rounds during server lag are not learned: " + ctx.computeOnClient(mc -> Arrays.toString(Repo.get().skin(LAGGED).frameTicks)));
 
@@ -142,13 +142,16 @@ public class TimingLearnerTest implements FabricClientGameTest {
         ctx.waitTicks(20); // the repo thread's batch window
         ctx.runOnClient(mc -> {
             Catalog after = Repo.get();
-            check(!after.skin(SAME).timed, "a timing equal to the repo's is not saved");
+            check(after.skin(SAME).timing != SkinEntry.Timing.LEARNED, "a timing equal to the repo's is not saved");
             String[] blink = before.skin(BLINK).textures, flash = before.skin(UNIFORM).textures; // learned, with any copies
             for (Map.Entry<String, SkinEntry> e : before.skins.entrySet()) {
                 String[] t = e.getValue().textures;
                 if (Arrays.equals(t, blink) || Arrays.equals(t, flash) || Arrays.equals(t, before.skin(LAGGED).textures)) continue;
                 SkinEntry now = after.skins.get(e.getKey());
-                check(now != null && !now.timed && Arrays.equals(now.frameTicks, e.getValue().frameTicks), "untouched: " + e.getKey());
+                check(now != null && now.timing != SkinEntry.Timing.LEARNED, "not learned: " + e.getKey());
+                // A blink estimated meanwhile from frames the other tests downloaded is not the learner's doing.
+                if (now.timing == SkinEntry.Timing.GUESSED || e.getValue().timing == SkinEntry.Timing.GUESSED) continue;
+                check(Arrays.equals(now.frameTicks, e.getValue().frameTicks), "untouched: " + e.getKey());
             }
         });
         String saved = read(timings());
@@ -174,7 +177,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
 
         deleteTimings();
         reload(ctx);
-        check(ctx.computeOnClient(mc -> !Repo.get().skin(BLINK).timed
+        check(ctx.computeOnClient(mc -> Repo.get().skin(BLINK).timing != SkinEntry.Timing.LEARNED
             && Arrays.equals(Repo.get().skin(BLINK).frameTicks, new int[]{51, 2, 4, 2})), "without timings.json the repo timing is back");
         System.out.println("[SkyCosmeticsTest] timing learner checks passed");
     }
@@ -230,7 +233,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
         reload(ctx);
         List<Path> aside = brokenTimings();
         check(aside.size() == 1 && read(aside.getFirst()).contains("oops"), "the unreadable file is set aside: " + aside);
-        check(ctx.computeOnClient(mc -> Repo.get().skin(BLINK).timed && Repo.get().skin(UNIFORM).timed), "learned timings are kept");
+        check(ctx.computeOnClient(mc -> Repo.get().skin(BLINK).timing == SkinEntry.Timing.LEARNED && Repo.get().skin(UNIFORM).timing == SkinEntry.Timing.LEARNED), "learned timings are kept");
         check(read(timings()).contains(BLINK), "and saved again");
 
         write(timings(), "{\"skins\": {\"" + UNIFORM + "\": {\"frames\": 2, \"ticksPerTexture\": [5, 5]},"
@@ -239,8 +242,8 @@ public class TimingLearnerTest implements FabricClientGameTest {
         reload(ctx);
         ctx.runOnClient(mc -> {
             Catalog c = Repo.get();
-            check(!c.skin(UNIFORM).timed && !c.skin(BLINK).timed, "a timing for another frame count, or out of range, is ignored");
-            check(c.skin(SAME).timed && Arrays.equals(c.skin(SAME).frameTicks, new int[]{30, 3, 3, 3}), "a saved timing is read back");
+            check(c.skin(UNIFORM).timing != SkinEntry.Timing.LEARNED && c.skin(BLINK).timing != SkinEntry.Timing.LEARNED, "a timing for another frame count, or out of range, is ignored");
+            check(c.skin(SAME).timing == SkinEntry.Timing.LEARNED && Arrays.equals(c.skin(SAME).frameTicks, new int[]{30, 3, 3, 3}), "a saved timing is read back");
         });
         aside.forEach(TimingLearnerTest::delete);
         System.out.println("[SkyCosmeticsTest] broken timings.json checks passed");
@@ -250,7 +253,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
 
     /** Frames of an animation none of the checks above learned or confirmed. */
     private static String[] untimed() {
-        return Repo.get().animatedTab.stream().filter(e -> !e.timed && e.textures.length > 2 && !List.of(BLINK, UNIFORM, SAME).contains(e.id)
+        return Repo.get().animatedTab.stream().filter(e -> e.timing != SkinEntry.Timing.LEARNED && e.textures.length > 2 && !List.of(BLINK, UNIFORM, SAME).contains(e.id)
             && !e.id.startsWith("PET_SKIN_RABBIT_GARDEN_BUNNY") && !e.id.startsWith("NECRON_DIAMOND_KNIGHT")).findFirst().orElseThrow().textures;
     }
 

@@ -408,7 +408,8 @@ public final class TimingLearner {
         SkinEntry s = a.skin;
         SETTLED.add(s.id);
         int[] ticks = frames(a, runTicks);
-        if (close(ticks, s.frameTicks)) {
+        // An estimate that turns out right is saved all the same: from then on it is measured, not estimated.
+        if (close(ticks, s.frameTicks) && s.timing != SkinEntry.Timing.GUESSED) {
             SkyCosmetics.LOG.debug("Animation timing of {} confirmed: {}", s.id, Arrays.toString(s.frameTicks));
             return;
         }
@@ -457,7 +458,7 @@ public final class TimingLearner {
         int timed = 0;
         int count = 0;
         for (SkinEntry e : c.skins.values()) {
-            if (e.timed) timed++;
+            if (e.timing == SkinEntry.Timing.LEARNED) timed++;
             if (!e.animated()) continue;
             String[] hashes = new String[e.textures.length];
             for (int i = 0; i < hashes.length; i++) {

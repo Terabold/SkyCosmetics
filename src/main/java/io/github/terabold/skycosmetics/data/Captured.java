@@ -172,10 +172,13 @@ final class Captured {
     /**
      * Repo plus learned skins. The repo wins wherever it has the key: a learned
      * still is dropped once the repo lists the id, and a learned animation only
-     * replaces a repo entry that has no frames of its own. Learned frame timings
-     * ({@code timed}, may be null) then replace the timing of skins with as many frames.
+     * replaces a repo entry that has no frames of its own. Then frame timings
+     * replace the timing of skins with as many frames, each source over the one
+     * before (any may be null): blinks estimated from the frames ({@code guessed},
+     * only where the repo times every frame the same), timings shipped with the
+     * mod ({@code bundled}), and those measured in this game ({@code timed}).
      */
-    static Catalog compose(RepoParser.Parsed base, Captured cap, Timings timed) {
+    static Catalog compose(RepoParser.Parsed base, Captured cap, BlinkGuesser.Store guessed, Timings bundled, Timings timed) {
         Map<String, SkinEntry> skins = new LinkedHashMap<>(base.skins);
         int learned = 0;
         for (Map.Entry<String, Still> e : cap.stills.entrySet()) {
@@ -214,10 +217,14 @@ final class Captured {
                 entry = new SkinEntry(key, name, color, kind, frames, ticks, parent);
             }
             entry.learned = true;
+            entry.perFrame = a.ticksPerTexture != null;
             skins.put(key, entry);
             if (existing == null || !existing.learned) learned++;
         }
-        if (timed != null) timed.apply(skins);
+        // Weakest first, each replacing what came before: estimated blinks, shipped timings, then the player's own.
+        if (guessed != null) guessed.apply(skins);
+        if (bundled != null) bundled.apply(skins, SkinEntry.Timing.BUNDLED);
+        if (timed != null) timed.apply(skins, SkinEntry.Timing.LEARNED);
         return new Catalog(base.label, base.items, learned, skins, base.dyes, base.names, base.dyeOrder);
     }
 

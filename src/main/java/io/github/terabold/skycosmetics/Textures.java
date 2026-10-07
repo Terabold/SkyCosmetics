@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMultimap;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
+import io.github.terabold.skycosmetics.data.BlinkGuesser;
 import io.github.terabold.skycosmetics.data.SkinEntry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
@@ -67,7 +68,10 @@ public final class Textures {
         s.checkedAt = now;
         if (!s.future.isDone()) {
             IN_FLIGHT.incrementAndGet();
-            s.future.whenComplete((r, e) -> IN_FLIGHT.decrementAndGet());
+            s.future.whenComplete((r, e) -> {
+                IN_FLIGHT.decrementAndGet();
+                BlinkGuesser.nudge(); // the skin file is on disk now
+            });
         }
         return s.future.isDone() && loaded(s.future);
     }

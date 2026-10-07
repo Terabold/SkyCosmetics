@@ -34,7 +34,7 @@ import java.util.zip.ZipFile;
 
 /**
  * Keeps {@link #get()} on the newest complete NEU repo, plus skins and frame
- * timings learned in game.
+ * timings learned in game, timings shipped with the mod, and estimated blinks.
  *
  * Sources, best first: -Dskycosmetics.repo, Skyblocker's clone, Firmament's
  * extracted zip, our own zip, then leftovers of an uninstalled mod (see
@@ -87,9 +87,13 @@ public final class Repo {
     private static long lastPoll;
     private static Captured captured;
     private static Timings timings;
+    /** {@code assets/skycosmetics/timings.json}, read once. */
+    private static Timings bundled;
+    private static BlinkGuesser.Store guesses;
     /** What the next {@link #flush} has to save. */
     private static boolean capturedDirty;
     private static boolean timingsDirty;
+    private static boolean guessesDirty;
     private static String loadedVersion;
     private static ScheduledFuture<?> retry;
     private static int retries;
@@ -151,7 +155,16 @@ public final class Repo {
         if (b == null) return catalog;
         Captured c = Captured.fromJson(JsonParser.parseString(capturedJson).getAsJsonObject());
         c.trim(Looks.usedSkins());
-        return Captured.compose(b, c, null);
+        return Captured.compose(b, c, null, null, null);
+    }
+
+    /**
+     * For tests: the timings shipped with the mod are {@code json} instead (null: the real ones again), from the
+     * next reload on. The file format is the one of the learned timings.json.
+     */
+    public static void useBundledTimings(String json) {
+        EXEC.execute(() -> guarded(() -> bundled = json == null ? Timings.bundled()
+            : Timings.fromJson(JsonParser.parseString(json).getAsJsonObject())));
     }
 
     // ------------------------------------------------------------ signals ---
@@ -211,6 +224,8 @@ public final class Repo {
     private static void check(boolean force) {
         if (captured == null || force) captured = Captured.load();
         if (timings == null || force) timings = Timings.load(timings);
+        if (bundled == null) bundled = Timings.bundled();
+        if (guesses == null || force) guesses = BlinkGuesser.Store.load();
         List<RepoSource.Candidate> all = RepoSource.candidates();
         RepoSource.Candidate pick = null;
         RepoSource.Snapshot snap = null;
@@ -298,13 +313,14 @@ public final class Repo {
         return null;
     }
 
-    /** Repo plus captured.json and timings.json -> the live catalog. Repo thread only. */
+    /** Repo plus captured.json and every timing source -> the live catalog. Repo thread only. */
     private static void publish() {
         RepoParser.Parsed b = base;
         if (b == null) return;
-        Catalog c = Captured.compose(b, captured, timings);
+        Catalog c = Captured.compose(b, captured, guesses, bundled, timings);
         catalog = c;
         TimingLearner.index(c);
+        BlinkGuesser.index(c, guesses);
         Looks.bump();
     }
 
@@ -364,6 +380,19 @@ public final class Repo {
         }));
     }
 
+    /**
+     * What {@link BlinkGuesser} found for {@code id} with frames {@code sig}: blink ticks, or null for no blink.
+     * Saved and merged in a batch like learned timings.
+     */
+    static void guessTiming(String id, String sig, int[] ticks) {
+        EXEC.execute(() -> guarded(() -> {
+            if (guesses == null) guesses = BlinkGuesser.Store.load();
+            if (!guesses.put(id, sig, ticks, Looks.usedSkins())) return;
+            guessesDirty = true;
+            queue(null);
+        }));
+    }
+
     private static boolean mayLearn() {
         if (learnedThisSession < MAX_LEARNED_PER_SESSION) {
             learnedThisSession++;
@@ -388,7 +417,8 @@ public final class Repo {
         flushQueued = false;
         if (capturedDirty) captured.save();
         if (timingsDirty) timings.save();
-        capturedDirty = timingsDirty = false;
+        if (guessesDirty) guesses.save();
+        capturedDirty = timingsDirty = guessesDirty = false;
         publish();
         if (!TIMING_NEWS.isEmpty()) {
             say(TIMING_NEWS.size() == 1 ? TIMING_NEWS.getFirst() : Component.literal("Learned the animation timing of "
