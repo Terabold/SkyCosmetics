@@ -42,6 +42,12 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   (Custom Dye…, Custom Color…, Reset Name), and shorter search hints and messages.
 
 ### Changed
+- **Gradient names in one short code.** A gradient is now `&[#FF0000>#00FF00]` (2 to 8 colors) before the letters it
+  colors, instead of a code on every letter, so long names fit and stay readable in the name box, where the code shows
+  in its own colors. Bold, italic and other styles work inside it, and editing part of a gradient keeps the rest smooth.
+  Names saved with a code on every letter still work and show as one gradient code; so do letter-by-letter gradients
+  moved from other mods.
+- **Chroma names:** `&[chroma]` colors the letters after it in a moving rainbow.
 - **"Every item of this type" looks show only on your own items:** what you wear, hold and carry, your pet, your
   Wardrobe, Ender Chest and other menus of your own things, and items My Items remembers. Never on items in auction,
   bazaar, trade or shop menus, or on other players, so nobody sees a skin on an item they might buy. The "Looks on

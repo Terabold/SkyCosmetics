@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.gui;
 
+import io.github.terabold.skycosmetics.Cosmetics;
 import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
@@ -41,6 +42,7 @@ public final class TooltipPanel {
     private static final int WIDE_ICON = 150;
 
     private ItemStack stack;
+    private Component builtName;
     private int version = -1, wrap = -1, builtScale = -1;
     private boolean advanced;
     private Component title;
@@ -158,7 +160,9 @@ public final class TooltipPanel {
         boolean adv = mc.options.advancedItemTooltips;
         int v = Looks.version();
         int gs = Math.max(1, (int) Math.round(mc.getWindow().getGuiScale()));
-        if (s == stack && v == version && width == wrap && adv == advanced && gs == builtScale) return;
+        Component custom = Cosmetics.customName(s); // the same object until it changes; a moving name, once a tick
+        if (s == stack && v == version && width == wrap && adv == advanced && gs == builtScale && custom == builtName) return;
+        builtName = custom;
         stack = s;
         version = v;
         wrap = width;

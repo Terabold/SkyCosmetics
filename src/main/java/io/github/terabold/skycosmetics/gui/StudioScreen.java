@@ -306,6 +306,7 @@ public class StudioScreen extends Screen {
     /** The custom name in the summary, clipped once per name and width rather than every frame. */
     private String summaryNameRaw;
     private int summaryNameWidth;
+    private long summaryNameTick;
     private FormattedCharSequence summaryName;
 
     // Layout, recomputed in init().
@@ -1167,7 +1168,8 @@ public class StudioScreen extends Screen {
         nameBox = new NameBox(font, midX, y0 + NAME_HEAD, right - midX - infoW - 4, boxH);
         nameBox.setHint(Component.literal("Empty = original name").withColor(Theme.DIM & 0xFFFFFF));
         nameBox.setMaxLength(MAX_NAME);
-        nameBox.setValue(pendingName != null ? pendingName : l.name() != null ? l.name() : nameBaseline);
+        // A name saved with a code on every letter (an older gradient) shows as one gradient code.
+        nameBox.setValue(pendingName != null ? pendingName : l.name() != null ? Names.compact(l.name()) : nameBaseline);
         nameBox.setResponder(v -> {
             pendingName = v;
             pendingNameAt = Util.getMillis();
@@ -2084,9 +2086,11 @@ public class StudioScreen extends Screen {
 
     /** The custom name in its own colours and styles, cut to fit; rebuilt only when it or the width changes. */
     private FormattedCharSequence styledName(String raw, int px) {
-        if (!raw.equals(summaryNameRaw) || px != summaryNameWidth) {
+        boolean moved = summaryNameRaw != null && summaryNameTick != Names.liveTick() && Names.animated(raw);
+        if (!raw.equals(summaryNameRaw) || px != summaryNameWidth || moved) {
             summaryNameRaw = raw;
             summaryNameWidth = px;
+            summaryNameTick = Names.liveTick();
             summaryName = NameBox.fit(font, Names.parse(raw), px);
         }
         return summaryName;

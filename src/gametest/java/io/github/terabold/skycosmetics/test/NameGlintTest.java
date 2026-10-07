@@ -13,6 +13,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.StringDecomposer;
@@ -61,23 +62,48 @@ final class NameGlintTest {
         check("#FF55AA".equals(Names.colourAt("&6Big &#FF55AAAxe", 6)) && "#FFAA00".equals(Names.colourAt("&6Gold", 0))
             && Names.colourAt("Plain", 0) == null, "colourAt");
 
-        // Gradients: one code per letter, none for a space (it takes the next letter's colour), styles kept.
+        // Gradients: one &[...] code however long the selection, styles kept, the formatting after it restored.
         int[] redBlue = {0xFF0000, 0x0000FF};
-        gradient("Golden Axe", 0, 10, redBlue,
-            "&#FF0000G&#DF0020o&#BF0040l&#9F0060d&#800080e&#60009Fn&#4000BF A&#2000DFx&#0000FFe", 8, 82, "the whole name");
-        gradient("&6Big Golden Axe", 6, 12, redBlue,
-            "&6Big &#FF0000G&#CC0033o&#990066l&#660099d&#3300CCe&#0000FFn&6 Axe", 14, 60, "a middle word, gold around it");
-        gradient("&6&lGolden Axe", 4, 10, new int[]{0xFF0000, 0x00FF00},
-            "&#FF0000&lG&#CC3300&lo&#996600&ll&#669900&ld&#33CC00&le&#00FF00&ln&6&l Axe", 10, 66, "bold stays on every letter");
-        gradient("&cRe&9d", 0, 7, new int[]{0xFFFFFF, 0x000000}, "&#FFFFFFR&#808080e&#000000d", 8, 27,
+        gradient("Golden Axe", 0, 10, redBlue, "&[#FF0000>#0000FF]Golden Axe", 18, 28, "the whole name");
+        gradient("&6Big Golden Axe", 6, 12, redBlue, "&6Big &[#FF0000>#0000FF]Golden &6Axe", 24, 30,
+            "a middle word, gold around it");
+        gradient("&6&lGolden Axe", 4, 10, new int[]{0xFF0000, 0x00FF00}, "&[#FF0000>#00FF00]&lGolden &6&lAxe", 20, 26,
+            "bold stays on every letter");
+        gradient("&cRe&9d", 0, 7, new int[]{0xFFFFFF, 0x000000}, "&[#FFFFFF>#000000]Red", 18, 21,
             "codes inside the selection give way");
-        gradient("Big Axe", 0, 7, new int[]{0xFF5555, 0xFFAA00, 0x5555FF},
-            "&#FF5555B&#FF7733i&#FF9911g&#DD9933 A&#997799x&#5555FFe", 8, 55, "three colors");
+        gradient("Big Axe", 0, 7, new int[]{0xFF5555, 0xFFAA00, 0x5555FF}, "&[#FF5555>#FFAA00>#5555FF]Big Axe", 26, 33,
+            "three colors");
         String once = Names.gradient("Hyperion", 0, 8, redBlue).text();
-        check(Names.gradient(once, 0, once.length(), 0x00FF00, 0xFFFF00).text().length() == once.length(),
-            "a second gradient replaces the first one's codes");
+        check(Names.gradient(once, 0, once.length(), 0x00FF00, 0xFFFF00).text().equals("&[#00FF00>#FFFF00]Hyperion"),
+            "a second gradient replaces the first one");
         check(Names.gradient("Axe", 1, 1, redBlue).text().equals("Axe") && Names.gradient("A  B", 1, 3, redBlue).text()
             .equals("A  B"), "no letters selected: nothing changes");
+        // Drawn: evenly from the first colour to the last over the letters, a space as the letter after it.
+        List<String> drawn = letters(Names.parse("&[#FF0000>#0000FF]Hi yo&6!"));
+        check(drawn.equals(List.of("Hff0000", "iaa0055", " 5500aa", "y5500aa", "off", "!ffaa00")), "a gradient drawn: " + drawn);
+        // Edits inside a gradient keep it smooth; the letters left of a cut keep their colours.
+        String g = once + " Sword";
+        g = Names.gradient(g, 0, g.length(), redBlue).text();
+        check(g.equals("&[#FF0000>#0000FF]Hyperion Sword"), "one gradient over two words: " + g);
+        edit(g, 27, 32, "&l", "&[#FF0000>#0000FF]Hyperion &lSword", 29, 34, "bold inside a gradient adds only &l");
+        edit(g, 27, 32, "&c", "&[#FF0000>#6A0095]Hyperion &cSword", 29, 34, "a color cuts the gradient where it starts");
+        edit(g, 18, 26, "&l", "&[#FF0000>#6A0095]&lHyperion&[#5500AA>#0000FF] Sword", 20, 28,
+            "bold on the first word: the rest carries on");
+        // Names made before gradient codes: a code on every letter becomes one gradient code.
+        check(Names.compact("&#FF0000G&#DF0020o&#BF0040l&#9F0060d&#800080e&#60009Fn&#4000BF A&#2000DFx&#0000FFe")
+            .equals("&[#FF0000>#0000FF]Golden Axe"), "an old gradient compacts");
+        check(Names.compact("&#FF5555B&#FF7733i&#FF9911g&#DD9933 A&#997799x&#5555FFe").equals("&[#FF5555>#FFAA00>#5555FF]Big Axe"),
+            "an old three-color gradient compacts");
+        check(Names.compact("&6Big &lBold&6 Axe").equals("&6Big &lBold&6 Axe") && Names.compact("&#FF0000R&#00FF00G&#0000FFB")
+            .equals("&#FF0000R&#00FF00G&#0000FFB"), "names that are not gradients stay as they are");
+        MutableComponent rainbow = Component.empty();
+        for (int i = 0; i < 6; i++) rainbow.append(Component.literal("Rainbow".substring(i, i + 1)).withColor(Names.mix(redBlue, i / 5f)));
+        check(Names.toCodes(rainbow).equals("&[#FF0000>#0000FF]Rainbo"), "another mod's letter-by-letter gradient: " + Names.toCodes(rainbow));
+        check(Names.codeAt("&[#FF0000>#00FF00]x", 0) == 18 && Names.codeAt("&[chroma]x", 0) == 9 && Names.codeAt("&[#FF0000]x", 0) == 0
+            && Names.codeAt("&[#FF0000>#00FF0]x", 0) == 0 && Names.codeAt("&[#FF0000>#00FF00", 0) == 0, "gradient and chroma codes");
+        check(Names.format("Hyperion", 0, 8, Names.chroma()).text().equals("&[chroma]Hyperion") && Names.animated("&[chroma]Hi")
+            && !Names.animated("&[#FF0000>#00FF00]Hi"), "chroma");
+        check("#5500AA".equals(Names.colourAt(g, g.indexOf('S'))), "colourAt in a gradient: " + Names.colourAt(g, g.indexOf('S')));
 
         // Hypixel's name as codes: every letter keeps its colour and styles, and they end where the name ends them.
         Style plain = Style.EMPTY.withItalic(false);

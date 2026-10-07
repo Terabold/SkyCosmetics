@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.gui;
 
+import io.github.terabold.skycosmetics.Names;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -108,14 +109,20 @@ final class CodesTooltip implements ClientTooltipComponent {
         out.add(new Entry("&k", Component.literal("Magic ")
             .append(Component.literal("magic").withStyle(ChatFormatting.OBFUSCATED)), -1, false));
         out.add(style("r", "Plain", Style.EMPTY));
-        MutableComponent any = Component.empty();
-        String word = "any color";
-        for (int i = 0; i < word.length(); i++) {
-            any.append(Component.literal(String.valueOf(word.charAt(i)))
-                .withColor(Mth.hsvToRgb(i / (float) word.length(), 0.6f, 1f) & 0xFFFFFF));
-        }
+        MutableComponent any = spread("any color", i -> Mth.hsvToRgb(i, 0.6f, 1f) & 0xFFFFFF);
         out.add(new Entry("&#RRGGBB ", any, -1, false));
+        out.add(new Entry("&[#…>#…] ", spread("gradient", i -> Names.mix(new int[]{0xFF5FA8, 0xFFB13B}, i)), -1, false));
+        out.add(new Entry("&[chroma] ", spread("moving rainbow", i -> Mth.hsvToRgb(i, 0.6f, 1f) & 0xFFFFFF), -1, false));
         return List.copyOf(out);
+    }
+
+    /** {@code word} with each letter in {@code colour} of how far along the word it is (0 to 1). */
+    private static MutableComponent spread(String word, java.util.function.Function<Float, Integer> colour) {
+        MutableComponent out = Component.empty();
+        for (int i = 0; i < word.length(); i++) {
+            out.append(Component.literal(String.valueOf(word.charAt(i))).withColor(colour.apply(i / (float) word.length())));
+        }
+        return out;
     }
 
     private static Entry style(String code, String name, Style style) {

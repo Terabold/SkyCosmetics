@@ -81,6 +81,8 @@ public final class Cosmetics {
         /** Glint colour/speed, or null for Minecraft's own. */
         Glints.Style glintStyle;
         Component name;
+        /** The name as typed, when it moves (chroma): drawn from {@link Names#live}, once per tick. */
+        String liveName;
         int piece;
         ItemStack out;
         int outFrame = -2;
@@ -240,6 +242,7 @@ public final class Cosmetics {
             e.glint = "on".equals(look.glint()) ? Boolean.TRUE : "off".equals(look.glint()) ? Boolean.FALSE : null;
             e.glintStyle = e.glint == Boolean.FALSE ? null : Glints.style(look.glintColor(), look.glintSpeed(), look.glintStrength());
             e.name = look.name() != null ? Names.parse(look.name()) : null;
+            e.liveName = Names.animated(look.name()) ? look.name() : null;
             e.piece = pieceIndex(s);
             if (e.skin != null) Textures.preload(e.skin);
             return e;
@@ -308,7 +311,7 @@ public final class Cosmetics {
             if (raw instanceof Output) return null;
             Entry e = fresh(s, data, (Entry) raw, null);
             if (e != raw) cache.skycosmetics$entry(e);
-            return e.name;
+            return e.liveName != null ? Names.live(e.liveName) : e.name;
         } catch (RuntimeException ex) {
             Io.failed("Finding an item's custom name", ex);
             return null;

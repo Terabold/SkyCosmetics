@@ -18,9 +18,10 @@ import net.minecraft.util.Util;
 /**
  * The name field. Unfocused, it shows the name the way the game will:
  * colours and styles, no codes. Focused, it shows the raw text with every
- * {@code &} code tinted in the colour it sets, so the codes are easy to find
- * and the text stays readable (the letters keep the normal colour, and only
- * colour changes are used, so the cursor still lines up).
+ * {@code &} code tinted in the colour it sets (a gradient's code in its
+ * colours from end to end), so the codes are easy to find and the text stays
+ * readable (the letters keep the normal colour, and only colour changes are
+ * used, so the cursor still lines up).
  *
  * It also remembers the selection, which EditBox keeps to itself, so the
  * colour and style buttons can format just the selected letters.
@@ -36,6 +37,8 @@ public class NameBox extends TextField {
     private Style[] tints = new Style[0];
     private String styledFor;
     private int styledWidth;
+    private boolean styledLive;
+    private long styledTick;
     private FormattedCharSequence styled;
     /** Where the focusing click put the cursor, and when; -1 once used. */
     private int focusClick = -1;
@@ -136,12 +139,18 @@ public class NameBox extends TextField {
         if (isHovered()) g.requestCursor(CursorTypes.IBEAM);
     }
 
-    /** The name as the game shows it, cut with "..." to the box; rebuilt only when the text or width changes. */
+    /**
+     * The name as the game shows it, cut with "..." to the box; rebuilt only when the text or width changes,
+     * or once per tick while it moves (chroma).
+     */
     private FormattedCharSequence styled() {
         String v = getValue();
-        if (!v.equals(styledFor) || getInnerWidth() != styledWidth) {
+        long tick = styledLive ? Names.liveTick() : styledTick;
+        if (!v.equals(styledFor) || getInnerWidth() != styledWidth || tick != styledTick) {
             styledFor = v;
             styledWidth = getInnerWidth();
+            styledLive = Names.animated(v);
+            styledTick = Names.liveTick();
             styled = fit(font, Names.parse(v), styledWidth);
         }
         return styled;
@@ -181,9 +190,16 @@ public class NameBox extends TextField {
                 out[i++] = Style.EMPTY;
                 continue;
             }
+            int[] stops = Names.stopsAt(raw, i);
+            boolean chroma = Names.chromaAt(raw, i);
             int rgb = Names.codeColour(raw, i);
             Style s = Style.EMPTY.withColor(TextColor.fromRgb(rgb < 0 ? STYLE_CODE : readable(rgb)));
-            for (int j = i; j < i + n; j++) out[j] = s;
+            for (int j = i; j < i + n; j++) {
+                // A gradient's code shows its colours from end to end; chroma's, the rainbow.
+                float t = (j - i) / (float) Math.max(1, n - 1);
+                out[j] = stops != null ? Style.EMPTY.withColor(TextColor.fromRgb(readable(Names.mix(stops, t))))
+                    : chroma ? Style.EMPTY.withColor(TextColor.fromRgb(Mth.hsvToRgb(t * 0.85f, 0.6f, 1f) & 0xFFFFFF)) : s;
+            }
             i += n;
         }
         return out;
