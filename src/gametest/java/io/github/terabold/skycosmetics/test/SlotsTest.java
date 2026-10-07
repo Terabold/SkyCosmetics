@@ -599,17 +599,20 @@ public class SlotsTest implements FabricClientGameTest {
     /** Scrolls the settings list so a widget of this type (or, for null, the end) is in view. */
     private static void scrollTo(ClientGameTestContext ctx, Class<?> type) {
         ctx.runOnClient(mc -> {
-            AbstractScrollArea area = null;
-            for (GuiEventListener l : mc.screen.children()) if (l instanceof AbstractScrollArea a) area = a;
-            check(area != null, "the settings list scrolls");
+            check(mc.screen instanceof io.github.terabold.skycosmetics.gui.SettingsScreen, "the settings are open");
+            io.github.terabold.skycosmetics.gui.SettingsScreen ss = (io.github.terabold.skycosmetics.gui.SettingsScreen) mc.screen;
+            List<String> ids = ss.rowIds();
+            check(!ids.isEmpty(), "the settings list has rows");
             if (type == null) {
-                area.setScrollAmount(area.maxScrollAmount());
+                check(ss.scrollTo(ids.get(ids.size() - 1)), "the settings list scrolls to its end");
                 return;
             }
-            for (AbstractWidget w : widgets(mc.screen)) {
-                if (!type.isInstance(w)) continue;
-                area.setScrollAmount(Math.max(0, area.scrollAmount() + w.getY() - area.getY() - 40));
-                return;
+            for (String id : ids) {
+                AbstractWidget w = ss.widget(id);
+                if (w != null && type.isInstance(w)) {
+                    check(ss.scrollTo(id), "the settings list scrolls");
+                    return;
+                }
             }
             throw new AssertionError(TAG + "failed: no " + type.getSimpleName());
         });
@@ -667,6 +670,13 @@ public class SlotsTest implements FabricClientGameTest {
     private static List<AbstractWidget> widgets(GuiEventListener root) {
         List<AbstractWidget> out = new ArrayList<>();
         collect(root, out);
+        // The settings draw their rows' widgets themselves rather than as screen children.
+        if (root instanceof io.github.terabold.skycosmetics.gui.SettingsScreen ss) {
+            for (String id : ss.rowIds()) {
+                AbstractWidget w = ss.widget(id);
+                if (w != null && !out.contains(w)) out.add(w);
+            }
+        }
         return out;
     }
 
