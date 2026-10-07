@@ -30,19 +30,11 @@ public final class Settings {
     public static boolean worldReskin = true;
     /** Learn skins the repo does not have yet from items and Elizabeth previews. */
     public static boolean learnSkins = true;
-    /** My Items: show items from every SkyBlock profile, not only the current one. */
-    public static boolean allProfiles = false;
     /**
      * My Items also lists what menus you open showed (Wardrobe, Ender Chest, Backpacks...). Off: only what you
      * wear and carry; nothing more is learned and items.json stays as it is, so On brings them back.
      */
     public static boolean storedItems = true;
-    /**
-     * Other mods see your custom names through {@code getHoverName}. Off by default: many mods
-     * recognise items by their name, SkyCosmetics promises to leave Hypixel's item alone, and a mod
-     * that posts an item's name in chat (Odin's !holding reply) would post yours.
-     */
-    public static boolean namesInOtherMods = false;
     /** The studio's first-open tip about binding a key has been shown. */
     public static boolean keyTipShown = false;
 
@@ -56,9 +48,7 @@ public final class Settings {
         flag("brush", () -> brush, v -> brush = v);
         flag("worldReskin", () -> worldReskin, v -> worldReskin = v);
         flag("learnSkins", () -> learnSkins, v -> learnSkins = v);
-        flag("allProfiles", () -> allProfiles, v -> allProfiles = v);
         flag("storedItems", () -> storedItems, v -> storedItems = v);
-        flag("namesInOtherMods", () -> namesInOtherMods, v -> namesInOtherMods = v);
         flag("keyTipShown", () -> keyTipShown, v -> keyTipShown = v);
     }
 

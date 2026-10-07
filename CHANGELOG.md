@@ -46,6 +46,10 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   Wardrobe, Ender Chest and other menus of your own things, and items My Items remembers. Never on items in auction,
   bazaar, trade or shop menus, or on other players, so nobody sees a skin on an item they might buy. The "Looks on
   Other Players" setting is gone.
+- **My Items shows the current profile's items.** The "All Profiles" setting is gone; items stay remembered per
+  profile.
+- **Custom names stay in SkyCosmetics' tooltips and the held-item name.** The "Names in Other Mods" setting is gone:
+  other mods always read the original name.
 
 ### Fixed
 - **Blinks and flashes play at Hypixel's speed.** The item repo gives most animated skins one tick count for every

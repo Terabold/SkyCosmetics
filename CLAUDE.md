@@ -47,8 +47,8 @@ Package `io.github.terabold.skycosmetics`.
 - `LivingEntityRenderer.extractRenderState` `getItemBySlot`: head skull profile on entities.
 - `HumanoidMobRenderer.getEquipmentIfRenderable`: worn armor (dye tint).
 - `ItemStack.getStyledHoverName`: custom display names only.
-- `ItemStack.getHoverName`: the custom name too, only with the opt-in "Names in Other Mods".
-  SkyCosmetics' own code reads Hypixel's name with `Cosmetics.originalName`, never `getHoverName`.
+- `ItemStack.getHoverName` is never hooked: other mods always read Hypixel's name.
+  SkyCosmetics' own code reads it with `Cosmetics.originalName`, which no mod's hook changes.
 
 All of them call `Cosmetics`, which returns a cached copy (`StackCache` duck field on `ItemStack`), rebuilt only when
 the look, the stack's custom data, the animation frame or the dye color changes.
@@ -63,7 +63,7 @@ of the main buffer source, so they draw after the surface under them, like vanil
 1. **No packets, no clicks, no automation, no advantage.** Mixins and callbacks observe only; Fabric "allow"
    callbacks return `true` unless we consume our own key. This is what makes the mod safe on Hypixel.
 2. **Never modify the real ItemStack.** Only render copies. Other mods and the server must keep seeing Hypixel's item
-   (and `getHoverName`, unless the user turns on "Names in Other Mods").
+   (and its `getHoverName`).
 3. **No Steve flashes.** Only swap to a texture `Textures.ready()` reports loaded; hold the last good frame otherwise.
 4. **Nothing heavy per frame.** No JSON/NBT parsing, IO, sorting or entity scans in render paths; use the caches;
    config writes go through `Io`.

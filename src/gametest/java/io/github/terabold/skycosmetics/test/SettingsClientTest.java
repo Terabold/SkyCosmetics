@@ -21,14 +21,12 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AnvilScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -44,7 +42,7 @@ import java.util.Map;
 /**
  * Settings and data: the settings window at every GUI scale and in a small window (on screen, every control inside
  * the pane and only themed widgets, the list scrolls), the open-key box (bind, Esc, Backspace, conflicts, side mouse
- * button), "Names in Other Mods" against getHoverName and Cosmetics.originalName, and which menu titles My Items
+ * button), custom names against getHoverName and Cosmetics.originalName, and which menu titles My Items
  * learns from. Labels are read from the lang file, so rewording one never breaks a check.
  */
 public class SettingsClientTest implements FabricClientGameTest {
@@ -241,7 +239,7 @@ public class SettingsClientTest implements FabricClientGameTest {
         System.out.println("[SkyCosmeticsTest] open-key button checks passed");
     }
 
-    /** getHoverName shows your name to other mods only with the setting on; SkyCosmetics still reads Hypixel's. */
+    /** Tooltips show your name; getHoverName and Cosmetics.originalName always keep Hypixel's, for other mods too. */
     private static void names(ClientGameTestContext ctx, TestSingleplayerContext sp) {
         sp.getServer().runCommand("item replace entity @a hotbar.6 with minecraft:diamond_sword[minecraft:custom_data="
             + "{id:\"HYPERION\",uuid:\"t-shared\"},minecraft:custom_name=\"Hyperion\"]");
@@ -255,37 +253,18 @@ public class SettingsClientTest implements FabricClientGameTest {
         ctx.waitTicks(2);
         ctx.runOnClient(mc -> {
             ItemStack sword = mc.player.getInventory().getItem(6), pet = mc.player.getInventory().getItem(7);
-            boolean was = Settings.namesInOtherMods;
             try {
-                Settings.namesInOtherMods = false;
-                check(sword.getHoverName().getString().equals("Hyperion"), "off: other mods read Hypixel's name");
+                check(sword.getHoverName().getString().equals("Hyperion"), "other mods read Hypixel's name");
                 check(sword.getStyledHoverName().getString().equals("Sharp Blade"), "tooltips show your name");
-
-                Settings.namesInOtherMods = true;
-                String shared = sword.getHoverName().getString();
-                System.out.println("[SkyCosmeticsTest] names in other mods on: getHoverName='" + shared
-                    + "', originalName='" + Cosmetics.originalName(sword).getString() + "'");
-                check(shared.equals("Sharp Blade"), "on: other mods read your name");
-                check(Cosmetics.originalName(sword).getString().equals("Hyperion"), "SkyCosmetics still reads Hypixel's name");
+                check(Cosmetics.originalName(sword).getString().equals("Hyperion"), "SkyCosmetics reads Hypixel's name");
                 check(pet.getHoverName().getString().equals("[Lvl 100] Golden Dragon"), "pets keep Hypixel's name");
                 check(pet.getStyledHoverName().getString().equals("Draggy"), "the pet's tooltip shows your name");
-                String[] other = new String[1];
-                Thread t = new Thread(() -> other[0] = sword.getHoverName().getString());
-                t.start();
-                t.join();
-                check("Hyperion".equals(other[0]), "other threads read Hypixel's name: " + other[0]);
-                mc.setScreen(new AnvilScreen(new AnvilMenu(101, mc.player.getInventory()), mc.player.getInventory(), Component.literal("Repair")));
-                check(sword.getHoverName().getString().equals("Hyperion"), "a vanilla anvil gets Hypixel's name (no rename sent)");
-                mc.setScreen(null);
-            } catch (InterruptedException e) {
-                throw new AssertionError(e);
             } finally {
-                Settings.namesInOtherMods = was;
                 Looks.put(false, "t-shared", null);
                 Looks.put(false, "t-shared-pet", null);
             }
         });
-        System.out.println("[SkyCosmeticsTest] shared name checks passed");
+        System.out.println("[SkyCosmeticsTest] name checks passed");
     }
 
     /** My Items learns from a menu titled like Hypixel's wardrobe, never from one titled like the auction house. */

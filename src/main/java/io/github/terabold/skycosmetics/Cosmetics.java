@@ -14,7 +14,6 @@ import io.github.terabold.skycosmetics.mixin.CustomDataAccessor;
 import io.github.terabold.skycosmetics.pet.WorldPet;
 import io.github.terabold.skycosmetics.render.Glints;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.inventory.AnvilScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -284,11 +283,9 @@ public final class Cosmetics {
     }
 
     /**
-     * Hypixel's name for this stack, never the custom one. SkyCosmetics' own
-     * code must use this instead of {@code getHoverName}, which returns the
-     * custom name when "Show my names in other mods" is on. Same as vanilla
+     * Hypixel's name for this stack, never the custom one. Same as vanilla
      * {@code getHoverName}, read straight from the item so no mod's hook on it
-     * (ours, Skyblocker's custom names...) changes the answer.
+     * (Skyblocker's custom names...) changes the answer.
      */
     public static Component originalName(ItemStack s) {
         Component custom = s.getCustomName();
@@ -297,9 +294,9 @@ public final class Cosmetics {
 
     /**
      * Your custom name for this stack, or null. {@code getStyledHoverName}
-     * (tooltips, held-item name) asks for it, and {@code getHoverName} too when
-     * "Show my names in other mods" is on (see {@link #sharedName}). An "every
-     * item" name only on your own items, decided the same way as when it is drawn.
+     * (tooltips, held-item name) asks for it; {@code getHoverName} never does,
+     * so other mods keep reading Hypixel's name. An "every item" name only on
+     * your own items, decided the same way as when it is drawn.
      */
     public static Component customName(ItemStack s) {
         try {
@@ -314,26 +311,6 @@ public final class Cosmetics {
             return e.name;
         } catch (RuntimeException ex) {
             Io.failed("Finding an item's custom name", ex);
-            return null;
-        }
-    }
-
-    /**
-     * The custom name {@code getHoverName} returns for other mods, or null to keep Hypixel's.
-     * Only on the client thread (the integrated server and other mods' worker threads keep
-     * Hypixel's name), never while a vanilla anvil is open (its rename box would send the name
-     * to the server), and never for pets, whose "[Lvl 100] Name" other mods parse.
-     */
-    public static Component sharedName(ItemStack s) {
-        try {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc == null || !mc.isSameThread() || mc.screen instanceof AnvilScreen) return null;
-            Component name = customName(s);
-            if (name == null) return null;
-            CompoundTag t = ((CustomDataAccessor) (Object) s.get(DataComponents.CUSTOM_DATA)).skycosmetics$tag();
-            return "PET".equals(t.getStringOr("id", "")) ? null : name;
-        } catch (RuntimeException ex) {
-            Io.failed("Sharing an item's custom name", ex);
             return null;
         }
     }

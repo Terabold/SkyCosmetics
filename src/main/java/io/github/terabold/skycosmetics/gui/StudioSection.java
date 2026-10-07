@@ -52,14 +52,9 @@ public final class StudioSection {
             Settings.storedItems = v;
             OwnedItems.refresh();
         }).search(Component.translatable("skycosmetics.option.storedItems.search").getString()));
-        rows.add(toggle("allProfiles", () -> Settings.allProfiles, v -> {
-            Settings.allProfiles = v;
-            OwnedItems.refresh();
-        }).enabledWhen(() -> Settings.storedItems));
 
         rows.add(Option.header("groupWhereLooksShow", Component.translatable("skycosmetics.menu.group.whereLooksShow")));
         rows.add(toggle("worldReskin", () -> Settings.worldReskin, v -> Settings.worldReskin = v));
-        rows.add(toggle("namesInOtherMods", () -> Settings.namesInOtherMods, v -> Settings.namesInOtherMods = v));
         return rows;
     }
 

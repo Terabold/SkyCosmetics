@@ -173,7 +173,7 @@ public final class OwnedItems {
     }
 
     /**
-     * Your items on the current profile (or all profiles, per settings), grouped by category then name. None
+     * Your items on the current profile (all of them until Hypixel names it), grouped by category then name. None
      * while Stored Items is off: the studio then lists only what you wear and carry.
      */
     public static List<Owned> list() {
@@ -182,8 +182,7 @@ public final class OwnedItems {
             String profile = Profiles.current();
             List<Owned> out = new ArrayList<>();
             for (Owned o : ITEMS.values()) {
-                if (io.github.terabold.skycosmetics.Settings.allProfiles || profile == null || o.profile == null
-                    || o.profile.equals(profile)) out.add(o);
+                if (profile == null || o.profile == null || o.profile.equals(profile)) out.add(o);
             }
             out.sort(Comparator.comparing((Owned o) -> o.category)
                 .thenComparing(Owned::sortName, String.CASE_INSENSITIVE_ORDER));

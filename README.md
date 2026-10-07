@@ -21,7 +21,7 @@ clicks nothing, and other players see Hypixel's items as usual.
   Animated dyes ripple from boots to helmet like on Hypixel. Armor Hypixel makes from iron (Helianthus...) is shown as
   dyed leather so the color always shows.
 - **Names.** Rename items with color codes (`&6Golden &lBlade`), a color picker, or a one-click gradient (Rainbow,
-  Fire, Ocean...). Display only: other mods still see Hypixel's real name unless you turn on "Names in Other Mods".
+  Fire, Ocean...). Display only: other mods still see Hypixel's real name.
 - **Glint.** Turn the enchant glint on or off per item, and give it any color, speed and strength.
 - **Pets and power orbs in the world.** Your summoned pet and your deployed power orb wear the skin you picked:
   Hypixel's own entity, reskinned. Nothing extra is spawned.
