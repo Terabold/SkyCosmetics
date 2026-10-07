@@ -47,6 +47,13 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   bazaar, trade or shop menus, or on other players, so nobody sees a skin on an item they might buy. The "Looks on
   Other Players" setting is gone.
 
+### Fixed
+- **Blinks and flashes play at Hypixel's speed.** The item repo gives most animated skins one tick count for every
+  frame, so a blink lasted as long as an open eye. SkyCosmetics now times each frame from the heads Hypixel animates
+  around you (your own items, other players, pets and orbs) and keeps the timing in `timings.json`. **Learn Animation
+  Timing** in the settings turns it off; `/skycosmetics debug` shows what was learned.
+- A blink frame is no longer skipped the first time an animated skin is drawn again after minutes out of view.
+
 ## 1.4.0-beta — unreleased
 
 ### Renamed: Skin Studio is now SkyCosmetics

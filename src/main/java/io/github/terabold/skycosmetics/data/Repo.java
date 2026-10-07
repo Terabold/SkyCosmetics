@@ -33,7 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipFile;
 
 /**
- * Keeps {@link #get()} on the newest complete NEU repo, plus skins learned in game.
+ * Keeps {@link #get()} on the newest complete NEU repo, plus skins and frame
+ * timings learned in game.
  *
  * Sources, best first: -Dskycosmetics.repo, Skyblocker's clone, Firmament's
  * extracted zip, our own zip, then leftovers of an uninstalled mod (see
@@ -85,6 +86,10 @@ public final class Repo {
     private static long startedAt;
     private static long lastPoll;
     private static Captured captured;
+    private static Timings timings;
+    /** What the next {@link #flush} has to save. */
+    private static boolean capturedDirty;
+    private static boolean timingsDirty;
     private static String loadedVersion;
     private static ScheduledFuture<?> retry;
     private static int retries;
@@ -93,6 +98,8 @@ public final class Repo {
     private static long lastDownloadTry;
     private static boolean flushQueued;
     private static final List<Component> NEWS = new ArrayList<>();
+    /** Learned timings of skins a look wears, said in their own line. */
+    private static final List<Component> TIMING_NEWS = new ArrayList<>();
     /** New skins learned per game session, so a server showing made-up skins cannot push out real ones. */
     private static final int MAX_LEARNED_PER_SESSION = 200;
     private static int learnedThisSession;
@@ -144,7 +151,7 @@ public final class Repo {
         if (b == null) return catalog;
         Captured c = Captured.fromJson(JsonParser.parseString(capturedJson).getAsJsonObject());
         c.trim(Looks.usedSkins());
-        return Captured.compose(b, c);
+        return Captured.compose(b, c, null);
     }
 
     // ------------------------------------------------------------ signals ---
@@ -203,6 +210,7 @@ public final class Repo {
 
     private static void check(boolean force) {
         if (captured == null || force) captured = Captured.load();
+        if (timings == null || force) timings = Timings.load(timings);
         List<RepoSource.Candidate> all = RepoSource.candidates();
         RepoSource.Candidate pick = null;
         RepoSource.Snapshot snap = null;
@@ -271,8 +279,8 @@ public final class Repo {
         FAILURES.clear();
         publish();
         Catalog c = catalog;
-        SkyCosmetics.LOG.info("{} in {} ms: {} items, {} skins ({} animated in lore without frames), {} dyes, {} learned",
-            label, ms, parsed.items, c.skins.size(), parsed.missingFrames, c.dyes.size(), c.learned);
+        SkyCosmetics.LOG.info("{} in {} ms: {} items, {} skins ({} animated in lore without frames), {} dyes, {} learned, {} timed",
+            label, ms, parsed.items, c.skins.size(), parsed.missingFrames, c.dyes.size(), c.learned, TimingLearner.timedSkins());
     }
 
     /** Counts a failed parse of {@code snap}; returns the failures so far for it. */
@@ -290,11 +298,13 @@ public final class Repo {
         return null;
     }
 
-    /** Repo plus captured.json -> the live catalog. Repo thread only. */
+    /** Repo plus captured.json and timings.json -> the live catalog. Repo thread only. */
     private static void publish() {
         RepoParser.Parsed b = base;
         if (b == null) return;
-        catalog = Captured.compose(b, captured);
+        Catalog c = Captured.compose(b, captured, timings);
+        catalog = c;
+        TimingLearner.index(c);
         Looks.bump();
     }
 
@@ -313,6 +323,7 @@ public final class Repo {
             if (!mayLearn()) return;
             captured.stills.put(id, still);
             captured.trim(Looks.usedSkins());
+            capturedDirty = true;
             queue(news);
         }));
     }
@@ -331,7 +342,25 @@ public final class Repo {
             if (anim.textures().length > Captured.MAX_FRAMES || !mayLearn()) return;
             captured.anims.put(key, anim);
             captured.trim(Looks.usedSkins());
+            capturedDirty = true;
             queue(news);
+        }));
+    }
+
+    /**
+     * Frame timings measured in game for {@code id} (see {@link TimingLearner}), kept while the live skin still
+     * has exactly these {@code textures}. Saved and merged in a batch like learned skins; {@code news} (may be
+     * null) is said once they are live.
+     */
+    static void learnTiming(String id, String[] textures, int[] ticks, Component news) {
+        EXEC.execute(() -> guarded(() -> {
+            if (timings == null) timings = Timings.load(null);
+            SkinEntry live = catalog.skins.get(id);
+            if (live == null || !java.util.Arrays.equals(live.textures, textures)) return;
+            if (!timings.put(id, ticks, Looks.usedSkins())) return;
+            timingsDirty = true;
+            if (news != null) TIMING_NEWS.add(news);
+            queue(null);
         }));
     }
 
@@ -357,8 +386,15 @@ public final class Repo {
     /** Saves, publishes, and says what was learned in one chat line: the skin itself, or how many. */
     private static void flush() {
         flushQueued = false;
-        captured.save();
+        if (capturedDirty) captured.save();
+        if (timingsDirty) timings.save();
+        capturedDirty = timingsDirty = false;
         publish();
+        if (!TIMING_NEWS.isEmpty()) {
+            say(TIMING_NEWS.size() == 1 ? TIMING_NEWS.getFirst() : Component.literal("Learned the animation timing of "
+                + Names.count(TIMING_NEWS.size(), "skin") + " you use").withStyle(ChatFormatting.GRAY));
+            TIMING_NEWS.clear();
+        }
         int count = NEWS.size() + unannounced;
         if (count == 0) return;
         Component line = count == 1 && NEWS.size() == 1 ? NEWS.getFirst()
@@ -372,6 +408,10 @@ public final class Repo {
         NEWS_AT[newsSlot] = now;
         newsSlot = (newsSlot + 1) % NEWS_PER_MINUTE;
         unannounced = 0;
+        say(line);
+    }
+
+    private static void say(Component line) {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
             if (mc.player != null) mc.player.sendSystemMessage(SkyCosmetics.prefix().append(line));

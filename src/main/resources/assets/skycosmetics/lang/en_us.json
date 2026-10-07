@@ -47,6 +47,8 @@
   "skycosmetics.option.inventoryButton.tooltip": "Shows a brush on your player in the inventory that opens the studio.",
   "skycosmetics.option.learnSkins": "Learn New Skins",
   "skycosmetics.option.learnSkins.tooltip": "Remembers skins the item repo doesn't have yet, like new shop previews.",
+  "skycosmetics.option.learnTiming": "Learn Animation Timing",
+  "skycosmetics.option.learnTiming.tooltip": "Copies how fast animated skins really play in game, so blinks and flashes look right.",
   "skycosmetics.option.storedItems": "Stored Items",
   "skycosmetics.option.storedItems.tooltip": "Lists items from menus you open, like your Wardrobe, Ender Chest and Backpacks. Off: only what you wear and carry.",
   "skycosmetics.option.storedItems.search": "wardrobe ender chest backpack vault auto fill fetch",

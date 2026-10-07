@@ -57,6 +57,7 @@ public final class SkinLearner {
             ticks++;
             PreviewRecorder.tick(mc);
         });
+        TimingLearner.init();
         ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
             if (!(screen instanceof AbstractContainerScreen<?> acs)) return;
             ScreenMouseEvents.beforeMouseClick(screen).register((s, click) -> {

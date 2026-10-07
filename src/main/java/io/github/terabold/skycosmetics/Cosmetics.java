@@ -161,6 +161,7 @@ public final class Cosmetics {
 
         int frame = -1;
         if (e.skin != null) {
+            Textures.keepWarm(e.skin);
             int want = e.skin.frameAt(tick);
             if (Textures.ready(e.skin.textures[want])) {
                 frame = want;

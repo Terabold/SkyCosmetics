@@ -11,7 +11,8 @@ import java.util.Locale;
  * One selectable head look: a single texture, or an animation of several.
  *
  * Every Hypixel skull in the repo becomes one of these. Animated skins keep all
- * their frames and the per-frame tick count from {@code animatedskulls.json}, so
+ * their frames and the per-frame tick count from {@code animatedskulls.json} (or
+ * the timing {@link TimingLearner} measured in game, where the two differ), so
  * they cycle at the same speed as on Hypixel.
  */
 public final class SkinEntry {
@@ -43,6 +44,8 @@ public final class SkinEntry {
     public boolean missingFrames;
     /** Learned in game ({@code captured.json}) rather than read from the repo. */
     public boolean learned;
+    /** {@link #frameTicks} were measured in game ({@code timings.json}) rather than read from the repo. */
+    public boolean timed;
     /** Helmet unless the lore says power orbs, backpacks, or nothing you wear (minion and barn skins). */
     public Use use = Use.HELMET;
 
@@ -50,6 +53,9 @@ public final class SkinEntry {
     public static final int MAX_FRAME_TICKS = 72_000;
 
     private ItemStack[] icons;
+    /** When {@link Textures#keepWarm} last went over every frame ({@link System#nanoTime}); render thread only. */
+    private long warmedAt;
+    private boolean warmed;
 
     public static SkinEntry still(String id, String name, int color, Kind kind, String texture, String parent) {
         return new SkinEntry(id, name, color, kind, new String[]{texture}, new int[]{1}, parent);
@@ -69,6 +75,29 @@ public final class SkinEntry {
         // "animated" finds every animated skin, now that the grid has no Animated filter.
         this.searchKey = (name + " " + id.replace('_', ' ') + (textures.length > 1 ? " animated" : ""))
             .toLowerCase(Locale.ROOT);
+    }
+
+    /** This skin with other frame timings, everything else the same. */
+    SkinEntry withTicks(int[] ticks) {
+        SkinEntry e = new SkinEntry(id, name, color, kind, textures, ticks, parent);
+        e.listed = listed;
+        e.missingFrames = missingFrames;
+        e.learned = learned;
+        e.use = use;
+        return e;
+    }
+
+    /** One full cycle in ticks. */
+    public long cycle() {
+        return cycle;
+    }
+
+    /** True at most once per {@code everyNs}: time for {@link Textures#keepWarm} to look at every frame again. */
+    public boolean warmDue(long nowNs, long everyNs) {
+        if (warmed && nowNs - warmedAt < everyNs) return false;
+        warmed = true;
+        warmedAt = nowNs;
+        return true;
     }
 
     public boolean animated() {

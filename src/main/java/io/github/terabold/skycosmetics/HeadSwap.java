@@ -81,6 +81,7 @@ public final class HeadSwap {
 
     /** {@code stack} wearing {@code e}'s current frame, or null while no frame is loaded yet. */
     private ItemStack swap(SkinEntry e, ItemStack stack) {
+        Textures.keepWarm(e);
         int want = e.frameAt(Util.getMillis() / 50);
         int f;
         if (Textures.ready(e.textures[want])) {

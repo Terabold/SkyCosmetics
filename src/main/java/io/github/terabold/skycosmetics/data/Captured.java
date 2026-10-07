@@ -172,9 +172,10 @@ final class Captured {
     /**
      * Repo plus learned skins. The repo wins wherever it has the key: a learned
      * still is dropped once the repo lists the id, and a learned animation only
-     * replaces a repo entry that has no frames of its own.
+     * replaces a repo entry that has no frames of its own. Learned frame timings
+     * ({@code timed}, may be null) then replace the timing of skins with as many frames.
      */
-    static Catalog compose(RepoParser.Parsed base, Captured cap) {
+    static Catalog compose(RepoParser.Parsed base, Captured cap, Timings timed) {
         Map<String, SkinEntry> skins = new LinkedHashMap<>(base.skins);
         int learned = 0;
         for (Map.Entry<String, Still> e : cap.stills.entrySet()) {
@@ -216,6 +217,7 @@ final class Captured {
             skins.put(key, entry);
             if (existing == null || !existing.learned) learned++;
         }
+        if (timed != null) timed.apply(skins);
         return new Catalog(base.label, base.items, learned, skins, base.dyes, base.names, base.dyeOrder);
     }
 
