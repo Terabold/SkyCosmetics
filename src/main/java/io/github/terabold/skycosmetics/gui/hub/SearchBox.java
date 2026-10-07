@@ -11,9 +11,9 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
- * The settings' search field: vanilla's text box (typing, selection, copy and paste, narration) drawn as a rounded
- * field with a magnifier, and an x that clears it once something is typed. The text sits inset in the field, so
- * clicks are moved by the same inset before the text box places its cursor.
+ * A search field, in the settings and the studio: vanilla's text box (typing, selection, copy and paste, narration)
+ * drawn as a rounded field with a magnifier, and an x that clears it once something is typed. The text sits inset in
+ * the field, so clicks are moved by the same inset before the text box places its cursor.
  */
 public final class SearchBox extends EditBox {
     public static final int H = 16;
@@ -21,8 +21,14 @@ public final class SearchBox extends EditBox {
     private final Anim hover = new Anim(90, 0);
     private final Anim focus = new Anim(120, 0);
 
+    /** The settings' search: named "Search settings". */
     public SearchBox(Font font, int width, Component hint) {
-        super(font, 0, 0, width, H, Component.translatable("skycosmetics.menu.search"));
+        this(font, width, H, Component.translatable("skycosmetics.menu.search"), hint);
+    }
+
+    /** @param name what the field is called (narration, tests); the hint is the gray text while it is empty */
+    public SearchBox(Font font, int width, int height, Component name, Component hint) {
+        super(font, 0, 0, width, height, name);
         setBordered(false);
         setMaxLength(64);
         setTextColor(Theme.TEXT);
@@ -40,8 +46,9 @@ public final class SearchBox extends EditBox {
     public void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
         float hv = hover.to(isHovered() ? 1 : 0), f = focus.to(isFocused() ? 1 : 0);
-        Shapes.round(g, x, y, w, h, Theme.SMALL_RADIUS + 1, Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hv * (1 - f)));
-        Shapes.frame(g, x, y, w, h, Theme.SMALL_RADIUS + 1, Theme.mix(Theme.mix(Theme.LINE, Theme.MUTED, hv * 0.5f), Theme.ACCENT, f));
+        int r = Math.min(Theme.SMALL_RADIUS + 1, h / 2);
+        Shapes.round(g, x, y, w, h, r, Theme.mix(Theme.SURFACE, Theme.SURFACE_HOVER, hv * (1 - f)));
+        Shapes.frame(g, x, y, w, h, r, Theme.mix(Theme.mix(Theme.LINE, Theme.MUTED, hv * 0.5f), Theme.ACCENT, f));
         Ui.magnifier(g, x + 5, y + (h - 9) / 2, Theme.mix(Theme.MUTED, Theme.ACCENT, f));
         g.pose().pushMatrix();
         g.pose().translate(TEXT_X, (h - 8) / 2f);

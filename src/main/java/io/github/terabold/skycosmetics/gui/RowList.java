@@ -1,6 +1,9 @@
 package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Io;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
@@ -37,8 +40,8 @@ abstract class RowList {
         }
     }
 
-    static final int TEXT = 0xFFE8E8EE, MUTED = 0xFF8C8C9A, ACCENT = 0xFFD58CFF, LINE = 0xFF34343F;
-    static final int HOVER = 0x30FFFFFF, RED = 0xFFFF6666;
+    static final int TEXT = Theme.TEXT, MUTED = Theme.MUTED, LINE = Theme.LINE;
+    static final int RED = 0xFFFF6666;
     /** The big remove button on a row, and the small one on a part. */
     static final int X_BIG = 16, X_SMALL = 11;
 
@@ -123,7 +126,7 @@ abstract class RowList {
             int lh = l.height();
             if (ly + lh > y && ly < y + h) {
                 boolean over = inside && mouseY >= ly && mouseY < ly + lh && mouseX < x + rw;
-                if (over && l.hoverable()) g.fill(x, ly, x + rw, ly + lh, HOVER);
+                if (over && l.hoverable()) Shapes.round(g, x, ly, rw, lh, Theme.SMALL_RADIUS, Theme.SURFACE);
                 try {
                     l.draw(g, x, ly, rw, inside ? mouseX : -10000, inside ? mouseY : -10000, tick);
                 } catch (RuntimeException e) {
@@ -141,8 +144,8 @@ abstract class RowList {
         if (bar > 0) {
             int thumb = Math.max(12, h * h / total);
             int ty = y + (h - thumb) * scroll / Math.max(1, total - h);
-            g.fill(x + w - 2, y, x + w, y + h, 0x30FFFFFF);
-            g.fill(x + w - 2, ty, x + w, ty + thumb, 0x80FFFFFF);
+            boolean overBar = mouseX >= x + w - 5 && mouseX < x + w && mouseY >= y && mouseY < y + h;
+            scrollbar(g, x + w - 3, y, h, ty, thumb, overBar);
         }
         if (hovered != null) {
             try {
@@ -186,16 +189,19 @@ abstract class RowList {
 
     // ------------------------------------------------------------ helpers ---
 
-    /** A remove button: a dark red box with a ×; brighter under the mouse. */
+    /** A remove button: a dark red rounded box with an x; brighter under the mouse. */
     static void drawX(GuiGraphicsExtractor g, Font font, int x, int y, int size, boolean over) {
-        g.fill(x, y, x + size, y + size, over ? 0xFF8A3344 : 0xFF3A2228);
-        g.outline(x, y, size, size, over ? 0xFFFF8899 : 0xFF6A3A44);
-        g.pose().pushMatrix();
-        float s = size >= 14 ? 1.5f : 1f;
-        g.pose().translate(x + size / 2f, y + size / 2f);
-        g.pose().scale(s, s);
-        g.centeredText(font, "×", 0, -4, over ? 0xFFFFFFFF : 0xFFFFC0C8);
-        g.pose().popMatrix();
+        int r = Math.min(Theme.SMALL_RADIUS, size / 2);
+        Shapes.round(g, x, y, size, size, r, over ? Theme.DANGER_HOVER : Theme.DANGER);
+        Shapes.frame(g, x, y, size, size, r, over ? Theme.WARN : Theme.DANGER_LINE);
+        int c = size >= 14 ? 6 : 4;
+        Ui.cross(g, x + (size - c) / 2, y + (size - c) / 2, c, over ? 0xFFFFFFFF : 0xFFFFC0C8);
+    }
+
+    /** A slim rounded scrollbar: its track, and the thumb, which takes the accent under the mouse. */
+    static void scrollbar(GuiGraphicsExtractor g, int x, int top, int h, int thumbY, int thumbH, boolean over) {
+        Shapes.round(g, x, top, 3, h, 1, Theme.fade(Theme.SURFACE, over ? 1 : 0.6f));
+        Shapes.round(g, x, thumbY, 3, thumbH, 1, over ? Theme.ACCENT : Theme.DIM);
     }
 
     /** A small triangle: pointing down when {@code open}, else right. */
@@ -235,9 +241,9 @@ abstract class RowList {
 
         @Override
         public void draw(GuiGraphicsExtractor g, int x, int y, int w, int mouseX, int mouseY, long tick) {
-            g.text(font, title, x + 3, y + 4, ACCENT);
+            g.text(font, title, x + 3, y + 4, Theme.ACCENT);
             if (!count.isEmpty()) g.text(font, count, x + 3 + font.width(title) + 5, y + 4, MUTED);
-            g.fill(x + 2, y + 14, x + w - 2, y + 15, LINE);
+            g.fill(x + 2, y + 14, x + w - 2, y + 15, Theme.LINE_SOFT);
         }
 
         @Override

@@ -1,6 +1,8 @@
 package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Looks;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -102,8 +104,8 @@ public final class TooltipPanel {
         if (fit > 0 && fit < lore.size()) {
             int thumb = Math.max(6, loreH * fit / lore.size());
             int ty = loreY + (loreH - thumb) * scroll / (lore.size() - fit);
-            g.fill(cx + cw, loreY, cx + cw + 2, loreY + loreH, 0x40FFFFFF);
-            g.fill(cx + cw, ty, cx + cw + 2, ty + thumb, 0xC0FFFFFF);
+            Shapes.round(g, cx + cw, loreY, 2, loreH, 1, 0x40FFFFFF);
+            Shapes.round(g, cx + cw, ty, 2, thumb, 1, Theme.ACCENT);
         }
         return ch + 2 * FRAME;
     }

@@ -1,6 +1,7 @@
 package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.compat.OtherLooks.Change;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -68,9 +69,9 @@ final class OtherChip extends AbstractWidget {
     protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         int col = change.source().color();
         boolean over = isHoveredOrFocused() && change.live();
-        g.fill(getX(), getY(), getRight(), getBottom(), (col & 0x00FFFFFF) | (over ? 0x90000000 : 0x50000000));
-        g.outline(getX(), getY(), getWidth(), getHeight(), col);
-        g.text(font, label(), getX() + 4, getY() + 2, change.live() ? 0xFFFFFFFF : 0xFFB0B0B8);
+        Shapes.round(g, getX(), getY(), getWidth(), getHeight(), 3, (col & 0x00FFFFFF) | (over ? 0x90000000 : 0x50000000));
+        Shapes.frame(g, getX(), getY(), getWidth(), getHeight(), 3, col);
+        g.text(font, label(), getX() + 4, getY() + 2, change.live() ? 0xFFFFFFFF : 0xFFB0B0B8, false);
     }
 
     /** The label, cut with "…" when the chip is narrower than it; worked out once per width. */

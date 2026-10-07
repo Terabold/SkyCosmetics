@@ -96,6 +96,27 @@ public final class Shapes {
         gradient(g, x + r, y, x + w - r, y + h, left, right);
     }
 
+    /**
+     * A rounded rectangle through several colors, evenly spaced from left to right (opaque RGB or ARGB): rounded ends
+     * in the first and last color, a ramp between each neighboring pair. A few draws, whatever the width.
+     */
+    public static void roundStops(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, int[] stops) {
+        if (w <= 0 || h <= 0 || stops.length == 0) return;
+        int n = stops.length;
+        if (n == 1) {
+            round(g, x, y, w, h, r, 0xFF000000 | stops[0]);
+            return;
+        }
+        r = Math.min(r, Math.min(w, h) / 2);
+        round(g, x, y, 2 * r + 1, h, r, 0xFF000000 | stops[0]);
+        round(g, x + w - 2 * r - 1, y, 2 * r + 1, h, r, 0xFF000000 | stops[n - 1]);
+        int x0 = x + r, span = w - 2 * r;
+        for (int i = 0; i < n - 1; i++) {
+            int a = x0 + span * i / (n - 1), b = x0 + span * (i + 1) / (n - 1);
+            gradient(g, a, y, b, y + h, 0xFF000000 | stops[i], 0xFF000000 | stops[i + 1]);
+        }
+    }
+
     /** A plain rectangle from {@code left} to {@code right}; best when {@code left} is opaque. */
     public static void gradient(GuiGraphicsExtractor g, int x0, int y0, int x1, int y1, int left, int right) {
         if (x1 <= x0 || y1 <= y0) return;

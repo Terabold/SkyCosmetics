@@ -26,6 +26,11 @@ public final class Ui {
         return font.plainSubstrByWidth(s, Math.max(0, px - font.width("..."))) + "...";
     }
 
+    /** Text centered on {@code cx}, without the shadow vanilla's centered text has: the themed widgets' text. */
+    public static void centered(GuiGraphicsExtractor g, Font font, String text, int cx, int y, int color) {
+        g.text(font, text, cx - font.width(text) / 2, y, color, false);
+    }
+
     /** A small down (or up) chevron, 5 wide and 3 tall, with its top left at (x, y). */
     public static void chevron(GuiGraphicsExtractor g, int x, int y, boolean up, int color) {
         for (int i = 0; i < 3; i++) {

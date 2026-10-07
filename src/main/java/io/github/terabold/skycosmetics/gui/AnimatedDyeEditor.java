@@ -4,6 +4,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -40,12 +43,7 @@ public class AnimatedDyeEditor {
     private static final int[] SPEEDS = {1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100};
     private static final int[] DEFAULT_KEYS = {0xD58CFF, 0x4AC8FF};
 
-    private static final int LINE = 0xFF34343F;
-    private static final int TEXT = 0xFFE8E8EE;
-    private static final int MUTED = 0xFF8C8C9A;
-    private static final int ACCENT = 0xFFD58CFF;
-    private static final int BUTTON = 0xFF26262F;
-    private static final int BUTTON_HOVER = 0xFF34343F;
+    private static final int LINE = Theme.LINE, TEXT = Theme.TEXT, MUTED = Theme.MUTED;
 
     private int x, y, width, height;
     private final List<Integer> keys = new ArrayList<>();
@@ -167,25 +165,25 @@ public class AnimatedDyeEditor {
         int hoveredChip = chipAt(mouseX, mouseY);
         for (int i = 0; i < keys.size(); i++) {
             int cx = chipX(i);
-            g.fill(cx, y, cx + CHIP, y + CHIP, 0xFF000000 | keys.get(i));
+            Shapes.round(g, cx, y, CHIP, CHIP, Theme.SMALL_RADIUS, 0xFF000000 | keys.get(i));
             if (i == selected) {
-                g.outline(cx - 2, y - 2, CHIP + 4, CHIP + 4, 0xFFFFFFFF);
-                g.outline(cx - 1, y - 1, CHIP + 2, CHIP + 2, 0xFF000000);
+                Shapes.frame(g, cx - 2, y - 2, CHIP + 4, CHIP + 4, Theme.SMALL_RADIUS + 2, 0xFFFFFFFF);
+                Shapes.frame(g, cx - 1, y - 1, CHIP + 2, CHIP + 2, Theme.SMALL_RADIUS + 1, 0xFF000000);
             } else {
-                g.outline(cx, y, CHIP, CHIP, i == hoveredChip ? 0xFFFFFFFF : 0xFF000000);
+                Shapes.frame(g, cx, y, CHIP, CHIP, Theme.SMALL_RADIUS, i == hoveredChip ? 0xFFFFFFFF : 0x50FFFFFF);
             }
             if (i == hoveredChip && keys.size() > MIN_KEYS) {
                 boolean overX = inRemove(i, mouseX, mouseY);
-                g.fill(cx + CHIP - 5, y, cx + CHIP, y + 5, overX ? 0xFFFF5555 : 0xC0000000);
-                g.text(font, "x", cx + CHIP - 5, y - 2, 0xFFFFFFFF, false);
+                Shapes.round(g, cx + CHIP - 6, y - 1, 7, 7, 3, overX ? Theme.DANGER_HOVER : 0xE0111116);
+                Ui.cross(g, cx + CHIP - 4, y + 1, 3, overX ? 0xFFFFFFFF : Theme.WARN);
             }
         }
         if (keys.size() < MAX_KEYS) {
             int px = chipX(keys.size());
             boolean over = inChip(keys.size(), mouseX, mouseY);
-            g.fill(px, y, px + CHIP, y + CHIP, over ? BUTTON_HOVER : BUTTON);
-            g.outline(px, y, CHIP, CHIP, over ? ACCENT : LINE);
-            g.centeredText(font, "+", px + CHIP / 2 + 1, y + 3, over ? ACCENT : TEXT);
+            Shapes.round(g, px, y, CHIP, CHIP, Theme.SMALL_RADIUS, over ? Theme.SURFACE_HOVER : Theme.SURFACE);
+            Shapes.frame(g, px, y, CHIP, CHIP, Theme.SMALL_RADIUS, over ? Theme.ACCENT : LINE);
+            g.centeredText(font, "+", px + CHIP / 2 + 1, y + 3, over ? Theme.ACCENT : TEXT);
         }
         String count = keys.size() + "/" + MAX_KEYS + " colors";
         int countX = x + width - font.width(count);
@@ -204,11 +202,11 @@ public class AnimatedDyeEditor {
         String pace = String.format(Locale.ROOT, seconds < 1 ? "%.2fs" : "%.1fs", seconds);
         g.text(font, pace, sideX + sideW - font.width(pace), speedY - 10, TEXT);
         int trackY = speedY + 3;
-        g.fill(sideX, trackY, sideX + sideW, trackY + 2, LINE);
+        Shapes.round(g, sideX, trackY - 1, sideW, 4, 2, Theme.SURFACE_HOVER);
         int knob = sideX + Math.round(speedPos() * (sideW - 4));
-        g.fill(sideX, trackY, knob + 2, trackY + 2, ACCENT);
+        Shapes.roundGradient(g, sideX, trackY - 1, knob + 2 - sideX, 4, 2, Theme.GRADIENT_START, Theme.GRADIENT_END);
         boolean overTrack = inSpeed(mouseX, mouseY);
-        g.fill(knob, speedY, knob + 4, speedY + 8, overTrack || draggingSpeed ? 0xFFFFFFFF : 0xFFCCCCD6);
+        Shapes.round(g, knob, speedY, 4, 8, 2, overTrack || draggingSpeed ? 0xFFFFFFFF : 0xFFCCCCD6);
         g.text(font, blend ? "per color fade" : "per color", sideX, speedY + 11, MUTED);
         if (overTrack || draggingSpeed) {
             g.requestCursor(CursorTypes.RESIZE_EW);
@@ -257,13 +255,17 @@ public class AnimatedDyeEditor {
         }
     }
 
-    /** One half of a two-way switch, 14 px tall; the chosen half is lit. Shared with {@link ColorPopup}. */
+    /** One half of a two-way switch, 14 px tall; the chosen half has the accent gradient. Shared with {@link ColorPopup}. */
     static void segment(GuiGraphicsExtractor g, Font font, String label, int sx, int sy, int w, boolean on,
                         int mouseX, int mouseY) {
         boolean over = mouseX >= sx && mouseX < sx + w && mouseY >= sy && mouseY < sy + TOGGLE_H;
-        g.fill(sx, sy, sx + w, sy + TOGGLE_H, on ? 0xFF4A2E5C : over ? BUTTON_HOVER : BUTTON);
-        g.outline(sx, sy, w, TOGGLE_H, on ? ACCENT : LINE);
-        g.centeredText(font, label, sx + w / 2, sy + 3, on ? 0xFFFFFFFF : TEXT);
+        if (on) {
+            Shapes.roundGradient(g, sx, sy, w, TOGGLE_H, Theme.SMALL_RADIUS, Theme.GRADIENT_START, Theme.GRADIENT_END);
+        } else {
+            Shapes.round(g, sx, sy, w, TOGGLE_H, Theme.SMALL_RADIUS, over ? Theme.SURFACE_HOVER : Theme.SURFACE);
+            Shapes.frame(g, sx, sy, w, TOGGLE_H, Theme.SMALL_RADIUS, over ? Theme.ACCENT : LINE);
+        }
+        Ui.centered(g, font, label, sx + w / 2, sy + 3, on ? Theme.ON_ACCENT : over ? Theme.TEXT : MUTED);
         if (over && !on) g.requestCursor(CursorTypes.POINTING_HAND);
     }
 

@@ -2,6 +2,8 @@ package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.mixin.AbstractContainerScreenAccessor;
 import io.github.terabold.skycosmetics.mixin.RecipeBookScreenAccessor;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -33,6 +35,8 @@ public final class InventoryButton extends AbstractWidget {
 
     private final InventoryScreen inv;
     private String hint = "";
+    /** The accent the tooltip was built with: its title is in the accent. */
+    private int tipTheme = -1;
 
     private InventoryButton(InventoryScreen inv) {
         super(0, 0, SIZE, SIZE, Component.literal("SkyCosmetics"));
@@ -63,9 +67,10 @@ public final class InventoryButton extends AbstractWidget {
         setY(a.skycosmetics$topPos() + OFF_Y);
         visible = !hidden();
         String now = SkyCosmetics.openKeyHint();
-        if (!now.equals(hint)) {
+        if (!now.equals(hint) || tipTheme != Theme.version()) {
             hint = now;
-            setTooltip(Tooltip.create(Component.literal("SkyCosmetics").withStyle(ChatFormatting.LIGHT_PURPLE)
+            tipTheme = Theme.version();
+            setTooltip(Tooltip.create(Component.literal("SkyCosmetics").withColor(Theme.ACCENT & 0xFFFFFF)
                 .append(Component.literal("\nSkins, dyes and names for your gear").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("\nTip: " + now).withStyle(ChatFormatting.DARK_GRAY))));
         }
@@ -75,8 +80,8 @@ public final class InventoryButton extends AbstractWidget {
     protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         int x = getX(), y = getY();
         boolean hover = isHovered();
-        g.fill(x, y, x + SIZE, y + SIZE, hover ? 0xC0FFC94A : 0x80000000);
-        g.outline(x, y, SIZE, SIZE, hover ? 0xFFFFE08A : 0xFF6A6A78);
+        Shapes.round(g, x, y, SIZE, SIZE, 2, hover ? Theme.fade(Theme.ACCENT, 0.75f) : 0x80000000);
+        Shapes.frame(g, x, y, SIZE, SIZE, 2, hover ? Theme.mix(Theme.ACCENT, 0xFFFFFFFF, 0.45f) : 0xFF6A6A78);
         if (icon == null) icon = new ItemStack(Items.BRUSH);
         g.pose().pushMatrix();
         g.pose().translate(x + 1, y + 1);

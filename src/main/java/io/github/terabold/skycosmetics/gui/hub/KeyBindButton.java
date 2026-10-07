@@ -75,7 +75,7 @@ public final class KeyBindButton extends ThemedButton {
             Shapes.frame(g, x, y, w, h, Theme.SMALL_RADIUS, Theme.fade(clash ? Theme.WARN : Theme.mix(Theme.LINE, Theme.ACCENT, hover), a));
             text = clash ? Theme.WARN : Theme.TEXT;
         }
-        g.centeredText(font, shown, x + w / 2, y + (h - 8) / 2, Theme.fade(text, a));
+        Ui.centered(g, font, shown, x + w / 2, y + (h - 7) / 2, Theme.fade(text, a));
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, Theme.SMALL_RADIUS);
     }
 

@@ -7,6 +7,8 @@ import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
@@ -276,13 +278,13 @@ final class SavedTab extends RowList {
 
         @Override
         public void draw(GuiGraphicsExtractor g, int x, int y, int w, int mouseX, int mouseY, long tick) {
-            if (isOpen) g.fill(x, y, x + w, y + ROW_H, 0x20D58CFF);
+            if (isOpen) Shapes.round(g, x, y, w, ROW_H, Theme.SMALL_RADIUS, Theme.fade(Theme.ACCENT_BG, 0.7f));
             if (!e.icon().isEmpty()) {
                 g.item(e.icon(), x + 4, y + 4);
             } else {
                 int frame = skin != null ? host.readyFrame(skin, tick) : -1;
                 if (frame >= 0) g.item(skin.icon(frame), x + 4, y + 4);
-                else if (dye != null) g.fill(x + 6, y + 6, x + 18, y + 18, 0xFF000000 | dye.rgbAt(tick, 0));
+                else if (dye != null) Shapes.round(g, x + 6, y + 6, 12, 12, 2, 0xFF000000 | dye.rgbAt(tick, 0));
                 else g.centeredText(font, "?", x + 12, y + 8, MUTED);
             }
             int textW = w - 24 - X_BIG - 18;
@@ -443,8 +445,9 @@ final class SavedTab extends RowList {
             g.fill(x + 11, y, x + 12, y + LINK_H - 3, LINE);
             String text = tr("skycosmetics.saved.edit");
             boolean over = in(mouseX, mouseY, x + 24, y, font.width(text), LINK_H);
-            g.text(font, text, x + 24, y + 2, over ? 0xFFF0C8FF : ACCENT);
-            if (over) g.fill(x + 24, y + 11, x + 24 + font.width(text), y + 12, 0xFFF0C8FF);
+            int color = over ? Theme.mix(Theme.ACCENT, 0xFFFFFFFF, 0.5f) : Theme.ACCENT;
+            g.text(font, text, x + 24, y + 2, color);
+            if (over) g.fill(x + 24, y + 11, x + 24 + font.width(text), y + 12, color);
         }
 
         @Override

@@ -7,6 +7,8 @@ import io.github.terabold.skycosmetics.compat.OtherLooks;
 import io.github.terabold.skycosmetics.compat.OtherLooks.Change;
 import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.Repo;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
@@ -367,8 +369,8 @@ final class OtherModsTab extends RowList {
                 int cx = x + 18;
                 String mod = ch.source().name();
                 int pw = font.width(mod) + 6;
-                g.fill(cx, y + 1, cx + pw, y + CHANGE_H - 1, (col & 0x00FFFFFF) | 0x50000000);
-                g.outline(cx, y + 1, pw, CHANGE_H - 2, col);
+                Shapes.round(g, cx, y + 1, pw, CHANGE_H - 2, 2, (col & 0x00FFFFFF) | 0x50000000);
+                Shapes.frame(g, cx, y + 1, pw, CHANGE_H - 2, 2, col);
                 g.text(font, mod, cx + 3, y + 3, 0xFFFFFFFF);
             }
             int cx = x + kindX();
@@ -397,9 +399,11 @@ final class OtherModsTab extends RowList {
             if (move != null) {
                 int mx = moveX(x, w);
                 boolean over = overMove(x, y, w, mouseX, mouseY);
-                g.fill(mx, y + 1, mx + moveW(), y + CHANGE_H - 1, over ? 0xFF4A3A66 : 0xFF2A2436);
-                g.outline(mx, y + 1, moveW(), CHANGE_H - 2, over ? ACCENT : 0xFF5A4A7A);
-                g.text(font, move, mx + 3, y + 3, over ? 0xFFFFFFFF : 0xFFE0C8FF);
+                int mw = moveW(), r = Theme.SMALL_RADIUS;
+                if (over) Shapes.roundGradient(g, mx, y + 1, mw, CHANGE_H - 2, r, Theme.GRADIENT_START, Theme.GRADIENT_END);
+                else Shapes.round(g, mx, y + 1, mw, CHANGE_H - 2, r, Theme.ACCENT_BG);
+                if (!over) Shapes.frame(g, mx, y + 1, mw, CHANGE_H - 2, r, Theme.fade(Theme.ACCENT, 0.55f));
+                g.text(font, move, mx + 3, y + 3, over ? Theme.ON_ACCENT : Theme.mix(Theme.ACCENT, 0xFFFFFFFF, 0.6f), false);
             }
             int bx = xAt(x, w);
             drawX(g, font, bx, y + 1, X_SMALL, overX(x, y, w, mouseX, mouseY));

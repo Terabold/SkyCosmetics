@@ -2,17 +2,15 @@ package io.github.terabold.skycosmetics.gui;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.Names;
+import io.github.terabold.skycosmetics.gui.hub.TextField;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
@@ -27,8 +25,7 @@ import net.minecraft.util.Util;
  * It also remembers the selection, which EditBox keeps to itself, so the
  * colour and style buttons can format just the selected letters.
  */
-public class NameBox extends EditBox {
-    private static final Identifier SPRITE = Identifier.withDefaultNamespace("widget/text_field");
+public class NameBox extends TextField {
     /** Style codes and {@code &r} set no colour; they are drawn in this one. */
     private static final int STYLE_CODE = 0x9A9AB4;
 
@@ -134,7 +131,7 @@ public class NameBox extends EditBox {
             super.extractWidgetRenderState(g, mouseX, mouseY, delta);
             return;
         }
-        g.blitSprite(RenderPipelines.GUI_TEXTURED, SPRITE, getX(), getY(), getWidth(), getHeight());
+        background(g);
         g.text(font, styled(), getX() + 4, getY() + (getHeight() - 8) / 2, 0xFFFFFFFF, true); // as tooltips draw it
         if (isHovered()) g.requestCursor(CursorTypes.IBEAM);
     }
@@ -192,7 +189,7 @@ public class NameBox extends EditBox {
         return out;
     }
 
-    /** Lifts colours too dark for the black box (&0 Black) just enough to be seen. */
+    /** Lifts colours too dark for the dark box (&0 Black) just enough to be seen. */
     private static int readable(int rgb) {
         int r = rgb >> 16 & 0xFF, g = rgb >> 8 & 0xFF, b = rgb & 0xFF;
         if (Math.max(r, Math.max(g, b)) >= 0x50) return rgb;

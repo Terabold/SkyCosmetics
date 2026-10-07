@@ -4,6 +4,10 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
+import io.github.terabold.skycosmetics.gui.ui.Anim;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -34,10 +38,7 @@ public class ColorPopup {
     private static final int SINGLE_W = 230, SINGLE_H = 120;
     private static final int ANIM_W = 320, ANIM_H = 150;
 
-    private static final int PANEL = 0xF8141419;
-    private static final int FRAME = 0xFF6A5480;
-    private static final int TEXT = 0xFFE8E8EE;
-    private static final int MUTED = 0xFF8C8C9A;
+    private final Anim appear = new Anim(110, 0);
 
     private final Component title;
     private final Consumer<String> onChange;
@@ -157,15 +158,16 @@ public class ColorPopup {
     public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Font font = Minecraft.getInstance().font;
         g.nextStratum();
-        g.fill(x + 3, y + 3, x + w + 3, y + h + 3, 0x70000000);
-        g.fill(x, y, x + w, y + h, PANEL);
-        g.outline(x, y, w, h, FRAME);
-        g.text(font, title, x + PAD, y + PAD + 2, TEXT);
+        float t = Anim.easeOut(appear.to(1));
+        Shapes.shadow(g, x, y, w, h, Theme.RADIUS, 6);
+        Shapes.round(g, x, y, w, h, Theme.RADIUS, Theme.BODY);
+        Shapes.frame(g, x, y, w, h, Theme.RADIUS, Theme.mix(Theme.LINE, Theme.ACCENT, 0.5f * t));
+        g.text(font, title, x + PAD, y + PAD + 2, Theme.TEXT);
 
         int cx = x + w - PAD - CLOSE, cy = y + PAD;
         boolean overClose = inClose(mouseX, mouseY);
-        g.fill(cx, cy, cx + CLOSE, cy + CLOSE, overClose ? 0xFF803040 : 0xFF26262F);
-        g.centeredText(font, "x", cx + CLOSE / 2 + 1, cy + 2, overClose ? 0xFFFFFFFF : MUTED);
+        if (overClose) Shapes.round(g, cx, cy, CLOSE, CLOSE, Theme.SMALL_RADIUS, 0xFF8A2E4A);
+        Ui.cross(g, cx + 3, cy + 3, CLOSE - 6, overClose ? 0xFFFFFFFF : Theme.MUTED);
         if (overClose) {
             g.requestCursor(CursorTypes.POINTING_HAND);
             g.setTooltipForNextFrame(font, Component.literal("Close (Esc)"), mouseX, mouseY);

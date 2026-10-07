@@ -3,7 +3,9 @@ package io.github.terabold.skycosmetics.gui;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.data.DyeEntry;
-import net.minecraft.ChatFormatting;
+import io.github.terabold.skycosmetics.gui.hub.TextField;
+import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -43,9 +45,6 @@ public class ColorPicker {
     private static final int CHIP_GAP = 2;
     private static final int MAX_RECENT = 8;
 
-    private static final int BORDER = 0xFF34343F;
-    private static final int MUTED = 0xFF8C8C9A;
-
     /** Colours picked this session, newest first. Shared by every picker so a colour can be reused anywhere. */
     private static final List<Integer> RECENT = new ArrayList<>();
 
@@ -77,9 +76,9 @@ public class ColorPicker {
         this.width = width;
         this.height = height;
         Font font = Minecraft.getInstance().font;
-        hexBox = new EditBox(font, x, y, HEX_W, 14, Component.literal("Hex color"));
+        hexBox = new TextField(font, x, y, HEX_W, 14, Component.literal("Hex color"));
         hexBox.setMaxLength(7);
-        hexBox.setHint(Component.literal("#RRGGBB").withStyle(ChatFormatting.DARK_GRAY));
+        hexBox.setHint(Component.literal("#RRGGBB").withColor(Theme.DIM & 0xFFFFFF));
         hexBox.setResponder(this::typed);
         setRgb(0xFFFFFF);
         layout();
@@ -182,7 +181,7 @@ public class ColorPicker {
             columnHue = hue;
         }
         for (int i = 0; i < svW; i++) g.fillGradient(x + i, y, x + i + 1, y + svH, columnTop[i], 0xFF000000);
-        g.outline(x - 1, y - 1, svW + 2, svH + 2, BORDER);
+        g.outline(x - 1, y - 1, svW + 2, svH + 2, Theme.LINE);
         int cx = x + Math.round(sat * (svW - 1)), cy = y + Math.round((1 - val) * (svH - 1));
         g.outline(cx - 3, cy - 3, 7, 7, 0xFF000000);
         g.outline(cx - 2, cy - 2, 5, 5, 0xFFFFFFFF);
@@ -192,18 +191,18 @@ public class ColorPicker {
             g.fillGradient(hueX, y0, hueX + HUE_W, y1, 0xFF000000 | hsvToRgb(i / 6f, 1, 1),
                 0xFF000000 | hsvToRgb((i + 1) / 6f, 1, 1));
         }
-        g.outline(hueX - 1, y - 1, HUE_W + 2, svH + 2, BORDER);
+        g.outline(hueX - 1, y - 1, HUE_W + 2, svH + 2, Theme.LINE);
         int hy = y + Math.round(hue * (svH - 1));
         g.fill(hueX - 2, hy - 1, hueX + HUE_W + 2, hy + 2, 0xFF000000);
         g.fill(hueX - 1, hy, hueX + HUE_W + 1, hy + 1, 0xFFFFFFFF);
 
-        g.fill(x, infoY, x + SWATCH, infoY + SWATCH, 0xFF000000 | rgb);
-        g.outline(x - 1, infoY - 1, SWATCH + 2, SWATCH + 2, BORDER);
+        Shapes.round(g, x, infoY, SWATCH, SWATCH, Theme.SMALL_RADIUS, 0xFF000000 | rgb);
+        Shapes.frame(g, x, infoY, SWATCH, SWATCH, Theme.SMALL_RADIUS, 0x50FFFFFF);
         hexBox.extractRenderState(g, mouseX, mouseY, 0);
         int textX = hexBox.getX() + hexBox.getWidth() + 6;
         if (x + width - textX >= font.width("255 255 255")) {
             g.text(font, String.format(Locale.ROOT, "%d %d %d", rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF),
-                textX, infoY + 4, MUTED);
+                textX, infoY + 4, Theme.MUTED);
         }
 
         if (showRecent) {
@@ -213,15 +212,15 @@ public class ColorPicker {
                 boolean over = mouseX >= rx && mouseX < rx + CHIP && mouseY >= recentY && mouseY < recentY + CHIP;
                 if (i < RECENT.size()) {
                     int c = RECENT.get(i);
-                    g.fill(rx, recentY, rx + CHIP, recentY + CHIP, 0xFF000000 | c);
-                    g.outline(rx, recentY, CHIP, CHIP, over ? 0xFFFFFFFF : 0xFF000000);
+                    Shapes.round(g, rx, recentY, CHIP, CHIP, 2, 0xFF000000 | c);
+                    Shapes.frame(g, rx, recentY, CHIP, CHIP, 2, over ? 0xFFFFFFFF : 0x50FFFFFF);
                     if (over) {
                         g.requestCursor(CursorTypes.POINTING_HAND);
                         g.setTooltipForNextFrame(font, Component.literal(hex(c) + " · recent"),
                             mouseX, mouseY);
                     }
                 } else {
-                    g.outline(rx, recentY, CHIP, CHIP, BORDER);
+                    Shapes.frame(g, rx, recentY, CHIP, CHIP, 2, Theme.LINE);
                 }
             }
         }
