@@ -2,6 +2,7 @@ package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
+import io.github.terabold.skycosmetics.data.TimingLearner;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Hub;
 import io.github.terabold.skycosmetics.hub.Option;
@@ -44,6 +45,7 @@ public final class StudioSection {
             .search(Component.translatable("skycosmetics.option.openKey.search").getString()));
         rows.add(toggle("inventoryButton", () -> Settings.brush, v -> Settings.brush = v));
         rows.add(toggle("learnSkins", () -> Settings.learnSkins, v -> Settings.learnSkins = v));
+        rows.add(toggle("learnTiming", () -> TimingLearner.enabled, v -> TimingLearner.enabled = v));
 
         rows.add(Option.header("groupMyItems", Component.translatable("skycosmetics.menu.group.myItems")));
         rows.add(toggle("storedItems", () -> Settings.storedItems, v -> {
