@@ -133,6 +133,9 @@ public class ThemeTest implements FabricClientGameTest {
         ctx.waitTicks(2);
         clickPreset(ctx, "Gold");
 
+        window(ctx, 1920, 1080, 4);
+        settings(ctx);
+        ctx.takeScreenshot("skycosmetics-73-theme-general-guiscale-4");
         window(ctx, 854, 480, 0);
         settings(ctx);
         ctx.takeScreenshot("skycosmetics-73-theme-general-small-window");
@@ -160,7 +163,7 @@ public class ThemeTest implements FabricClientGameTest {
 
     /** The studio in gold: every tab only has themed widgets; screenshots at the common sizes. */
     private static void studio(ClientGameTestContext ctx) {
-        int[][] windows = {{1920, 1080, 2}, {1920, 1080, 3}, {854, 480, 0}};
+        int[][] windows = {{1920, 1080, 2}, {1920, 1080, 3}, {1920, 1080, 4}, {854, 480, 0}};
         for (int[] w : windows) {
             window(ctx, w[0], w[1], w[2]);
             open(ctx, mc -> mc.player.getItemBySlot(EquipmentSlot.CHEST));

@@ -22,8 +22,8 @@ import java.util.function.Function;
  * goes to {@code onChange}; the drag ending goes to {@code onRelease}, so the
  * host can save once.
  *
- * Drawn in the theme: a field that fills with the accent gradient up to a white
- * handle, its label over it. Vanilla's slider still does the input, so clicks and
+ * Drawn in the theme: a field that fills with the accent gradient up to a
+ * handle, its label over both. Vanilla's slider still does the input, so clicks and
  * the arrow keys work as on any slider.
  */
 final class SpeedSlider extends AbstractSliderButton {
@@ -75,8 +75,9 @@ final class SpeedSlider extends AbstractSliderButton {
         Shapes.roundGradient(g, x, y, kx - x + 2, h, r, Theme.fade(Theme.GRADIENT_START, 0.5f * a),
             Theme.fade(Theme.mix(Theme.GRADIENT_START, Theme.GRADIENT_END, v), 0.5f * a));
         Shapes.frame(g, x, y, w, h, r, Theme.fade(Theme.mix(Theme.LINE, Theme.ACCENT, hv), a));
-        Shapes.round(g, kx - 2, y + 2, 4, h - 4, 2, Theme.fade(0xFFFFFFFF, a));
-        // Over the handle, with a shadow, so the letters it passes over still read.
+        // A dark handle with a light rim: the label reads over it as well as over the fill.
+        Shapes.round(g, kx - 3, y + 1, 6, h - 2, 2, Theme.fade(0xFF0E0E12, a));
+        Shapes.frame(g, kx - 3, y + 1, 6, h - 2, 2, Theme.fade(Theme.mix(Theme.ACCENT, 0xFFFFFFFF, 0.35f + 0.4f * hv), a));
         String label = getMessage().getString();
         Font font = Minecraft.getInstance().font;
         g.text(font, label, x + (w - font.width(label)) / 2, y + (h - 7) / 2, Theme.fade(Theme.TEXT, a), true);

@@ -149,6 +149,8 @@ public class StudioScreen extends Screen {
 
     private static final int BG = 0xE0101014;
     private static final Component TITLE = Component.literal("SkyCosmetics").withStyle(ChatFormatting.BOLD);
+    /** The title where the bold one would run under the Settings button (a narrow left column). */
+    private static final Component TITLE_PLAIN = Component.literal("SkyCosmetics");
     private static final int TEXT = Theme.TEXT, MUTED = Theme.MUTED, GOLD = Theme.GOLD;
 
     private static final List<Component> ITEMS_HELP = List.of(
@@ -217,6 +219,7 @@ public class StudioScreen extends Screen {
     private int builtFor = -1;
     private boolean byType;
     private Button itemsInfo, settings;
+    private Component title = TITLE;
     /** While the open key is unbound, the Settings button is outlined until it is clicked. */
     private boolean keyTip;
 
@@ -922,6 +925,7 @@ public class StudioScreen extends Screen {
             minecraft.setScreen(parent instanceof SettingsScreen ? parent : new SettingsScreen(this, Hub.STUDIO));
         }));
         settings.setPosition(PAD + leftW - 4 - sw, PAD + 3);
+        title = font.width(TITLE) <= settings.getX() - 4 - (PAD + 6) ? TITLE : TITLE_PLAIN;
         keyTip = !Settings.keyTipShown && SkyCosmetics.openKey() != null && SkyCosmetics.openKey().isUnbound();
         settings.setTooltip(Tooltip.create(Component.translatable(keyTip ? "skycosmetics.studio.settings.keyTip"
             : "skycosmetics.studio.settings.tooltip")));
@@ -1758,7 +1762,7 @@ public class StudioScreen extends Screen {
                 Theme.SMALL_RADIUS + 3, Theme.fade(Theme.ACCENT, pulse));
         }
 
-        g.text(font, TITLE, PAD + 6, PAD + 9, Theme.ACCENT, false);
+        g.text(font, title, PAD + 6, PAD + 9, Theme.ACCENT, false);
         drawList(g, mx, my);
         if (prevW > 0) drawPreview(g, mx, my, mouseX, mouseY, tick);
         else drawCompactPreview(g, mx, my, tick);
