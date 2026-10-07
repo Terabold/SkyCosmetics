@@ -12,7 +12,8 @@
       "io.github.terabold.skycosmetics.test.DataSafetyTest",
       "io.github.terabold.skycosmetics.test.StudioTabsClientTest",
       "io.github.terabold.skycosmetics.test.ThemeTest",
-      "io.github.terabold.skycosmetics.test.TimingLearnerTest"
+      "io.github.terabold.skycosmetics.test.TimingLearnerTest",
+      "io.github.terabold.skycosmetics.test.SlotsTest"
     ]
   },
   "depends": { "skycosmetics": "*" }
