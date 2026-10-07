@@ -34,7 +34,7 @@ public final class Textures {
     /** The render cache expires entries 5 minutes after last access; re-touch well inside that. */
     private static final long TRUST_MS = 30_000;
     /** Half of it: while drawn, each frame of an animation is looked up again at least every 45 s. */
-    private static final long WARM_MS = TRUST_MS / 2;
+    private static final long WARM_NS = TRUST_MS / 2 * 1_000_000;
 
     private static final Map<String, ResolvableProfile> PROFILES = new ConcurrentHashMap<>();
     private static final Map<String, State> STATES = new ConcurrentHashMap<>();
@@ -115,7 +115,7 @@ public final class Textures {
      * cache entry alive while the skin is drawn, and reloads the frames together, ahead of time.
      */
     public static void keepWarm(SkinEntry e) {
-        if (e.textures.length > 1 && e.warmDue(System.currentTimeMillis(), WARM_MS)) preload(e);
+        if (e.textures.length > 1 && e.warmDue(System.nanoTime(), WARM_NS)) preload(e);
     }
 
     /**

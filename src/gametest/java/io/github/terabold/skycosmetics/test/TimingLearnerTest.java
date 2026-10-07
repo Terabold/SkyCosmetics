@@ -14,6 +14,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -24,8 +25,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +52,8 @@ public class TimingLearnerTest implements FabricClientGameTest {
     private static final String UNIFORM = "NECRON_DIAMOND_KNIGHT_BLACK";
     /** 55, 2, 4, 2 in the repo, played as such. */
     private static final String SAME = "PET_SKIN_RABBIT_GARDEN_BUNNY_CITRUS";
+    /** 3 frames, played during server lag first. */
+    private static final String LAGGED = "NECRON_DIAMOND_KNIGHT_AURORA";
     private static final long MS = 1_000_000L;
 
     private static final long[] NOW = {1_000_000_000_000L};
@@ -60,7 +65,7 @@ public class TimingLearnerTest implements FabricClientGameTest {
         reload(ctx);
         Catalog before = Repo.get();
         ctx.runOnClient(mc -> {
-            for (String id : List.of(BLINK, UNIFORM, SAME)) {
+            for (String id : List.of(BLINK, UNIFORM, SAME, LAGGED)) {
                 SkinEntry e = before.skin(id);
                 check(e != null && e.animated() && !e.timed, id + " is an animated repo skin");
             }
@@ -106,6 +111,17 @@ public class TimingLearnerTest implements FabricClientGameTest {
             check(TimingLearner.watching() == 0, "a confirmed head is no longer watched");
         });
 
+        // A server at two-thirds speed for three rounds: its frames last 1.5 times as long, and its time updates fall
+        // behind. Those rounds agree with each other (without the lag check, 45/4/9 would be learned) but must not count.
+        ctx.runOnClient(mc -> {
+            String[] frames = before.skin(LAGGED).textures;
+            playLagging(s -> TimingLearner.onEquipment(new ClientboundSetEquipmentPacket(5005, List.of(Pair.of(EquipmentSlot.HEAD, s)))),
+                frames, new int[]{30, 3, 6}, 7, 3);
+        });
+        ctx.waitFor(mc -> Repo.get().skin(LAGGED).timed, 20 * 10);
+        check(ctx.computeOnClient(mc -> Arrays.equals(Repo.get().skin(LAGGED).frameTicks, new int[]{30, 3, 6})),
+            "rounds during server lag are not learned: " + ctx.computeOnClient(mc -> Arrays.toString(Repo.get().skin(LAGGED).frameTicks)));
+
         // Still heads are never watched, and a head that turns into one is dropped.
         ctx.runOnClient(mc -> {
             Set<String> frames = new HashSet<>();
@@ -127,10 +143,10 @@ public class TimingLearnerTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> {
             Catalog after = Repo.get();
             check(!after.skin(SAME).timed, "a timing equal to the repo's is not saved");
-            String[] blink = before.skin(BLINK).textures, flash = before.skin(UNIFORM).textures;
+            String[] blink = before.skin(BLINK).textures, flash = before.skin(UNIFORM).textures; // learned, with any copies
             for (Map.Entry<String, SkinEntry> e : before.skins.entrySet()) {
                 String[] t = e.getValue().textures;
-                if (Arrays.equals(t, blink) || Arrays.equals(t, flash)) continue; // learned (or the same animation)
+                if (Arrays.equals(t, blink) || Arrays.equals(t, flash) || Arrays.equals(t, before.skin(LAGGED).textures)) continue;
                 SkinEntry now = after.skins.get(e.getKey());
                 check(now != null && !now.timed && Arrays.equals(now.frameTicks, e.getValue().frameTicks), "untouched: " + e.getKey());
             }
@@ -178,6 +194,34 @@ public class TimingLearnerTest implements FabricClientGameTest {
             t += (ticks[f] + (i == spike * n + 1 ? 20 : 0)) * 50 * MS;
         }
         NOW[0] = t + 1000 * MS;
+    }
+
+    /**
+     * Like {@link #play} from the first frame, with a time update every second: for the first {@code slowRounds}
+     * rounds the server runs at two-thirds speed, so frames take 1.5 times as long and its clock falls behind.
+     */
+    private static void playLagging(Consumer<ItemStack> send, String[] frames, int[] ticks, int rounds, int slowRounds) {
+        ItemStack[] heads = Arrays.stream(frames).map(TimingLearnerTest::head).toArray(ItemStack[]::new);
+        int n = frames.length;
+        long start = NOW[0];
+        List<long[]> events = new ArrayList<>(); // {time, 0 = frame / 1 = time update, frame or game time}
+        long t = start;
+        for (int i = 0; i <= rounds * n; i++) {
+            events.add(new long[]{t, 0, i % n});
+            t += ticks[i % n] * (i < slowRounds * n ? 75 : 50) * MS;
+        }
+        long slowEnd = events.get(slowRounds * n)[0];
+        for (long x = start; x <= t + 2000 * MS; x += 1000 * MS) {
+            long game = x <= slowEnd ? (x - start) / (75 * MS) : (slowEnd - start) / (75 * MS) + (x - slowEnd) / (50 * MS);
+            events.add(new long[]{x, 1, 1000 + game});
+        }
+        events.sort(Comparator.<long[]>comparingLong(e -> e[0]).thenComparingLong(e -> -e[1]));
+        for (long[] e : events) {
+            NOW[0] = e[0];
+            if (e[1] == 0) send.accept(heads[(int) e[2]]);
+            else TimingLearner.onTime(new ClientboundSetTimePacket(e[2], Map.of()));
+        }
+        NOW[0] = t + 3000 * MS;
     }
 
     /** An unreadable timings.json is set aside and what was learned stays; a timing for another frame count is ignored. */

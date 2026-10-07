@@ -11,9 +11,9 @@ import java.util.Locale;
  * One selectable head look: a single texture, or an animation of several.
  *
  * Every Hypixel skull in the repo becomes one of these. Animated skins keep all
- * their frames and the per-frame tick count from {@code animatedskulls.json}, or
- * the timing {@link TimingLearner} measured in game where the repo has only one
- * tick count for every frame, so they cycle at the same speed as on Hypixel.
+ * their frames and the per-frame tick count from {@code animatedskulls.json} (or
+ * the timing {@link TimingLearner} measured in game, where the two differ), so
+ * they cycle at the same speed as on Hypixel.
  */
 public final class SkinEntry {
     public enum Kind { SKIN, PET_SKIN, VARIANT, HEAD, CUSTOM }
@@ -53,8 +53,9 @@ public final class SkinEntry {
     public static final int MAX_FRAME_TICKS = 72_000;
 
     private ItemStack[] icons;
-    /** When {@link Textures#keepWarm} last went over every frame; render thread only. */
+    /** When {@link Textures#keepWarm} last went over every frame ({@link System#nanoTime}); render thread only. */
     private long warmedAt;
+    private boolean warmed;
 
     public static SkinEntry still(String id, String name, int color, Kind kind, String texture, String parent) {
         return new SkinEntry(id, name, color, kind, new String[]{texture}, new int[]{1}, parent);
@@ -91,10 +92,11 @@ public final class SkinEntry {
         return cycle;
     }
 
-    /** True at most once per {@code everyMs} (wall clock): time for {@link Textures#keepWarm} to look at every frame again. */
-    public boolean warmDue(long nowMs, long everyMs) {
-        if (nowMs - warmedAt < everyMs) return false;
-        warmedAt = nowMs;
+    /** True at most once per {@code everyNs}: time for {@link Textures#keepWarm} to look at every frame again. */
+    public boolean warmDue(long nowNs, long everyNs) {
+        if (warmed && nowNs - warmedAt < everyNs) return false;
+        warmed = true;
+        warmedAt = nowNs;
         return true;
     }
 

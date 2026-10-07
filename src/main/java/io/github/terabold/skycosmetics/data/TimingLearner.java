@@ -55,7 +55,7 @@ import java.util.function.LongSupplier;
  *
  * Read only: nothing here sends a packet, clicks, or changes a slot. Main thread only, except the index
  * of known frames, which the repo thread builds with each catalog. An update of a head that shows no frame
- * of an animation costs two map lookups; any other item, a null check.
+ * of an animation costs a few map lookups; any other item, a null check.
  */
 public final class TimingLearner {
     private static final long TICK_NS = 50_000_000L;
@@ -67,7 +67,6 @@ public final class TimingLearner {
     private static final long IDLE_NS = 60_000_000_000L;
     /** Time updates more than this many ticks behind the clock: the server lagged. */
     private static final double LAG_TICKS = 3;
-    private static final long TIME_GAP_NS = 1_500_000_000L;
     private static final int MAX_LAGS = 16;
     /** Real texture values are a few hundred characters; longer ones are not looked at. */
     private static final int MAX_VALUE = 2048;
@@ -160,14 +159,14 @@ public final class TimingLearner {
         }
     }
 
-    /** About once a second: how far the server's clock moved since the last one tells whether it lagged. */
+    /**
+     * About once a second: when the server's clock moved fewer ticks than the real one since the last update, it
+     * lagged in between. A clock that stands still (or goes back) tells nothing.
+     */
     public static void onTime(ClientboundSetTimePacket p) {
         long now = clock.getAsLong();
         long game = p.gameTime();
-        if (hasTime) {
-            double behind = (now - timeAt) / (double) TICK_NS - (game - timeGame);
-            if (game > timeGame ? behind > LAG_TICKS : now - timeAt > TIME_GAP_NS) lag(timeAt, now);
-        }
+        if (hasTime && game > timeGame && (now - timeAt) / (double) TICK_NS - (game - timeGame) > LAG_TICKS) lag(timeAt, now);
         hasTime = true;
         timeAt = now;
         timeGame = game;
