@@ -6,6 +6,7 @@ import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -75,7 +76,10 @@ final class SpeedSlider extends AbstractSliderButton {
             Theme.fade(Theme.mix(Theme.GRADIENT_START, Theme.GRADIENT_END, v), 0.5f * a));
         Shapes.frame(g, x, y, w, h, r, Theme.fade(Theme.mix(Theme.LINE, Theme.ACCENT, hv), a));
         Shapes.round(g, kx - 2, y + 2, 4, h - 4, 2, Theme.fade(0xFFFFFFFF, a));
-        Ui.centered(g, Minecraft.getInstance().font, getMessage().getString(), x + w / 2, y + (h - 7) / 2, Theme.fade(Theme.TEXT, a));
+        // Over the handle, with a shadow, so the letters it passes over still read.
+        String label = getMessage().getString();
+        Font font = Minecraft.getInstance().font;
+        g.text(font, label, x + (w - font.width(label)) / 2, y + (h - 7) / 2, Theme.fade(Theme.TEXT, a), true);
         if (Ui.keyboardFocus(this)) Ui.focusRing(g, x, y, w, h, r);
     }
 

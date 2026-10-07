@@ -17,8 +17,15 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
 - Keyboard: Esc clears the search, then closes; Tab moves between controls; the arrows step sliders and choices;
   Page Up, Page Down, Home and End scroll.
 - A setting that fails to load shows a gray line instead of closing the settings.
+- **Accent color:** a new General section, first in the sidebar, sets the color of switches, sliders, selections,
+  headings and highlights in the settings and the studio. Cyan by default; presets (Cyan, Blue, Purple, Pink, Green,
+  Gold, Red, White), any color from the picker, and Reset. Text on the accent turns dark on light colors, and a color
+  too dark to read is lightened.
 
 ### Studio
+- **Same look as the settings:** rounded panels over a blurred background, themed tabs, filter pills, search boxes,
+  buttons (Done in the accent, Reset in red), a glint switch, fill sliders, color and gradient swatches, a themed
+  name box and color pop-up, all in the accent color. Every panel, label and shortcut stays where it was.
 - **Saved, by section:** looks are grouped into Helmets, Armor, Weapons & Tools, Pets, Power Orbs and Every Item of a
   Type. Rows light up under the mouse and have a bigger ×. Click a row to see each change on its own line (skin, dye,
   name, glint, glint color, speed, strength), each with its own ×, and an Edit link to the item. **Undo** in the

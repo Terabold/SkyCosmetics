@@ -37,7 +37,7 @@ Package `io.github.terabold.skycosmetics`.
 | Pets | `pet/*`, `HeadSwap` | Tracks the summoned pet; reskins Hypixel's pet head in the world, whatever stand, mob, NPC or item display shows it (`/skycosmetics debug pet`). |
 | Orbs | `deploy/DeployedOrbs` | Reskins the power orb that appears right after your own deploy click (`/skycosmetics debug orb`). |
 | My Items | `items/OwnedItems`, `items/Profiles` | Remembers the player's own skinnable items (`config/skycosmetics/items.json`). |
-| Settings | `Settings`, `hub/*`, `gui/SettingsScreen`, `gui/hub/*`, `gui/ui/*`, `gui/StudioSection` | `settings.json`; features add a `hub.Section` with `Option` rows, each a `Control` that `gui.hub.Controls` turns into one custom-drawn widget. `gui/ui` holds the theme colors, smooth rounded shapes and frame-time animations. |
+| Settings | `Settings`, `hub/*`, `gui/SettingsScreen`, `gui/hub/*`, `gui/ui/*`, `gui/StudioSection`, `gui/GeneralSection` | `settings.json`; features add a `hub.Section` with `Option` rows, each a `Control` that `gui.hub.Controls` turns into one custom-drawn widget. `gui/ui` holds the theme colors (derived from the player's accent, General's setting), smooth rounded shapes and frame-time animations; the studio uses the same `gui/hub` widgets. |
 | Editor | `gui/StudioScreen`, `gui/TooltipPanel`, `gui/ColorPopup`, `gui/NameBox`, `gui/InventoryButton` | The editor (inline item tooltip, reusable color pop-up, styled name box) and the inventory brush. |
 | Mod Menu | `compat/ModMenuCompat` | Optional; only Mod Menu loads it. Configure opens the settings. |
 | IO | `Io` | One background thread for all config writes; unreadable files are set aside, never overwritten. |

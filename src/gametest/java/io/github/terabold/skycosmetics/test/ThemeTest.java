@@ -2,7 +2,6 @@ package io.github.terabold.skycosmetics.test;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.gui.GeneralSection;
@@ -118,8 +117,7 @@ public class ThemeTest implements FabricClientGameTest {
         });
         ctx.waitTicks(3);
         ctx.takeScreenshot("skycosmetics-71-theme-general-gold");
-        ctx.runOnClient(mc -> Io.flush());
-        check(read().contains("\"#FBBF24\""), "settings.json stores the accent: " + read());
+        ctx.waitFor(mc -> read().contains("\"#FBBF24\""), 20 * 5); // settings.json stores the accent
 
         // The search finds the presets by color name, and its highlights take the new accent.
         ctx.runOnClient(mc -> ((SettingsScreen) mc.screen).search().setValue("blue"));
@@ -142,7 +140,7 @@ public class ThemeTest implements FabricClientGameTest {
 
     /** settings.json: a value that isn't a color keeps the accent; a color is read. */
     private static void stored(ClientGameTestContext ctx) {
-        ctx.runOnClient(mc -> Io.flush());
+        ctx.waitFor(mc -> read().contains("\"#FBBF24\""), 20 * 5); // nothing still waiting to be written
         JsonObject o = JsonParser.parseString(read()).getAsJsonObject();
         o.addProperty("accent", "#12ZZ45");
         write(o.toString());
@@ -221,9 +219,8 @@ public class ThemeTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> {
             check(Theme.accent() == Theme.DEFAULT_ACCENT, "Reset goes back to cyan");
             check(!((SettingsScreen) mc.screen).widget("resetAccent").active, "and grays itself out");
-            Io.flush();
         });
-        check(read().contains("\"#22D3EE\""), "settings.json has cyan again");
+        ctx.waitFor(mc -> read().contains("\"#22D3EE\""), 20 * 5); // settings.json has cyan again
     }
 
     // ------------------------------------------------------------ helpers ---
@@ -241,6 +238,7 @@ public class ThemeTest implements FabricClientGameTest {
         ctx.setScreen(() -> new SettingsScreen(null, GeneralSection.ID));
         ctx.waitForScreen(SettingsScreen.class);
         ctx.getInput().setCursorPos(0, 0);
+        ctx.runOnClient(mc -> mc.getToastManager().clear());
         ctx.waitTicks(3);
     }
 
