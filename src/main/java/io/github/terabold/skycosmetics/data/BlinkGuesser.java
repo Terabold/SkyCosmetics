@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * About a hundred animations in animatedskulls.json have a tick count per frame, and nearly all of them are
  * blinks: eyes open for about two and a half seconds, then 2 ticks half closed, 4 closed (and 2 half closed
- * again). Hundreds of skins of the same design have one tick count for every frame, so their eyes stay shut as
+ * again). About two hundred skins of the same design have one tick count for every frame, so their eyes stay shut as
  * long as they stay open. Once every frame of such a skin is in Minecraft's skin cache on disk, the frames are
  * compared: when they differ only in a small part of the head and one of them loses much of the detail there
  * (the eyes close), it is a blink. The frame with the most detail there stays up for {@link #OPEN_TICKS}, the

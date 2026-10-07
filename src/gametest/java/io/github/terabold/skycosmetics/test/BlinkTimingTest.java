@@ -6,7 +6,9 @@ import io.github.terabold.skycosmetics.data.BlinkGuesser;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
 import io.github.terabold.skycosmetics.data.TimingLearner;
+import io.github.terabold.skycosmetics.gui.StudioScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -208,6 +210,7 @@ final class BlinkTimingTest {
             expect(ctx, LINE, SkinEntry.Timing.GUESSED, 49, 4);
             expect(ctx, TWO_A, SkinEntry.Timing.GUESSED, 4, 49);
             ctx.runOnClient(mc -> System.out.println("[SkyCosmeticsTest] " + BlinkGuesser.status()));
+            tooltip(ctx);
             String saved = read(estimated);
             check(saved.contains(BLINK) && saved.contains("49") && saved.contains(CYCLE) && !saved.contains(MEASURED),
                 "estimated-timings.json holds both answers: " + saved);
@@ -243,6 +246,38 @@ final class BlinkTimingTest {
         }
         check(ctx.computeOnClient(mc -> Repo.get().skin(BLINK) == null), "the test skins are gone again");
         System.out.println("[SkyCosmeticsTest] estimated and layered timing checks passed");
+    }
+
+    /** The studio's skin tooltip says when a timing is estimated. */
+    private static void tooltip(ClientGameTestContext ctx) {
+        try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
+            sp.getClientLevel().waitForChunksRender();
+            ctx.setScreen(() -> new StudioScreen(null, ItemStack.EMPTY));
+            ctx.waitForScreen(StudioScreen.class);
+            ctx.clickScreenButton("Skins");
+            ctx.clickScreenButton("All");
+            ctx.waitTicks(2);
+            ctx.getInput().typeChars("test blink");
+            ctx.waitTicks(5);
+            double[] at = ctx.computeOnClient(mc -> {
+                double scale = mc.getWindow().getGuiScale();
+                return new double[]{(field(mc.screen, "midX") + 12) * scale, (field(mc.screen, "gridY") + 12) * scale};
+            });
+            ctx.getInput().setCursorPos(at[0], at[1]);
+            ctx.waitTicks(3);
+            ctx.takeScreenshot("skycosmetics-blink-estimated-tooltip");
+            ctx.setScreen(() -> null);
+        }
+    }
+
+    private static int field(Object o, String name) {
+        try {
+            java.lang.reflect.Field f = StudioScreen.class.getDeclaredField(name);
+            f.setAccessible(true);
+            return f.getInt(o);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private static void expect(ClientGameTestContext ctx, String id, SkinEntry.Timing source, int... ticks) {
