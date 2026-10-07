@@ -6,6 +6,7 @@ import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -52,6 +53,7 @@ public class AnimatedDyeEditor {
     private boolean blend = true;
     private final ColorPicker picker;
     private boolean draggingSpeed;
+    private final Tips.Hover chipHover = new Tips.Hover();
 
     /** Rebuilt on every edit, never per frame. */
     private String id;
@@ -210,8 +212,9 @@ public class AnimatedDyeEditor {
         g.text(font, blend ? "per color fade" : "per color", sideX, speedY + 11, MUTED);
         if (overTrack || draggingSpeed) {
             g.requestCursor(CursorTypes.RESIZE_EW);
-            g.setTooltipForNextFrame(font, Component.literal(ticks + (ticks == 1 ? " tick" : " ticks")
-                + " per step (Hypixel dyes: 2)"), mouseX, mouseY);
+            // Above the track, so the knob and the text under it stay in view while dragging.
+            Tips.show(g, font, List.of(Component.literal(ticks + (ticks == 1 ? " tick" : " ticks") + " per step (Hypixel dyes: 2)")),
+                Tips.beside(sideX, speedY - 2, sideX + sideW, speedY + 20, sideX, speedY, Tips.Side.ABOVE, Tips.Side.BELOW), mouseX, mouseY);
         }
 
         if (armourY + 40 <= stripY - 4) {
@@ -243,15 +246,13 @@ public class AnimatedDyeEditor {
             g.fill(hx, stripY - 2, hx + 1, stripY + STRIP_H + 2, 0xFFFFFFFF);
         }
 
-        if (hoveredChip >= 0) {
-            g.requestCursor(CursorTypes.POINTING_HAND);
-            g.setComponentTooltipForNextFrame(font, List.of(Component.literal("Color " + (hoveredChip + 1) + " · "
-                    + ColorPicker.hex(keys.get(hoveredChip))),
+        if (hoveredChip >= 0) g.requestCursor(CursorTypes.POINTING_HAND);
+        else if (keys.size() < MAX_KEYS && inChip(keys.size(), mouseX, mouseY)) g.requestCursor(CursorTypes.POINTING_HAND);
+        // A chip's color and what clicks do, after a rest and beside the editor, never over the other chips.
+        if (chipHover.settled(hoveredChip < 0 ? null : hoveredChip)) {
+            Tips.show(g, font, List.of(Component.literal("Color " + (hoveredChip + 1) + " · " + ColorPicker.hex(keys.get(hoveredChip))),
                 Component.literal(keys.size() > MIN_KEYS ? "Click to edit · Right-click to remove" : "Click to edit")
-                    .withStyle(net.minecraft.ChatFormatting.YELLOW)), mouseX, mouseY);
-        } else if (keys.size() < MAX_KEYS && inChip(keys.size(), mouseX, mouseY)) {
-            g.requestCursor(CursorTypes.POINTING_HAND);
-            g.setTooltipForNextFrame(font, Component.literal("Add a color after the selected one"), mouseX, mouseY);
+                    .withStyle(net.minecraft.ChatFormatting.YELLOW)), Tips.beside(x, y, x + width, y + height, x, y), mouseX, mouseY);
         }
     }
 

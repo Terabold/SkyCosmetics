@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.gui.hub;
 
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Host;
 import io.github.terabold.skycosmetics.hub.Option;
@@ -7,7 +8,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -88,7 +88,7 @@ public final class Controls {
                 yield new Built(b, () -> {
                     boolean on = a.active().getAsBoolean() && o.enabled().getAsBoolean();
                     b.active = on;
-                    b.setTooltip(on || a.inactiveTip().getString().isEmpty() ? null : Tooltip.create(a.inactiveTip()));
+                    Tips.set(b, on ? null : a.inactiveTip());
                 });
             }
             case Control.Color c -> {

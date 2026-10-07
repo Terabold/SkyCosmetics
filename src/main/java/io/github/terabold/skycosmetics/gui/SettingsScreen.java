@@ -17,6 +17,7 @@ import io.github.terabold.skycosmetics.gui.hub.ToggleSwitch;
 import io.github.terabold.skycosmetics.gui.ui.Anim;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Host;
@@ -27,9 +28,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -43,7 +44,6 @@ import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -207,8 +207,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         search.setPosition(close.getX() - 6 - searchW, wy + 5);
         search.setValue(typed);
         search.setResponder(this::searched);
-        search.setTooltip(Tooltip.create(Component.translatable("skycosmetics.menu.search.tooltip")));
-        search.setTooltipDelay(Duration.ofMillis(700));
+        Tips.set(search, Component.translatable("skycosmetics.menu.search.tooltip"), 700);
         titleRight = search.getX() - 8;
         addWidget(search);
         addWidget(close);
@@ -383,7 +382,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         r.refresh = () -> {
             boolean on = a.active().getAsBoolean() && o.enabled().getAsBoolean();
             card.active = on;
-            card.setTooltip(on || a.inactiveTip().getString().isEmpty() ? null : Tooltip.create(a.inactiveTip()));
+            Tips.set(card, on ? null : a.inactiveTip());
         };
         return r;
     }
@@ -790,6 +789,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         content(g, mx, my, delta);
         toast(g);
         g.pose().popMatrix();
+        if (overlay == null) Tips.widgets(g, font, children(), mx, my, this::tipPlace);
         if (overlay != null) {
             try {
                 overlay.render(g, mouseX, mouseY);
@@ -797,6 +797,19 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
                 overlayFailed(e);
             }
         }
+    }
+
+    /**
+     * Where a widget's tooltip goes: under the header's search and close; right of the sidebar for a section;
+     * left of a row's control, over its own row's text, else above or under it. Never over the controls near it.
+     */
+    private ClientTooltipPositioner tipPlace(AbstractWidget w) {
+        if (w == search || w == close) {
+            return Tips.beside(w.getX(), w.getY(), w.getRight(), w.getBottom(), w.getX(), w.getY(), Tips.Side.BELOW, Tips.Side.LEFT);
+        }
+        if (w instanceof SectionTab) return Tips.beside(wx, sideTop, cx, sideTop + sideH, w.getX(), w.getY(), Tips.Side.RIGHT);
+        return Tips.beside(w.getX(), w.getY(), w.getRight(), w.getBottom(), w.getX(), w.getY(), Tips.Side.LEFT, Tips.Side.ABOVE,
+            Tips.Side.BELOW);
     }
 
     /** Moves the scrolls toward their targets by the time since the last frame. */
@@ -874,7 +887,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         g.text(font, headTitle, hx + 22, hy, Theme.TEXT, false);
         g.text(font, headHelp, hx + 22, hy + 12, Theme.MUTED, false);
         if (headClipped && mx >= hx + 22 && mx < cx + cw && my >= hy + 11 && my < hy + 21) {
-            g.setTooltipForNextFrame(font, headHelpFull, mx, my);
+            Tips.show(g, font, List.of(headHelpFull), Tips.beside(hx + 22, hy + 11, cx + cw, hy + 21, hx + 22, hy + 11,
+                Tips.Side.BELOW, Tips.Side.ABOVE), mx, my);
         }
         g.fill(cx + 8, vy - 1, cx + cw - 8, vy, Theme.LINE_SOFT);
 

@@ -2,11 +2,11 @@ package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.compat.OtherLooks.Change;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -46,7 +46,7 @@ final class OtherChip extends AbstractWidget {
         } else {
             tip.append("\n").append(Component.translatable("skycosmetics.other.changeIn", mod).withStyle(ChatFormatting.YELLOW));
         }
-        setTooltip(Tooltip.create(tip));
+        Tips.set(this, tip);
     }
 
     /** The change's value for a tooltip: the name itself, or the value with a swatch of its color. */

@@ -4,16 +4,14 @@ import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.gui.ui.Anim;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import io.github.terabold.skycosmetics.hub.Section;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-
-import java.time.Duration;
 
 /**
  * A section in the settings' sidebar: its icon, name and a gray line under it. The open one sits on the accent's
@@ -43,14 +41,13 @@ public final class SectionTab extends ThemedButton {
             i = ItemStack.EMPTY;
         }
         this.icon = i == null ? ItemStack.EMPTY : i;
-        if (!rail) setTooltipDelay(Duration.ofMillis(400)); // the text is there, cut: no rush
         clip();
     }
 
     /** The name and the gray line under it, for a tab that shows only its icon or cuts its text. */
-    private Tooltip fullName() {
-        return Tooltip.create(section.sub().getString().isEmpty() ? section.name()
-            : Component.empty().append(section.name()).append("\n").append(section.sub().copy().withColor(Theme.MUTED & 0xFFFFFF)));
+    private Component fullName() {
+        return section.sub().getString().isEmpty() ? section.name()
+            : Component.empty().append(section.name()).append("\n").append(section.sub().copy().withColor(Theme.MUTED & 0xFFFFFF));
     }
 
     public Section section() {
@@ -95,7 +92,8 @@ public final class SectionTab extends ThemedButton {
         }
         if (cut != tip) {
             tip = cut;
-            setTooltip(cut ? fullName() : null);
+            // An icon alone says nothing: its name shows quickly. A cut name is there already: no rush.
+            Tips.set(this, cut ? fullName() : null, rail ? 150 : Tips.DELAY_MS);
         }
     }
 

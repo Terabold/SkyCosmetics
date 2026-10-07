@@ -6,6 +6,7 @@ import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.gui.hub.TextField;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -61,6 +62,7 @@ public class ColorPicker {
     private IntConsumer onCommit = c -> {};
 
     private Drag drag = Drag.NONE;
+    private final Tips.Hover recentHover = new Tips.Hover();
     private final EditBox hexBox;
     private boolean syncing;
 
@@ -207,6 +209,7 @@ public class ColorPicker {
 
         if (showRecent) {
             int n = recentSlots();
+            int recentOver = -1, recentX = 0;
             for (int i = 0; i < n; i++) {
                 int rx = x + i * (CHIP + CHIP_GAP);
                 boolean over = mouseX >= rx && mouseX < rx + CHIP && mouseY >= recentY && mouseY < recentY + CHIP;
@@ -216,12 +219,17 @@ public class ColorPicker {
                     Shapes.frame(g, rx, recentY, CHIP, CHIP, 2, over ? 0xFFFFFFFF : 0x50FFFFFF);
                     if (over) {
                         g.requestCursor(CursorTypes.POINTING_HAND);
-                        g.setTooltipForNextFrame(font, Component.literal(hex(c) + " · recent"),
-                            mouseX, mouseY);
+                        recentOver = c;
+                        recentX = rx;
                     }
                 } else {
                     Shapes.frame(g, rx, recentY, CHIP, CHIP, 2, Theme.LINE);
                 }
+            }
+            // Its hex code under the row, clear of the square above it.
+            if (recentHover.settled(recentOver < 0 ? null : recentOver)) {
+                Tips.show(g, font, List.of(Component.literal(hex(recentOver) + " · recent")), Tips.beside(x, recentY,
+                    x + width, recentY + CHIP, recentX, recentY, Tips.Side.BELOW, Tips.Side.RIGHT, Tips.Side.LEFT), mouseX, mouseY);
             }
         }
 

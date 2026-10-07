@@ -79,8 +79,20 @@ final class SavedTabTest {
         ctx.waitTicks(2);
         ctx.takeScreenshot("skycosmetics-61-saved-hover");
         ctx.getInput().setCursorPos(boots[2] * scale, boots[3] * scale);
-        ctx.waitTicks(2);
+        ctx.waitTicks(10); // a row's tooltip waits for the mouse to rest
         ctx.takeScreenshot("skycosmetics-61b-saved-remove-hover");
+        // Its tooltip shows beside the list, level with the row: never over the rows or buttons around it.
+        for (int[] size : new int[][]{{1920, 1080, 2}, {1920, 1080, 3}, {854, 480, 2}}) {
+            window(ctx, size[0], size[1], size[2]);
+            int[] b = buttons(ctx, "I" + BOOTS);
+            double sc = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
+            ctx.getInput().setCursorPos(b[0] * sc, b[1] * sc);
+            ctx.waitTicks(10);
+            ctx.takeScreenshot("skycosmetics-61c-list-tooltip-" + size[0] + "x" + size[1] + "-guiscale-" + size[2]);
+        }
+        window(ctx, 1920, 1080, 2);
+        ctx.getInput().setCursorPos(0, 0);
+        ctx.waitTicks(1);
 
         // One change off: only the glint color goes; Undo puts it back.
         helm = buttons(ctx, "I" + HELM);

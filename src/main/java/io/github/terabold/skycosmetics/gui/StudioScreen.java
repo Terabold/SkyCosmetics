@@ -22,6 +22,7 @@ import io.github.terabold.skycosmetics.gui.hub.TabButton;
 import io.github.terabold.skycosmetics.gui.hub.TextField;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import io.github.terabold.skycosmetics.hub.Hub;
 import io.github.terabold.skycosmetics.items.OwnedItems;
@@ -30,11 +31,10 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -234,6 +234,8 @@ public class StudioScreen extends Screen {
     private String status = "";
     private int statusColor = MUTED;
     private long statusAt;
+    /** What the item list, the grids and Other Mods' note have under the mouse: their tooltips wait for a rest. */
+    private final Tips.Hover listHover = new Tips.Hover(), gridHover = new Tips.Hover(), noteHover = new Tips.Hover();
     /** The footer line as drawn last frame. */
     private String footShown = "";
     private List<SkinEntry> skinResults = List.of();
@@ -649,7 +651,7 @@ public class StudioScreen extends Screen {
         undoButton = addRenderableWidget(new ActionButton(Component.literal("Undo"), uw, 11, ActionButton.Kind.SECONDARY,
             b -> runUndo()));
         undoButton.setPosition(midX + midW - uw, height - PAD - 11);
-        undoButton.setTooltip(Tooltip.create(Component.literal("Puts back the last removal · Ctrl+Z")));
+        Tips.set(undoButton, Component.literal("Puts back the last removal · Ctrl+Z"));
         undoButton.visible = undoShown();
         refilter();
     }
@@ -728,7 +730,7 @@ public class StudioScreen extends Screen {
                 Button b = addRenderableWidget(new ActionButton(Component.literal(more), font.width(more) + 8, OtherChip.HEIGHT,
                     ActionButton.Kind.SECONDARY, btn -> switchTab(Tab.OTHER)));
                 b.setPosition(cx, top + r * step);
-                b.setTooltip(Tooltip.create(Component.translatable("skycosmetics.chip.more")));
+                Tips.set(b, Component.translatable("skycosmetics.chip.more"));
             }
         }
         return lines.size();
@@ -935,8 +937,8 @@ public class StudioScreen extends Screen {
         settings.setPosition(PAD + leftW - 4 - sw, PAD + 3);
         title = font.width(TITLE) <= settings.getX() - 4 - (PAD + 6) ? TITLE : TITLE_PLAIN;
         keyTip = !Settings.keyTipShown && SkyCosmetics.openKey() != null && SkyCosmetics.openKey().isUnbound();
-        settings.setTooltip(Tooltip.create(Component.translatable(keyTip ? "skycosmetics.studio.settings.keyTip"
-            : "skycosmetics.studio.settings.tooltip")));
+        Tips.set(settings, Component.translatable(keyTip ? "skycosmetics.studio.settings.keyTip"
+            : "skycosmetics.studio.settings.tooltip"));
 
         SearchBox items = new SearchBox(font, w - 18, 14, Component.literal("Search My Items"), Component.literal("Search My Items…"));
         items.setPosition(x, PAD + 28);
@@ -968,17 +970,17 @@ public class StudioScreen extends Screen {
         scope.setPosition(x + indent, y);
         scope.active = id != null && id.uuid() != null;
         String type = id != null ? Repo.get().typeName(id.type()) : null;
-        scope.setTooltip(Tooltip.create(Component.literal(type != null
+        Tips.set(scope, Component.literal(type != null
             ? "Click to switch: this item only, or every " + type : "Click to switch: this item only, or every item of its type")
             .append(Component.literal("\nA look for every item of a type shows only on your own items")
-                .withStyle(ChatFormatting.GRAY))));
+                .withStyle(ChatFormatting.GRAY)));
         int half = (w - 4) / 2;
         Button reset = addRenderableWidget(new ActionButton(Component.literal("Reset"), half, 20, ActionButton.Kind.DANGER,
             b -> resetItem()));
         reset.setPosition(x, y + 24);
         reset.active = id != null;
-        reset.setTooltip(Tooltip.create(Component.literal(byType && type != null ? "Reset every " + type + " to original"
-            : "Reset to original")));
+        Tips.set(reset, Component.literal(byType && type != null ? "Reset every " + type + " to original"
+            : "Reset to original"));
         addRenderableWidget(new ActionButton(Component.literal("Done"), half, 20, ActionButton.Kind.PRIMARY,
             b -> onClose())).setPosition(x + half + 4, y + 24);
     }
@@ -1038,7 +1040,7 @@ public class StudioScreen extends Screen {
                     ActionButton.Kind.SECONDARY, b -> openDyePopup()));
                 custom.setPosition(midX + sw + 4, y - 22);
                 custom.active = ident() != null;
-                custom.setTooltip(Tooltip.create(Component.literal("Any color, or your own animated dye")));
+                Tips.set(custom, Component.literal("Any color, or your own animated dye"));
             }
             case STYLE -> {
                 int first = children().size();
@@ -1106,7 +1108,7 @@ public class StudioScreen extends Screen {
                 rebuildWidgets();
             }));
             chip.setPosition(cx, cy);
-            chip.setTooltip(Tooltip.create(Component.literal(f.help)));
+            Tips.set(chip, Component.literal(f.help));
             cx += w + 2;
         }
         return cy + 18;
@@ -1190,10 +1192,8 @@ public class StudioScreen extends Screen {
         for (ChatFormatting f : COLOURS) {
             Button b = place(pos, right, 1, swatch(Component.literal("■").withStyle(f), sw, rowH, f.getColor(), true,
                 () -> applyCode("&" + f.getChar())));
-            b.setTooltip(Tooltip.create(Component.literal(CodesTooltip.title(f)).withStyle(f)
-                .append(Component.literal("  &" + f.getChar()).withStyle(ChatFormatting.DARK_GRAY))
-                .append(Component.literal("\nColors the selection, or the text after the cursor")
-                    .withStyle(ChatFormatting.GRAY))));
+            Tips.set(b, Component.literal(CodesTooltip.title(f)).withStyle(f)
+                .append(Component.literal("  &" + f.getChar()).withStyle(ChatFormatting.DARK_GRAY)));
         }
         pos = new int[]{midX, pos[1] + rowH + (roomy ? 4 : 2)};
         int extra = 0; // roomy: the style buttons share the row's width
@@ -1206,9 +1206,10 @@ public class StudioScreen extends Screen {
             Component label = styleLabel(st);
             Button b = place(pos, right, 2, ((ActionButton) keepFocus(label, font.width(label) + 10 + extra, rowH,
                 () -> applyCode("&" + st[0]))).showStyle());
-            b.setTooltip(Tooltip.create(Component.literal(st[2]).append(Component.literal("  &" + st[0])
-                .withStyle(ChatFormatting.DARK_GRAY)).append(Component.literal(st[0].equals("r") ? ""
-                : "\nLetters that have it already lose it").withStyle(ChatFormatting.GRAY))));
+            // Bold, Italic... show what they do on themselves; Magic and Plain say it.
+            if (st[0].equals("k") || st[0].equals("r")) {
+                Tips.set(b, Component.literal(st[2]).append(Component.literal("  &" + st[0]).withStyle(ChatFormatting.DARK_GRAY)));
+            }
         }
         pos = new int[]{midX, pos[1] + rowH + (roomy ? 6 : 2)};
         if (roomy) {
@@ -1229,12 +1230,12 @@ public class StudioScreen extends Screen {
         } else {
             pos[1] = gradients(midX, pos[1], right - midX, 16) + 2;
             place(pos, right, 2, keepFocus(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, 16,
-                this::openNameColour)).setTooltip(Tooltip.create(Component.literal("Any color for the selection")));
+                this::openNameColour));
             pos[1] += 16;
         }
         resetName.active = l.name() != null || pendingName != null;
-        resetName.setTooltip(Tooltip.create(Component.literal(typeName != null
-            ? "Reset to the name for every " + Repo.get().typeName(ident().type()) : "Reset to the original name")));
+        Tips.set(resetName, Component.literal(typeName != null
+            ? "Reset to the name for every " + Repo.get().typeName(ident().type()) : "Reset to the original name"));
         return initGlint(pos[1] + (roomy ? 10 : 8), right);
     }
 
@@ -1250,7 +1251,6 @@ public class StudioScreen extends Screen {
         Button toggle = addRenderableWidget(new SwitchButton(Component.literal("Glint: " + (on ? "On" : "Off")),
             Component.literal("Glint"), on, cw, rowH, b -> toggleGlint()));
         toggle.setPosition(cx, glintIconY);
-        toggle.setTooltip(Tooltip.create(Component.literal("Click to turn " + (on ? "off" : "on"))));
         reset(cx + cw + 2, glintIconY, rowH, l.glint() != null, (t.glint() != null
             ? "Reset to every " + Repo.get().typeName(widgetsFor.type()) : "Reset to original")
             + " (" + (glintDefault() ? "On" : "Off") + ")", () -> {
@@ -1263,7 +1263,6 @@ public class StudioScreen extends Screen {
             queueGlint(look -> look.withGlintSpeed(s));
             speedReset.active = true;
         }, this::flushPending));
-        slider.setTooltip(Tooltip.create(Component.literal("Glint speed, 0.1x to 4x")));
         speedReset = reset(cx + cw + 2, glintIconY + step, rowH, l.glintSpeed() != null, "Reset to default (1.0x)",
             () -> {
                 pendingGlint = null;
@@ -1276,7 +1275,6 @@ public class StudioScreen extends Screen {
             queueGlint(look -> look.withGlintStrength(s));
             strengthReset.active = true;
         }, this::flushPending));
-        bright.setTooltip(Tooltip.create(Component.literal("Glint strength, 0.25x to 3x")));
         strengthReset = reset(cx + cw + 2, glintIconY + 2 * step, rowH, l.glintStrength() != null,
             "Reset to default (1.0x)", () -> {
                 pendingGlint = null;
@@ -1296,7 +1294,7 @@ public class StudioScreen extends Screen {
                 edit(look -> look.withGlintColor(value));
                 rebuildWidgets();
             }));
-            b.setTooltip(Tooltip.create(Component.literal(c[0]).withColor(rgb)));
+            Tips.set(b, Component.literal(c[0]).withColor(rgb));
             glintSquares.put(c[0], b);
             if (Objects.equals(colour, c[1]) || c[1] == null && PURPLE.equals(colour)) {
                 glintPick = b;
@@ -1305,8 +1303,7 @@ public class StudioScreen extends Screen {
         }
         pos[0] += 1; // the usual 2 px before a button
         place(pos, right, 2, new ActionButton(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, sq,
-            ActionButton.Kind.SECONDARY, b -> openGlintColour()))
-            .setTooltip(Tooltip.create(Component.literal("Any glint color")));
+            ActionButton.Kind.SECONDARY, b -> openGlintColour()));
         Button undo = undoButton(b -> {
             pendingGlint = null;
             edit(look -> look.withGlintColor(null));
@@ -1315,7 +1312,7 @@ public class StudioScreen extends Screen {
         undo.setHeight(sq);
         colourReset = place(pos, right, 2, undo);
         colourReset.active = l.glintColor() != null;
-        colourReset.setTooltip(Tooltip.create(Component.literal("Reset to default (purple)")));
+        Tips.set(colourReset, Component.literal("Reset to default (purple)"));
         return pos[1] + sq;
     }
 
@@ -1378,7 +1375,7 @@ public class StudioScreen extends Screen {
         Button b = addRenderableWidget(undoButton(btn -> action.run()));
         b.setRectangle(14, h, x, y);
         b.active = active;
-        b.setTooltip(Tooltip.create(Component.literal(tip)));
+        Tips.set(b, Component.literal(tip));
         return b;
     }
 
@@ -1512,8 +1509,8 @@ public class StudioScreen extends Screen {
         List<Button> all = new ArrayList<>();
         for (Gradient gr : GRADIENTS) all.add(gradientSwatch(gr.name(), gr.stops(), gw, h, null));
         Button chroma = new SwatchButton(Component.literal("Chroma"), gw, h, CHROMA_STOPS, btn -> applyChroma()).keepFocus();
-        chroma.setTooltip(Tooltip.create(Names.parse(Names.chroma() + "Chroma").append(Component.literal(" · a moving rainbow")
-            .withStyle(ChatFormatting.GRAY))));
+        Tips.set(chroma, Names.parse(Names.chroma() + "Chroma").append(Component.literal(" · a moving rainbow")
+            .withStyle(ChatFormatting.GRAY)));
         all.add(chroma);
         for (int[] st : own) {
             Button b = gradientSwatch("Your Gradient", st, gw, h, "Right-click to remove");
@@ -1521,7 +1518,7 @@ public class StudioScreen extends Screen {
             all.add(b);
         }
         Button make = new IconButton(Component.literal("+"), gw, h, 1, true, btn -> openGradientBuilder()).keepFocus();
-        make.setTooltip(Tooltip.create(Component.literal("Make your own gradient")));
+        Tips.set(make, Component.literal("Make your own gradient"));
         all.add(make);
         for (int i = 0; i < all.size(); i++) {
             Button b = all.get(i);
@@ -1536,7 +1533,7 @@ public class StudioScreen extends Screen {
         Button b = new SwatchButton(Component.literal(name), w, h, stops, btn -> applyGradient(stops)).keepFocus();
         MutableComponent tip = Names.parse(Names.gradient(name, 0, name.length(), stops).text());
         if (hint != null) tip.append(Component.literal("\n" + hint).withStyle(ChatFormatting.GRAY));
-        b.setTooltip(Tooltip.create(tip));
+        Tips.set(b, tip);
         return b;
     }
 
@@ -1899,15 +1896,33 @@ public class StudioScreen extends Screen {
         footShown = clip(fresh ? status : foot, footW);
         g.text(font, footShown, midX, fy, fresh ? statusColor : MUTED);
         if (fresh && font.width(status) > footW && mx >= midX && mx < midX + footW && my >= fy - 1 && my < fy + 9) {
-            g.setTooltipForNextFrame(font, Component.literal(status), mx, my);
+            Tips.show(g, font, List.of(Component.literal(status)), Tips.beside(midX, fy - 1, midX + footW, fy + 9, midX, fy,
+                Tips.Side.ABOVE), mx, my); // the whole message, over the line it was cut from
         }
-        if (itemsInfo != null && itemsInfo.isHovered()) g.setComponentTooltipForNextFrame(font, Settings.storedItems ? ITEMS_HELP : ITEMS_HELP_STORED_OFF, mx, my);
+        // The (i)s are there for their help: at once, beside their column, clear of what is used with them.
+        if (itemsInfo != null && itemsInfo.isHovered()) {
+            Tips.show(g, font, Settings.storedItems ? ITEMS_HELP : ITEMS_HELP_STORED_OFF, columnTip(itemsInfo), mx, my);
+        }
         codesShown = nameInfo != null && nameInfo.isHovered();
         if (codesShown) {
             g.nextStratum();
-            g.tooltip(font, CodesTooltip.lines(height), mx, my, DefaultTooltipPositioner.INSTANCE, null);
+            g.tooltip(font, CodesTooltip.lines(height), mx, my, columnTip(nameInfo), null);
         }
+        if (popup == null) Tips.widgets(g, font, children(), mx, my, this::columnTip);
         if (popup != null) popup.render(g, mouseX, mouseY);
+    }
+
+    /** The column a widget sits in, {x0, y0, x1, y1}: its tooltip keeps clear of it. */
+    private int[] columnOf(int x) {
+        if (x < midX - 2) return new int[]{PAD, PAD, PAD + leftW, height - PAD};
+        if (prevW > 0 && x >= prevX) return new int[]{prevX, PAD, prevX + prevW, height - PAD};
+        return new int[]{midX - 2, PAD, midX + midW + 4, height - PAD};
+    }
+
+    /** Beside the widget's column, level with the widget. */
+    private ClientTooltipPositioner columnTip(AbstractWidget w) {
+        int[] c = columnOf(w.getX());
+        return Tips.beside(c[0], c[1], c[2], c[3], w.getX(), w.getY());
     }
 
     /** Only leather takes dye: other armour is drawn as the leather piece for its slot, heads not at all. */
@@ -1938,6 +1953,7 @@ public class StudioScreen extends Screen {
         g.enableScissor(x, listTop, x + w, listBottom);
         int y = listTop - listScroll;
         Row hovered = null;
+        int hoveredY = 0;
         for (Row r : rows) {
             int h = r.isHeader() ? HEADER_H : ROW_H;
             if (y + h >= listTop && y < listBottom) {
@@ -1957,7 +1973,10 @@ public class StudioScreen extends Screen {
                     g.item(s, x + 2, y + 2);
                     g.text(font, clip(s.getStyledHoverName().getString(), w - 24), x + 21, y + 2, TEXT);
                     if (!r.sub().isEmpty()) small(g, r.sub(), x + 21, y + 12, MUTED);
-                    if (over) hovered = r;
+                    if (over) {
+                        hovered = r;
+                        hoveredY = y;
+                    }
                 }
             }
             y += h;
@@ -1970,14 +1989,15 @@ public class StudioScreen extends Screen {
             boolean overBar = mouseX >= x + w - 6 && mouseX < x + w && mouseY >= listTop && mouseY < listBottom;
             Shapes.round(g, x + w - 2, ty, 2, thumb, 1, overBar ? Theme.ACCENT : Theme.DIM);
         }
-        if (hovered != null) {
+        // Beside the list after a rest, level with the row: never over the rows around it.
+        if (listHover.settled(hovered == null ? null : hovered.key())) {
             List<Component> tip = new ArrayList<>();
             tip.add(hovered.stack().get().getStyledHoverName());
             if (!hovered.sub().isEmpty()) tip.add(Component.literal(hovered.sub()).withStyle(ChatFormatting.GRAY));
             if (hovered.role().startsWith("uuid:")) {
                 tip.add(Component.literal("Right-click to forget").withStyle(ChatFormatting.DARK_GRAY));
             }
-            g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
+            Tips.show(g, font, tip, Tips.beside(PAD, listTop, PAD + leftW, listBottom, x, hoveredY), mouseX, mouseY);
         }
     }
 
@@ -2074,14 +2094,17 @@ public class StudioScreen extends Screen {
         g.item(s, 0, 0);
         g.pose().popMatrix();
         if (mouseX < x || mouseX >= x + size || mouseY < y || mouseY >= y + size) return;
-        if (more == null) {
-            g.setTooltipForNextFrame(font, s, mouseX, mouseY);
-            return;
-        }
+        // The item's tooltip is long: beside the icon's column, never over the controls next to it.
         List<Component> lines = new ArrayList<>(Screen.getTooltipFromItem(minecraft, s));
-        lines.add(Component.empty());
-        lines.addAll(more.get());
-        g.setTooltipForNextFrame(font, lines, s.getTooltipImage(), mouseX, mouseY);
+        if (more != null) {
+            lines.add(Component.empty());
+            lines.addAll(more.get());
+        }
+        int[] c = columnOf(x);
+        List<FormattedCharSequence> seq = new ArrayList<>(lines.size());
+        for (Component l : lines) seq.add(l.getVisualOrderText());
+        g.setTooltipForNextFrame(font, seq, s.getTooltipImage(), Tips.beside(c[0], c[1], c[2], c[3], x, y), mouseX, mouseY,
+            false, null);
     }
 
     /** Where the model was drawn last frame, and the pet beside it; a size of 0 when it was not. */
@@ -2202,7 +2225,9 @@ public class StudioScreen extends Screen {
         g.text(font, shown, x + 30, y, color);
         clearMark(g, y, clearable, right, mouseX, mouseY);
         if (shown.length() != value.length() && mouseX >= x + 30 && mouseX < right - 10 && mouseY >= y - 1 && mouseY < y + 9) {
-            g.setTooltipForNextFrame(font, Component.literal(value), mouseX, mouseY); // cut: the whole value on hover
+            // Cut: the whole value, over the summary's own lines rather than the buttons under it.
+            Tips.show(g, font, List.of(Component.literal(value)), Tips.beside(x, y - 1, right, y + 9, x + 30, y - 1,
+                Tips.Side.ABOVE, Tips.Side.LEFT), mouseX, mouseY);
         }
     }
 
@@ -2212,7 +2237,6 @@ public class StudioScreen extends Screen {
         boolean over = mouseX >= cx && mouseX < cx + 8 && mouseY >= y - 1 && mouseY < y + 9;
         if (over) Shapes.round(g, cx, y - 1, 9, 9, 2, Theme.DANGER_HOVER);
         Ui.cross(g, cx + 2, y + 1, 5, over ? 0xFFFFFFFF : 0xFF9A5A5A);
-        if (over) g.setTooltipForNextFrame(font, Component.literal("Remove"), mouseX, mouseY);
     }
 
     // ------------------------------------------------------------- cards ---
@@ -2288,6 +2312,7 @@ public class StudioScreen extends Screen {
         int visible = gridH / cardH;
         clampScroll(list.size());
         SkinEntry hovered = null;
+        int hx = 0, hy = 0;
         String current = look().skin();
         int start = scroll * cols;
         int end = Math.min(list.size(), start + (visible + 1) * cols);
@@ -2325,7 +2350,11 @@ public class StudioScreen extends Screen {
             if (fav) star(g, cx, cy);
             int ly = fav ? cy + 12 : cy + 3; // under the star
             if (e.learned) g.fill(cx + 3, ly, cx + 6, ly + 3, 0xFF66DD88);
-            if (hover) hovered = e;
+            if (hover) {
+                hovered = e;
+                hx = cx;
+                hy = cy;
+            }
         }
         g.disableScissor();
         // Warm the next rows with what the budget leaves, so scrolling down rarely shows empty cards.
@@ -2333,7 +2362,7 @@ public class StudioScreen extends Screen {
         if (list.isEmpty() && !Repo.get().skins.isEmpty()) {
             g.centeredText(font, "Nothing matches \"" + query + "\"", midX + midW / 2, gridY + 20, MUTED);
         }
-        if (hovered != null) {
+        if (gridHover.settled(hovered == null ? null : hovered.id)) {
             List<Component> tip = new ArrayList<>();
             tip.add(Component.literal(hovered.name).withColor(hovered.color & 0xFFFFFF));
             if (hovered.animated()) {
@@ -2345,7 +2374,7 @@ public class StudioScreen extends Screen {
             tip.add(Component.literal(hovered.id.equals(current) ? "Click to remove" : "Click to apply")
                 .withStyle(ChatFormatting.YELLOW));
             tip.add(favoriteHint(Favorites.skin(hovered.id)));
-            g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
+            Tips.show(g, font, tip, gridTip(hx, hy), mouseX, mouseY);
         }
     }
 
@@ -2410,6 +2439,7 @@ public class StudioScreen extends Screen {
         int visible = gridH / cardH;
         clampScroll(list.size());
         DyeEntry hovered = null;
+        int hx = 0, hy = 0;
         String current = look().dye();
         g.enableScissor(midX, gridY, midX + midW, gridY + gridH);
         int start = scroll * cols;
@@ -2431,10 +2461,14 @@ public class StudioScreen extends Screen {
             g.fill(cx + 8, cy + 27, cx + cardW - 8, cy + 29, rgb); // live colour, animated dyes cycle here
             drawCardName(g, cx, cy + 1, d.id, d.name.replace(" Dye", ""), d.nameColor);
             if (Favorites.dye(d.id)) star(g, cx, cy);
-            if (hover) hovered = d;
+            if (hover) {
+                hovered = d;
+                hx = cx;
+                hy = cy;
+            }
         }
         g.disableScissor();
-        if (hovered != null) {
+        if (gridHover.settled(hovered == null ? null : hovered.id)) {
             int rgb = hovered.rgbAt(tick, 0);
             List<Component> tip = new ArrayList<>();
             tip.add(Component.literal(hovered.name).withColor(hovered.nameColor & 0xFFFFFF));
@@ -2446,8 +2480,13 @@ public class StudioScreen extends Screen {
             tip.add(Component.literal(hovered.id.equals(current) ? "Click to remove" : "Click to apply")
                 .withStyle(ChatFormatting.YELLOW));
             tip.add(favoriteHint(Favorites.dye(hovered.id)));
-            g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
+            Tips.show(g, font, tip, gridTip(hx, hy), mouseX, mouseY);
         }
+    }
+
+    /** A card's tooltip: beside the grid (over the preview, or the item list), level with the card. */
+    private ClientTooltipPositioner gridTip(int cx, int cy) {
+        return Tips.beside(midX - 2, gridY - 2, midX + midW + 4, gridY + gridH + 2, cx, cy);
     }
 
     /** A gold star in a card's top-left corner: a favorite, listed first. */
@@ -2531,9 +2570,10 @@ public class StudioScreen extends Screen {
     /** Other Mods: what other mods change on your items, with their mod's chip (see {@link OtherModsTab}). */
     private void drawOther(GuiGraphicsExtractor g, int mouseX, int mouseY, long tick) {
         g.text(font, clip(otherNote, midW), midX, otherNoteY + 1, MUTED);
-        if (mouseX >= midX && mouseX < midX + midW && mouseY >= otherNoteY && mouseY < otherNoteY + 10) {
-            g.setComponentTooltipForNextFrame(font, List.of(Component.literal(otherNote),
-                Component.translatable("skycosmetics.other.aboutHelp").withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
+        boolean overNote = mouseX >= midX && mouseX < midX + midW && mouseY >= otherNoteY && mouseY < otherNoteY + 10;
+        if (noteHover.settled(overNote ? otherNote : null)) {
+            Tips.show(g, font, List.of(Component.literal(otherNote), Component.translatable("skycosmetics.other.aboutHelp")
+                .withStyle(ChatFormatting.GRAY)), Tips.beside(midX - 2, PAD, midX + midW + 4, height - PAD, midX, otherNoteY), mouseX, mouseY);
         }
         boolean any = otherTab.render(g, midX, gridY, midW, gridH, mouseX, mouseY, tick);
         if (any) return;

@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * Makes a name gradient: 2 to {@link Names#MAX_STOPS} colors in order (click one to change it with the picker,
- * + adds one after it, the arrows move it, x or right-click removes it), shown live on the item's name as it
+ * + adds one at the end, the arrows move it, x or right-click removes it), shown live on the item's name as it
  * is now, at whatever length. Apply puts it on the selected letters or the whole name; Save Preset keeps it
  * beside the built-in gradients.
  */
@@ -355,14 +355,12 @@ public final class GradientPopup implements StudioPopup {
         picker.setRgb(stops.get(i));
     }
 
-    /** A new color after the selected one: halfway to the next, or lighter at the end. */
+    /** A new last color, lighter than the one before it; the arrows move it where it should go. */
     private void add() {
         if (stops.size() >= Names.MAX_STOPS) return;
-        int c = stops.get(selected);
-        int next = selected + 1 < stops.size() ? stops.get(selected + 1) : 0xFFFFFF;
-        stops.add(selected + 1, Names.mix(new int[]{c, next}, 0.5f));
+        stops.add(Names.mix(new int[]{stops.getLast(), 0xFFFFFF}, 0.5f));
         version++;
-        select(selected + 1);
+        select(stops.size() - 1);
     }
 
     private void remove(int i) {

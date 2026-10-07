@@ -171,10 +171,7 @@ public class ColorPopup implements StudioPopup {
         boolean overClose = inClose(mouseX, mouseY);
         if (overClose) Shapes.round(g, cx, cy, CLOSE, CLOSE, Theme.SMALL_RADIUS, 0xFF8A2E4A);
         Ui.cross(g, cx + 3, cy + 3, CLOSE - 6, overClose ? 0xFFFFFFFF : Theme.MUTED);
-        if (overClose) {
-            g.requestCursor(CursorTypes.POINTING_HAND);
-            g.setTooltipForNextFrame(font, Component.literal("Close (Esc)"), mouseX, mouseY);
-        }
+        if (overClose) g.requestCursor(CursorTypes.POINTING_HAND);
 
         if (editor != null) {
             int half = (w - 2 * PAD) / 2;

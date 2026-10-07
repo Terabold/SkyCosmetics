@@ -42,6 +42,10 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   (Custom Dye…, Custom Color…, Reset Name), and shorter search hints and messages.
 
 ### Changed
+- **Tooltips never cover what you are about to click.** In lists and grids (My Items, Saved, Other Mods, skins, dyes)
+  a tooltip waits until the mouse rests a moment, then shows beside the list, level with the row, instead of over the
+  next rows. Button tooltips do the same beside their column, the (i) help opens beside its column, and tooltips
+  that only said what a control already shows are gone.
 - **Gradient names in one short code.** A gradient is now `&[#FF0000>#00FF00]` (2 to 8 colors) before the letters it
   colors, instead of a code on every letter, so long names fit and stay readable in the name box, where the code shows
   in its own colors. Bold, italic and other styles work inside it, and editing part of a gradient keeps the rest smooth.

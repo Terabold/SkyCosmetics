@@ -13,6 +13,7 @@ import io.github.terabold.skycosmetics.gui.hub.ColorPresets;
 import io.github.terabold.skycosmetics.gui.hub.ColorSwatch;
 import io.github.terabold.skycosmetics.gui.hub.SectionTab;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -23,6 +24,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.entity.EquipmentSlot;
+import org.joml.Vector2ic;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -44,8 +46,30 @@ public class ThemeTest implements FabricClientGameTest {
     private static final String CHEST = "t-theme-chest", SWORD = "t-theme-sword";
     private static final int GOLD = 0xFFFBBF24, BLUE = 0xFF60A5FA;
 
+    /**
+     * Tooltips keep clear of the area they belong to: right of it level with the hovered row, else left, above or
+     * below; where nothing fits whole, the side with the most room, kept on screen.
+     */
+    private static void tooltipPlacement() {
+        // A list from x 10 to 100 on a 400 x 300 screen; a 80 x 20 tooltip for the row at y 50.
+        Vector2ic right = Tips.beside(10, 10, 100, 200, 10, 50).positionTooltip(400, 300, 0, 0, 80, 20);
+        check(right.x() == 107 && right.y() == 50, "right of the list, level with the row: " + right);
+        Vector2ic left = Tips.beside(300, 10, 395, 200, 300, 50).positionTooltip(400, 300, 0, 0, 80, 20);
+        check(left.x() == 300 - 7 - 80 && left.y() == 50, "left of a list at the right edge: " + left);
+        Vector2ic above = Tips.beside(10, 100, 100, 110, 30, 100, Tips.Side.ABOVE).positionTooltip(400, 300, 0, 0, 80, 20);
+        check(above.x() == 30 && above.y() == 100 - 7 - 20, "above when asked: " + above);
+        Vector2ic low = Tips.beside(10, 10, 100, 200, 10, 290).positionTooltip(400, 300, 0, 0, 80, 20);
+        check(low.y() + 20 <= 300 - 5, "kept on screen at the bottom: " + low);
+        Vector2ic wide = Tips.beside(100, 10, 300, 200, 100, 50).positionTooltip(400, 300, 0, 0, 150, 20);
+        check(wide.x() + 150 <= 400 - 5 && wide.x() >= 5, "too wide for either side: on screen anyway: " + wide);
+        Tips.Hover h = new Tips.Hover();
+        check(!h.settled("row") && !h.settled("row") && h.settled("row", 0) && !h.settled(null), "a hover waits, then settles");
+        System.out.println("[SkyCosmeticsTest] tooltip placement checks passed");
+    }
+
     @Override
     public void runTest(ClientGameTestContext ctx) {
+        tooltipPlacement();
         ctx.waitFor(mc -> !Repo.get().skins.isEmpty(), 20 * 120);
         int before = ctx.computeOnClient(mc -> Theme.accent());
         int[] size = ctx.computeOnClient(mc -> new int[]{mc.getWindow().getWidth(), mc.getWindow().getHeight()});

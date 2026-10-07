@@ -3,6 +3,7 @@ package io.github.terabold.skycosmetics.gui;
 import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -50,6 +51,8 @@ abstract class RowList {
     private Object builtFor;
     private int total;
     private int scroll;
+    /** The row (and which part of it) under the mouse: its tooltip waits for the mouse to rest. */
+    private final Tips.Hover hover = new Tips.Hover();
     /** Where the list was drawn last frame, for clicks and the wheel. */
     private int x, y, w, h;
 
@@ -147,14 +150,18 @@ abstract class RowList {
             boolean overBar = mouseX >= x + w - 5 && mouseX < x + w && mouseY >= y && mouseY < y + h;
             scrollbar(g, x + w - 3, y, h, ty, thumb, overBar);
         }
+        List<Component> tip = null;
         if (hovered != null) {
             try {
-                List<Component> tip = hovered.tooltip(x, hy, rw, mouseX, mouseY);
-                if (tip != null && !tip.isEmpty()) g.setComponentTooltipForNextFrame(font, tip, mouseX, mouseY);
+                tip = hovered.tooltip(x, hy, rw, mouseX, mouseY);
             } catch (RuntimeException e) {
                 Io.failed("A tooltip in " + getClass().getSimpleName(), e);
             }
         }
+        // After a rest, beside the list and level with the row: never over the rows or buttons around it.
+        boolean some = tip != null && !tip.isEmpty();
+        Tips.list(g, font, hover, some ? List.of(hovered, tip.getFirst().getString()) : null, tip, x - 2, y - 2, x + w + 4, y + h + 2,
+            x, hy, mouseX, mouseY);
         return !ls.isEmpty();
     }
 

@@ -5,6 +5,7 @@ import io.github.terabold.skycosmetics.gui.ColorPicker;
 import io.github.terabold.skycosmetics.gui.ui.Anim;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
+import io.github.terabold.skycosmetics.gui.ui.Tips;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Host;
@@ -15,6 +16,8 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+
+import java.util.List;
 
 /**
  * The color picker of a {@link ColorSwatch}, popped up next to it: the studio's {@link ColorPicker} (square, hue,
@@ -122,7 +125,8 @@ public final class ColorPopover implements Overlay {
             g.fill(kx - 1, alphaY - 1, kx + 2, alphaY + ALPHA_H + 1, 0xFFFFFFFF);
             if (overAlpha(mouseX, mouseY) || draggingAlpha) {
                 g.requestCursor(CursorTypes.RESIZE_EW);
-                g.setTooltipForNextFrame(font, Component.literal(alphaText), mouseX, mouseY);
+                Tips.show(g, font, List.of(Component.literal(alphaText)), Tips.beside(ax, alphaY, ax + aw, alphaY + ALPHA_H,
+                    Math.clamp(kx - 10, ax, ax + aw), alphaY, Tips.Side.BELOW, Tips.Side.ABOVE), mouseX, mouseY);
             }
         }
     }

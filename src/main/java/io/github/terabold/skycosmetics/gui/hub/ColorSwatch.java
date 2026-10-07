@@ -9,7 +9,6 @@ import io.github.terabold.skycosmetics.hub.Host;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -30,7 +29,6 @@ public final class ColorSwatch extends ThemedButton {
         super(width, H, title, b -> ((ColorSwatch) b).toggle());
         this.color = color;
         this.host = host;
-        setTooltip(Tooltip.create(Component.translatable("skycosmetics.menu.color.tooltip")));
         refresh();
     }
 

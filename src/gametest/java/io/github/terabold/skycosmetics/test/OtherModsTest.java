@@ -93,7 +93,7 @@ final class OtherModsTest {
         int[] dye = chips.get("Dyed by Skyblocker");
         double scale = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
         ctx.getInput().setCursorPos(dye[0] * scale, dye[1] * scale);
-        ctx.waitTicks(3);
+        ctx.waitTicks(10); // tooltips wait for the mouse to rest
         ctx.takeScreenshot("skycosmetics-64b-other-mod-chip-tooltip");
 
         click(ctx, dye[0], dye[1]);
