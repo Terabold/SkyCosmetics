@@ -63,6 +63,11 @@ with any mod, you use it under Hypixel's rules on allowed modifications.
 their change shows over SkyCosmetics' one: the editor marks it with a chip ("Dyed by Skyblocker"), and the **Other
 Mods** tab lists all of them, to remove in that mod's own settings or to move into SkyCosmetics.
 
+**An animated skin blinks at the wrong speed?** SkyCosmetics times each frame from what Hypixel shows you, and
+estimates blinks until then. Seeing the skin animate in game (on your pet, in the pets menu or a skin preview) fixes
+it for good. Share your `config/skycosmetics/timings.json` on the issue tracker and the timings ship with the next
+release, for everyone.
+
 ## Install
 
 - Download the jar from [Releases](https://github.com/Terabold/SkyCosmetics/releases) and put it in your `mods`

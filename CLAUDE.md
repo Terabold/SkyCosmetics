@@ -33,7 +33,7 @@ Package `io.github.terabold.skycosmetics`.
 | Entry | `SkyCosmetics`, `Migration` | Open key, `/skycosmetics` (settings), `/skycosmetics edit` (editor), registers everything; one-time copy of the old config. |
 | Looks | `Looks`, `Names`, `Favorites` | Saved looks `(skin, dye, name, glint)` per item UUID or per type (`config/skycosmetics/looks.json`); `Names` parses `&` codes and formats a selection (colors, styles, gradients); `Favorites` are the starred skins and dyes. |
 | Rendering | `Cosmetics`, `Textures`, `render/Glints`, `mixin/*` | Builds a **render copy** of a stack with the look; never edits the real item. |
-| Catalog | `data/*` | NEU repo → skins/dyes; picks Skyblocker's or Firmament's copy safely, reloads on their updates, learns unknown skins and real frame timing (`TimingLearner`). |
+| Catalog | `data/*` | NEU repo → skins/dyes; picks Skyblocker's or Firmament's copy safely, reloads on their updates, learns unknown skins and real frame timing (`TimingLearner`), estimates blinks the repo times evenly from the frames (`BlinkGuesser`). |
 | Pets | `pet/*`, `HeadSwap` | Tracks the summoned pet; reskins Hypixel's pet head in the world, whatever stand, mob, NPC or item display shows it (`/skycosmetics debug pet`). |
 | Orbs | `deploy/DeployedOrbs` | Reskins the power orb that appears right after your own deploy click (`/skycosmetics debug orb`). |
 | My Items | `items/OwnedItems`, `items/Profiles` | Remembers the player's own skinnable items (`config/skycosmetics/items.json`). |
@@ -78,9 +78,12 @@ of the main buffer source, so they draw after the surface under them, like vanil
 ## Data the mod reads and writes
 
 - Reads: NEU repo (`config/skyblocker/item-repo`, `.firmament/repo-extracted`, or its own
-  `config/skycosmetics/neu-repo.zip`); Mojang texture servers via Minecraft's skin loader.
+  `config/skycosmetics/neu-repo.zip`); Mojang texture servers via Minecraft's skin loader; skin files Minecraft
+  cached (`assets/skins`, for `BlinkGuesser`); bundled `assets/skycosmetics/timings.json`.
+- Frame timing sources, each over the one before: repo, estimated blink (only over even repo timing), bundled,
+  learned. `SkinEntry.timing` says which one a skin plays.
 - Writes (all in `config/skycosmetics/`): `settings.json`, `looks.json`, `items.json`, `pets.json`, `favorites.json`,
-  `captured.json`, `timings.json`.
+  `captured.json`, `timings.json`, `estimated-timings.json`.
 
 ## Conventions
 
