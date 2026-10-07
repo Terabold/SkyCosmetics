@@ -99,8 +99,7 @@ final class CodesTooltip implements ClientTooltipComponent {
         for (ChatFormatting f : ChatFormatting.values()) {
             if (!f.isColor()) continue;
             int rgb = f.getColor();
-            boolean dark = (rgb >> 16 & 0xFF) * 3 + (rgb >> 8 & 0xFF) * 6 + (rgb & 0xFF) < 0x100;
-            out.add(new Entry("&" + f.getChar(), Component.literal(title(f)).withStyle(f), rgb, dark));
+            out.add(new Entry("&" + f.getChar(), Component.literal(title(f)).withStyle(f), rgb, dark(rgb)));
         }
         out.add(style("l", "Bold", Style.EMPTY.withBold(true)));
         out.add(style("o", "Italic", Style.EMPTY.withItalic(true)));
@@ -127,6 +126,17 @@ final class CodesTooltip implements ClientTooltipComponent {
 
     private static Entry style(String code, String name, Style style) {
         return new Entry("&" + code, Component.literal(name).withStyle(style), -1, false);
+    }
+
+    /** Black and Dark Blue: too dark to read on a tooltip's black. */
+    private static boolean dark(int rgb) {
+        return (rgb >> 16 & 0xFF) * 3 + (rgb >> 8 & 0xFF) * 6 + (rgb & 0xFF) < 0x100;
+    }
+
+    /** A color's name in that color, for a tooltip; one too dark to read there in light gray instead. */
+    static MutableComponent colourName(ChatFormatting f) {
+        Component name = Component.literal(title(f));
+        return dark(f.getColor()) ? name.copy().withColor(DARK_NAME & 0xFFFFFF) : name.copy().withStyle(f);
     }
 
     /** "dark_blue" -> "Dark Blue". */

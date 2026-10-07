@@ -1199,7 +1199,7 @@ public class StudioScreen extends Screen {
         for (ChatFormatting f : COLOURS) {
             Button b = place(pos, right, 1, swatch(Component.literal("■").withStyle(f), sw, rowH, f.getColor(), true,
                 () -> applyCode("&" + f.getChar())));
-            Tips.set(b, Component.literal(CodesTooltip.title(f)).withStyle(f)
+            Tips.set(b, CodesTooltip.colourName(f)
                 .append(Component.literal("  &" + f.getChar()).withStyle(ChatFormatting.DARK_GRAY)));
         }
         pos = new int[]{midX, pos[1] + rowH + (roomy ? 4 : 2)};

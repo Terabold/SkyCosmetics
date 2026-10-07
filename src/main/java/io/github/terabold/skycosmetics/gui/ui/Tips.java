@@ -158,10 +158,12 @@ public final class Tips {
             if (!(c instanceof AbstractWidget w) || !w.visible) continue;
             Tip t = WIDGETS.get(w);
             if (t == null) continue;
-            if (w.isHovered() || keys && w.isFocused() && hovered == null) {
+            // Hovered when last drawn and under the mouse now: a control scrolled out of view keeps neither.
+            boolean over = w.isHovered() && mx >= w.getX() && mx < w.getRight() && my >= w.getY() && my < w.getBottom();
+            if (over || keys && w.isFocused() && hovered == null) {
                 hovered = w;
                 tip = t;
-                if (w.isHovered()) break;
+                if (over) break;
             }
         }
         if (!WIDGET_HOVER.settled(hovered, tip == null ? DELAY_MS : tip.delay)) return;

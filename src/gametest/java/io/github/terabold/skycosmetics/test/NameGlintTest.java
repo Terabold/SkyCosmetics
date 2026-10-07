@@ -312,8 +312,9 @@ final class NameGlintTest {
         check(v.equals(name(ctx)), "the name is saved: " + name(ctx));
         try {
             String json = Files.readString(FabricLoader.getInstance().getConfigDir().resolve("skycosmetics/settings.json"));
-            check(json.contains("nameGradients") && json.contains(Names.token(gp.stops()).substring(2, 26)),
-                "the preset is in settings.json");
+            String token = Names.token(gp.stops());
+            check(json.contains("nameGradients") && json.contains(token.substring(2, token.length() - 1)),
+                "the preset is in settings.json: " + token);
         } catch (java.io.IOException e) {
             throw new AssertionError(e);
         }
@@ -545,6 +546,8 @@ final class NameGlintTest {
         });
         ctx.takeScreenshot("skycosmetics-37-name-glint-1080p-guiscale-3-picker");
         codesHelp(ctx, "skycosmetics-37-name-codes-help-guiscale-3");
+        window(ctx, 1920, 1080, 2);
+        codesHelp(ctx, "skycosmetics-37-name-codes-help-1080p-guiscale-2");
 
         // A short window lists the codes in two columns.
         window(ctx, 854, 480, 0);
