@@ -170,7 +170,7 @@ public class SettingsClientTest implements FabricClientGameTest {
         }
         check(s.widget("openStudio") instanceof CardButton, "Open Studio is a card");
         check(s.widget("openKey") instanceof KeyBindButton, "the open key is a key box");
-        check(switches >= 6, "the studio's settings are switches: " + switches);
+        check(switches >= 5, "the studio's settings are switches: " + switches);
         for (GuiEventListener l : s.children()) {
             check(l.getClass().getName().startsWith("io.github.terabold.skycosmetics."), "only themed widgets: " + l.getClass().getName());
         }

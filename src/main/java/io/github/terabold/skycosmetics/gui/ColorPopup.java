@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  * click outside closes it. When the tab or the item changes the host simply
  * drops it: no callback fires, so nothing lands on the wrong item.
  */
-public class ColorPopup {
+public class ColorPopup implements StudioPopup {
     private static final int PAD = 6;
     private static final int TITLE_H = 12;
     private static final int TOGGLE_H = 14;
@@ -97,6 +97,7 @@ public class ColorPopup {
     }
 
     /** Centres the pop-up in an area: as big as its editor likes, never bigger than the area. */
+    @Override
     public void place(int areaX, int areaY, int areaW, int areaH) {
         w = Math.min(areaW, editor != null ? ANIM_W : SINGLE_W);
         int top = PAD + TITLE_H + 4 + (editor != null ? TOGGLE_H + 6 : 0);
@@ -128,6 +129,7 @@ public class ColorPopup {
         return animated;
     }
 
+    @Override
     public boolean isClosed() {
         return closed;
     }
@@ -155,6 +157,7 @@ public class ColorPopup {
     // ---------------------------------------------------------- render ---
 
     /** Draws in a layer of its own, so the text and items of the screen under it never show through. */
+    @Override
     public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Font font = Minecraft.getInstance().font;
         g.nextStratum();
@@ -186,6 +189,7 @@ public class ColorPopup {
     // ----------------------------------------------------------- input ---
 
     /** Takes every click: outside closes, inside goes to the switch or the editor. */
+    @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (!isMouseOver(mx, my) || inClose(mx, my)) {
             close();
@@ -201,12 +205,14 @@ public class ColorPopup {
         return true;
     }
 
+    @Override
     public boolean mouseDragged(double mx, double my, int button) {
         if (animated) editor.mouseDragged(mx, my, button);
         else picker.mouseDragged(mx, my, button);
         return true;
     }
 
+    @Override
     public boolean mouseReleased(double mx, double my, int button) {
         if (animated) editor.mouseReleased(mx, my, button);
         else picker.mouseReleased(mx, my, button);
@@ -214,6 +220,7 @@ public class ColorPopup {
     }
 
     /** Keys go to the hex box while it is being typed in; otherwise Esc closes and the rest are swallowed. */
+    @Override
     public boolean keyPressed(KeyEvent event) {
         boolean editing = animated ? editor.isEditing() : picker.isEditing();
         if (editing) {
@@ -225,6 +232,7 @@ public class ColorPopup {
         return true;
     }
 
+    @Override
     public boolean charTyped(CharacterEvent event) {
         if (animated) editor.charTyped(event);
         else picker.charTyped(event);
@@ -232,6 +240,7 @@ public class ColorPopup {
     }
 
     /** Closes as the user asked: a half-typed hex value is applied first, then the host is told. */
+    @Override
     public void close() {
         if (closed) return;
         stopEditing();

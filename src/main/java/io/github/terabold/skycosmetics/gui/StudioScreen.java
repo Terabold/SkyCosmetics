@@ -188,6 +188,9 @@ public class StudioScreen extends Screen {
     /** A name gradient preset: its colours from the first letter to the last (0xRRGGBB). */
     private record Gradient(String name, int... stops) {}
 
+    /** How the chroma button is filled: the rainbow it moves through. */
+    private static final int[] CHROMA_STOPS = {0xFF5555, 0xFFFF55, 0x55FF55, 0x55FFFF, 0x5555FF, 0xFF55FF};
+
     private static final List<Gradient> GRADIENTS = List.of(
         new Gradient("Rainbow", 0xFF5555, 0xFFAA00, 0xFFFF55, 0x55FF55, 0x55FFFF, 0x5555FF, 0xFF55FF),
         new Gradient("Fire", 0xFFF06A, 0xFF8A1F, 0xE0201B), new Gradient("Ocean", 0x55FFFF, 0x2F6BFF),
@@ -275,8 +278,11 @@ public class StudioScreen extends Screen {
     private final Map<AbstractWidget, Integer> styleY = new HashMap<>();
     private int styleScroll, styleMax;
     private boolean codesShown;
-    /** The colour pop-up over the middle column, or null. It gets every click and key first. */
-    private ColorPopup popup;
+    /** The colour or gradient pop-up over the middle column, or null. It gets every click and key first. */
+    private StudioPopup popup;
+    /** The player's saved gradients as drawn, for their right-click; a preset was saved while the builder was open. */
+    private final Map<Button, int[]> customGradients = new HashMap<>();
+    private boolean presetsChanged;
     /** Tab, item and scope the pop-up was opened for; it is dropped when any of them changes. */
     private String popupOwner;
     /** A dye chosen in a picker, applied once the mouse rests (no file write per drag step). */
@@ -330,6 +336,7 @@ public class StudioScreen extends Screen {
      */
     public StudioScreen(Screen parent, ItemStack focus) {
         super(Component.literal("SkyCosmetics"));
+        GradientPresets.init();
         this.parent = parent;
         this.focus = focus == null || focus.isEmpty() ? ItemStack.EMPTY : focus.copy();
     }
@@ -1112,8 +1119,8 @@ public class StudioScreen extends Screen {
         openPopup(new ColorPopup(Component.literal("Custom Dye"), current, true, this::queueDye).onClose(this::flushPending));
     }
 
-    /** Shows a colour pop-up over the middle column until it is closed or the tab, item or scope changes. */
-    private void openPopup(ColorPopup p) {
+    /** Shows a pop-up over the middle column until it is closed or the tab, item or scope changes. */
+    private void openPopup(StudioPopup p) {
         popup = p;
         popupOwner = popupOwnerKey();
         placePopup();
@@ -1475,32 +1482,109 @@ public class StudioScreen extends Screen {
     /** A gradient on the selected letters while the box has the keyboard, else on the whole name. */
     private void applyGradient(int[] stops) {
         if (nameBox == null) return;
-        String v = nameBox.getValue();
-        boolean focused = nameBox.isFocused();
-        int a = nameBox.selectionStart(), b = nameBox.selectionEnd();
-        boolean some = focused && a != b;
-        setName(Names.gradient(v, some ? a : 0, some ? b : v.length(), stops), focused);
+        int[] r = nameRange();
+        setName(Names.gradient(nameBox.getValue(), r[0], r[1], stops), nameBox.isFocused());
     }
 
-    /** The gradient presets from (x, y) in as few rows {@code w} wide as fit; returns the bottom of the last row. */
+    /** Chroma, the same way. */
+    private void applyChroma() {
+        if (nameBox == null) return;
+        int[] r = nameRange();
+        setName(Names.format(nameBox.getValue(), r[0], r[1], Names.chroma()), nameBox.isFocused());
+    }
+
+    /** The selected letters while the box has the keyboard and some are selected, else the whole name. */
+    private int[] nameRange() {
+        int a = nameBox.selectionStart(), b = nameBox.selectionEnd();
+        return nameBox.isFocused() && a != b ? new int[]{a, b} : new int[]{0, nameBox.getValue().length()};
+    }
+
+    /**
+     * The gradient presets from (x, y) in as few rows {@code w} wide as fit: the built-in ones, chroma, the
+     * player's own and + to make one. Returns the bottom of the last row.
+     */
     private int gradients(int x, int y, int w, int h) {
-        int perRow = Math.clamp((w + 2) / 20, 1, GRADIENTS.size());
+        customGradients.clear();
+        List<int[]> own = GradientPresets.list();
+        int n = GRADIENTS.size() + 1 + own.size() + 1;
+        int perRow = Math.clamp((w + 2) / 20, 1, n);
         int gw = (w + 2) / perRow - 2;
-        for (int i = 0; i < GRADIENTS.size(); i++) {
-            Button b = gradientSwatch(GRADIENTS.get(i), gw, h);
+        List<Button> all = new ArrayList<>();
+        for (Gradient gr : GRADIENTS) all.add(gradientSwatch(gr.name(), gr.stops(), gw, h, null));
+        Button chroma = new SwatchButton(Component.literal("Chroma"), gw, h, CHROMA_STOPS, btn -> applyChroma()).keepFocus();
+        chroma.setTooltip(Tooltip.create(Names.parse(Names.chroma() + "Chroma").append(Component.literal(" · a moving rainbow")
+            .withStyle(ChatFormatting.GRAY))));
+        all.add(chroma);
+        for (int[] st : own) {
+            Button b = gradientSwatch("Your Gradient", st, gw, h, "Right-click to remove");
+            customGradients.put(b, st);
+            all.add(b);
+        }
+        Button make = new IconButton(Component.literal("+"), gw, h, 1, true, btn -> openGradientBuilder()).keepFocus();
+        make.setTooltip(Tooltip.create(Component.literal("Make your own gradient")));
+        all.add(make);
+        for (int i = 0; i < all.size(); i++) {
+            Button b = all.get(i);
             b.setPosition(x + i % perRow * (gw + 2), y + i / perRow * (h + 2));
             addRenderableWidget(b);
         }
-        return y + (GRADIENTS.size() + perRow - 1) / perRow * (h + 2) - 2;
+        return y + (all.size() + perRow - 1) / perRow * (h + 2) - 2;
     }
 
     /** A gradient button filled with its colours; the name box keeps the keyboard and its selection. */
-    private Button gradientSwatch(Gradient gr, int w, int h) {
-        Button b = new SwatchButton(Component.literal(gr.name()), w, h, gr.stops(), btn -> applyGradient(gr.stops())).keepFocus();
-        String name = gr.name();
-        b.setTooltip(Tooltip.create(Names.parse(Names.gradient(name, 0, name.length(), gr.stops()).text())
-            .append(Component.literal("\nGradient for the selection, or the whole name").withStyle(ChatFormatting.GRAY))));
+    private Button gradientSwatch(String name, int[] stops, int w, int h, String hint) {
+        Button b = new SwatchButton(Component.literal(name), w, h, stops, btn -> applyGradient(stops)).keepFocus();
+        MutableComponent tip = Names.parse(Names.gradient(name, 0, name.length(), stops).text());
+        if (hint != null) tip.append(Component.literal("\n" + hint).withStyle(ChatFormatting.GRAY));
+        b.setTooltip(Tooltip.create(tip));
         return b;
+    }
+
+    /**
+     * The gradient builder, starting from the gradient the selected letters (or the name) already have. Apply
+     * goes to the letters selected now, or the whole name; a saved preset shows up once it closes.
+     */
+    private void openGradientBuilder() {
+        if (nameBox == null) return;
+        boolean focused = nameBox.isFocused();
+        int[] start = Names.gradientAt(nameBox.getValue(), nameRange()[0]);
+        openPopup(new GradientPopup(new GradientPopup.Host() {
+            @Override
+            public String name() {
+                return nameBox != null ? nameBox.getValue() : "";
+            }
+
+            @Override
+            public int selectionStart() {
+                return nameBox != null && focused ? nameBox.selectionStart() : 0;
+            }
+
+            @Override
+            public int selectionEnd() {
+                return nameBox != null && focused ? nameBox.selectionEnd() : 0;
+            }
+
+            @Override
+            public void apply(int[] stops, boolean whole) {
+                if (nameBox == null) return;
+                String v = nameBox.getValue();
+                int a = whole ? 0 : nameBox.selectionStart(), b = whole ? v.length() : nameBox.selectionEnd();
+                setName(Names.gradient(v, a, b, stops), focused);
+            }
+
+            @Override
+            public boolean save(int[] stops) {
+                boolean added = GradientPresets.add(stops);
+                presetsChanged |= added;
+                return added;
+            }
+        }, start).onClose(() -> {
+            flushPending();
+            if (presetsChanged) {
+                presetsChanged = false;
+                rebuildWidgets();
+            }
+        }));
     }
 
     /** Shows an edited name with the same letters selected; {@code focus} gives the box the keyboard. */
@@ -1672,12 +1756,27 @@ public class StudioScreen extends Screen {
         mc.setScreen(parent);
     }
 
+    /**
+     * The name box is built again with the rest; while it has the keyboard it keeps it, and its selection, so
+     * a pop-up working on the selected letters still finds them after a resize or a refresh.
+     */
+    @Override
+    protected void rebuildWidgets() {
+        NameBox old = nameBox != null && getFocused() == nameBox ? nameBox : null;
+        int from = old != null ? old.selectionStart() : 0, to = old != null ? old.selectionEnd() : 0;
+        super.rebuildWidgets();
+        if (old != null && nameBox != null && nameBox.visible && nameBox.getValue().equals(old.getValue())) {
+            setFocused(nameBox);
+            nameBox.select(from, to);
+        }
+    }
+
     /** Any screen change, not only Esc or Done: a menu Hypixel opens or closes, a warp, a disconnect. */
     @Override
     public void removed() {
         if (namePicker != null) namePicker.stopEditing(); // applies a half-typed hex value
         if (popup != null) {
-            ColorPopup p = popup;
+            StudioPopup p = popup;
             popup = null;
             p.close(); // applies a half-typed hex value; its close action saves
         }
@@ -2471,6 +2570,15 @@ public class StudioScreen extends Screen {
         }
         // Before the widgets: a click elsewhere also ends typing in its hex box. The name box keeps its selection.
         if (namePicker != null && namePicker.mouseClicked(mx, my, event.button())) return true;
+        if (event.button() == 1) { // a right-click on one of the player's gradients removes it
+            for (Map.Entry<Button, int[]> e : customGradients.entrySet()) {
+                if (!e.getKey().visible || !e.getKey().isMouseOver(mx, my)) continue;
+                GradientPresets.remove(e.getValue());
+                flash("Gradient preset removed", MUTED);
+                rebuildWidgets();
+                return true;
+            }
+        }
         if (super.mouseClicked(event, doubleClick)) return true;
         if (tooSmall) return false;
         if (nameBox != null && getFocused() == nameBox) setFocused(null); // a click elsewhere shows the styled name
@@ -2648,7 +2756,12 @@ public class StudioScreen extends Screen {
 
     /** The open colour pop-up, or null. */
     public ColorPopup popup() {
-        return popup;
+        return popup instanceof ColorPopup c ? c : null;
+    }
+
+    /** The gradient builder, while it is open. */
+    public GradientPopup gradientPopup() {
+        return popup instanceof GradientPopup g ? g : null;
     }
 
     public TooltipPanel preview() {

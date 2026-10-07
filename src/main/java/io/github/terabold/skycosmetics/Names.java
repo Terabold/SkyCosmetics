@@ -701,6 +701,12 @@ public final class Names {
         return out;
     }
 
+    /** The colours of the gradient the first letter at or after pos is in (0xRRGGBB), or null when it is in none. */
+    public static int[] gradientAt(String raw, int pos) {
+        for (Letter l : decode(raw)) if (l.start >= pos) return l.span != null ? l.span.stops.clone() : null;
+        return null;
+    }
+
     /** The colour of the first letter at or after pos as "#RRGGBB" (a gradient's letter: its own), or null. */
     public static String colourAt(String raw, int pos) {
         for (Letter l : decode(raw)) {

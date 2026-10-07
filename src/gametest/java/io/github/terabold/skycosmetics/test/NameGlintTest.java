@@ -4,11 +4,14 @@ import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.gui.ColorPicker;
 import io.github.terabold.skycosmetics.gui.ColorPopup;
+import io.github.terabold.skycosmetics.gui.GradientPopup;
+import io.github.terabold.skycosmetics.gui.GradientPresets;
 import io.github.terabold.skycosmetics.gui.NameBox;
 import io.github.terabold.skycosmetics.gui.SpeedSlider;
 import io.github.terabold.skycosmetics.gui.StudioScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -19,6 +22,7 @@ import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.StringDecomposer;
 import org.lwjgl.glfw.GLFW;
 
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -168,6 +172,7 @@ final class NameGlintTest {
         codesHelp(ctx, "skycosmetics-34-name-codes-help");
         resetName(ctx);
         nameColour(ctx);
+        gradientBuilder(ctx);
         glint(ctx);
         sizes(ctx);
         closedByServer(ctx);
@@ -257,6 +262,86 @@ final class NameGlintTest {
             Looks.put(false, UUID, Looks.byUuid(UUID).withName("&9Aspect &c&lof&9 the End"));
         });
         ctx.takeScreenshot("skycosmetics-33-name-preview");
+    }
+
+    /**
+     * The gradient builder: + after the presets opens it on the selected letters; a color added and changed shows
+     * in its preview; Apply puts one gradient code on those letters only; Save Preset keeps it beside the presets
+     * (settings.json), and a right-click there removes it. The name box shows the code tinted when focused and the
+     * gradient when not.
+     */
+    private static void gradientBuilder(ClientGameTestContext ctx) {
+        ctx.tryClickScreenButton("Reset Name");
+        ctx.waitTicks(2);
+        int saved = ctx.computeOnClient(mc -> GradientPresets.list().size());
+        ctx.runOnClient(mc -> {
+            NameBox box = screen(mc).nameBox();
+            mc.screen.setFocused(box);
+            box.select(2, 8); // "Aspect"
+        });
+        press(ctx, mc -> labelled(mc, "+").getLast());
+        GradientPopup gp = ctx.computeOnClient(mc -> screen(mc).gradientPopup());
+        check(gp != null && !gp.wholeName() && gp.stops().length == 2, "+ opens the builder on the selected letters");
+        int[] plus = gp.chipAt(2);
+        click(ctx, plus[0], plus[1]);
+        check(gp.stops().length == 3 && gp.selected() == 2, "+ adds a third color and picks it");
+        click(ctx, gp.picker().x() + 6, gp.picker().y() + 6);
+        ctx.waitTicks(2);
+        int[] stops = gp.stops();
+        check(stops[2] != Names.mix(new int[]{stops[1], 0xFFFFFF}, 0.5f), "the picker changes the picked color");
+        ctx.takeScreenshot("skycosmetics-39-gradient-builder");
+        for (int[] size : new int[][]{{1920, 1080, 2}, {1920, 1080, 3}, {854, 480, 2}}) {
+            window(ctx, size[0], size[1], size[2]);
+            ctx.takeScreenshot("skycosmetics-39-gradient-builder-" + size[0] + "x" + size[1] + "-guiscale-" + size[2]);
+        }
+        window(ctx, 1280, 720, 2);
+        GradientPopup again = ctx.computeOnClient(mc -> screen(mc).gradientPopup());
+        check(again == gp, "the builder stays open through a resize");
+        int[] apply = gp.applyAt();
+        click(ctx, apply[0], apply[1]);
+        ctx.waitTicks(2);
+        String v = ctx.computeOnClient(NameGlintTest::value);
+        check(v.equals(Names.token(gp.stops()) + "Aspect &9of the End"), "Apply puts one gradient code on 'Aspect': " + v);
+        int[] save = gp.saveAt();
+        click(ctx, save[0], save[1]);
+        ctx.waitTicks(2);
+        check(ctx.computeOnClient(mc -> GradientPresets.list().size()) == saved + 1, "Save Preset keeps it");
+        ctx.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        ctx.waitTicks(12);
+        check(ctx.computeOnClient(mc -> screen(mc).gradientPopup() == null), "Esc closes the builder");
+        check(v.equals(name(ctx)), "the name is saved: " + name(ctx));
+        try {
+            String json = Files.readString(FabricLoader.getInstance().getConfigDir().resolve("skycosmetics/settings.json"));
+            check(json.contains("nameGradients") && json.contains(Names.token(gp.stops()).substring(2, 26)),
+                "the preset is in settings.json");
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+
+        // The box: focused, the code tinted in its colors; not focused, the gradient itself.
+        ctx.runOnClient(mc -> mc.screen.setFocused(screen(mc).nameBox()));
+        ctx.waitTicks(1);
+        ctx.takeScreenshot("skycosmetics-39b-gradient-code-focused");
+        unfocus(ctx);
+        ctx.takeScreenshot("skycosmetics-39c-gradient-name-styled");
+        for (int[] size : new int[][]{{1920, 1080, 2}, {1920, 1080, 3}, {854, 480, 2}}) {
+            window(ctx, size[0], size[1], size[2]);
+            ctx.runOnClient(mc -> mc.screen.setFocused(screen(mc).nameBox()));
+            ctx.waitTicks(1);
+            ctx.takeScreenshot("skycosmetics-39b-gradient-code-focused-" + size[0] + "x" + size[1] + "-guiscale-" + size[2]);
+        }
+        window(ctx, 1280, 720, 2);
+        unfocus(ctx);
+
+        AbstractWidget mine = ctx.computeOnClient(mc -> labelled(mc, "Your Gradient").getLast());
+        double scale = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
+        ctx.getInput().setCursorPos((mine.getX() + 3) * scale, (mine.getY() + 3) * scale);
+        ctx.waitTicks(1);
+        ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+        ctx.waitTicks(2);
+        check(ctx.computeOnClient(mc -> GradientPresets.list().size()) == saved, "a right-click removes a saved gradient");
+        ctx.clickScreenButton("Reset Name");
+        ctx.waitTicks(2);
     }
 
     /** The (i) beside the name lists every code. */
