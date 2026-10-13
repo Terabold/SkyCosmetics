@@ -51,7 +51,7 @@ final class HandPresetScreen extends Screen {
             }, true);
             button("Apply", x + 12, y + 110, (w - 32) / 3, () -> { Hand.apply(preset.setup().deepCopy()); Hand.save(); status = "Setup applied."; }, true);
             button("Copy code", x + 16 + (w - 32) / 3, y + 110, (w - 32) / 3, () -> {
-                minecraft.keyboardHandler.setClipboard(HandImport.code(preset.setup())); status = "Setup code copied.";
+                minecraft.keyboardHandler.setClipboard(HandCode.code(preset.setup())); status = "Setup code copied.";
             }, true);
             button("Delete", x + 20 + 2 * ((w - 32) / 3), y + 110, (w - 32) / 3, () -> {
                 undo = Hand.removePreset(selected); selected = null; Hand.save(); status = "Setup deleted. Undo is available."; rebuildWidgets();

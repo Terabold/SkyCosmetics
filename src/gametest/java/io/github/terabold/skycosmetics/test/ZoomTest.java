@@ -24,7 +24,6 @@ public class ZoomTest implements FabricClientGameTest {
         JsonObject before = ctx.computeOnClient(mc -> ZoomSettings.write());
         boolean advancedBefore = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.gui.MenuState.advanced("zoom"));
         String keyBefore = ctx.computeOnClient(mc -> Zoom.primaryKey.saveString());
-        String secondBefore = ctx.computeOnClient(mc -> Zoom.secondaryKey.saveString());
         String resetBefore = ctx.computeOnClient(mc -> Zoom.resetKey.saveString());
         String inBefore = ctx.computeOnClient(mc -> Zoom.inKey.saveString());
         String outBefore = ctx.computeOnClient(mc -> Zoom.outKey.saveString());
@@ -37,7 +36,6 @@ public class ZoomTest implements FabricClientGameTest {
                 ZoomSettings.reset(); enabled = true;
                 primary.initial = 4; primary.scrollStep = 1.25;
                 primary.inSeconds = primary.outSeconds = primary.scrollSeconds = 0;
-                Zoom.secondaryKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_B)); KeyMapping.resetMapping();
                 Zoom.inKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_KP_ADD));
                 Zoom.resetKey.setKey(InputConstants.Type.MOUSE.getOrCreate(GLFW.GLFW_MOUSE_BUTTON_MIDDLE));
                 Zoom.outKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_KP_SUBTRACT)); KeyMapping.resetMapping();
@@ -110,17 +108,9 @@ public class ZoomTest implements FabricClientGameTest {
             ctx.setScreen(() -> null); ctx.waitTicks(4);
             check(ctx.computeOnClient(mc -> Zoom.magnification()) == 1, "closing the menu does not leave a stuck toggle");
 
-            ctx.runOnClient(mc -> { primary.mode = Mode.HOLD; primary.initial = 4;
-                secondary.inSeconds = secondary.outSeconds = 0; secondary.initial = 8;
-                secondary.overlay = Overlay.VIGNETTE; });
+            ctx.runOnClient(mc -> { primary.mode = Mode.HOLD; primary.initial = 4; });
             ctx.getInput().holdKey(GLFW.GLFW_KEY_J); ctx.waitTicks(3);
-            ctx.getInput().holdKey(GLFW.GLFW_KEY_B); ctx.waitTicks(3);
-            near(ctx.computeOnClient(mc -> Zoom.magnification()), 8, .0001, "secondary overrides primary");
-            check(ctx.computeOnClient(mc -> Zoom.hideHud()), "secondary profile hides the HUD");
-            ctx.takeScreenshot("skycosmetics-122-zoom-cinematic");
-            ctx.getInput().releaseKey(GLFW.GLFW_KEY_B); ctx.waitTicks(3);
-            near(ctx.computeOnClient(mc -> Zoom.magnification()), 4, .0001, "releasing secondary restores primary");
-            check(!ctx.computeOnClient(mc -> Zoom.hideHud()), "primary HUD settings restore");
+            near(ctx.computeOnClient(mc -> Zoom.magnification()), 4, .0001, "holding the key zooms to the starting level");
             ctx.runOnClient(mc -> { primary.overlay = Overlay.VIGNETTE; primary.hideCrosshair = true; primary.hideHand = true; });
             ctx.takeScreenshot("skycosmetics-123-zoom-vignette");
             check(ctx.computeOnClient(mc -> Zoom.hideHand() && Zoom.hideCrosshair()), "hand and crosshair options are active");
@@ -168,7 +158,7 @@ public class ZoomTest implements FabricClientGameTest {
             ctx.setScreen(() -> null);
             ctx.runOnClient(mc -> { ZoomSettings.read(before);
                 io.github.terabold.skycosmetics.gui.MenuState.advanced("zoom", advancedBefore); Settings.save();
-                Zoom.primaryKey.setKey(InputConstants.getKey(keyBefore)); Zoom.secondaryKey.setKey(InputConstants.getKey(secondBefore));
+                Zoom.primaryKey.setKey(InputConstants.getKey(keyBefore));
                 Zoom.resetKey.setKey(InputConstants.getKey(resetBefore)); Zoom.inKey.setKey(InputConstants.getKey(inBefore)); Zoom.outKey.setKey(InputConstants.getKey(outBefore));
                 KeyMapping.resetMapping(); mc.options.save(); });
         }

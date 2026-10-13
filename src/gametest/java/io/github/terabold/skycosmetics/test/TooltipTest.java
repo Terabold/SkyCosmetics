@@ -45,7 +45,7 @@ public class TooltipTest implements FabricClientGameTest {
             settings(ctx);
             inventoryPreview(ctx);
             rendering(ctx);
-            images(ctx);
+            cache(ctx);
             packedBackground(ctx);
         } catch (IOException e) {
             throw new AssertionError("Tooltip test files", e);
@@ -147,10 +147,9 @@ public class TooltipTest implements FabricClientGameTest {
             var screen = (SettingsScreen) mc.screen;
             check(!TooltipSettings.shiftToScroll && TooltipSettings.rarityBorder, "whole-tooltip scrolling needs no Shift and rarity borders are the default");
             check(screen.widget("image") == null && screen.widget("pattern") == null, "unrelated background controls are hidden");
-            TooltipSettings.background = TooltipSettings.Background.PATTERN; screen.changed();
-            check(TooltipSettings.effectiveBackground() == TooltipSettings.Background.SOLID
-                && TooltipSettings.write().get("background").getAsString().equals("PATTERN"), "paused pattern data remains readable but renders as solid");
-            check(screen.widget("image") == null && screen.widget("pattern") == null && screen.widget("direction") == null, "release menu does not revive deferred artwork controls");
+            JsonObject old = TooltipSettings.write(); old.addProperty("background", "PATTERN");
+            TooltipSettings.read(old);
+            check(TooltipSettings.effectiveBackground() == TooltipSettings.Background.SOLID, "an old pattern or image background reads as solid");
             TooltipSettings.background = TooltipSettings.Background.SOLID; screen.changed();
             JsonObject snapshot = TooltipSettings.write();
             TooltipSettings.reset();
@@ -253,33 +252,7 @@ public class TooltipTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> { TooltipSettings.enabled = true; TooltipSettings.size = 100; });
     }
 
-    private static void images(ClientGameTestContext ctx) throws IOException {
-        ctx.waitFor(mc -> !TooltipImage.busy(), 100);
-        Path input = ctx.computeOnClient(mc -> mc.gameDirectory.toPath().resolve("tooltip-image-test.png"));
-        try (NativeImage img = new NativeImage(32, 16, false)) {
-            for (int y = 0; y < 16; y++) for (int x = 0; x < 32; x++) img.setPixel(x, y, x < 16 ? 0xFF184050 : 0xFF306048);
-            img.writeToFile(input);
-        }
-        ctx.setScreen(() -> new TooltipImageScreen(null));
-        ctx.runOnClient(mc -> mc.screen.onFilesDrop(List.of(input)));
-        ctx.waitFor(mc -> !TooltipImage.busy(), 100);
-        check(TooltipImage.loaded() && Files.isRegularFile(TooltipImage.file()), "drag-drop imports and persists the local PNG");
-        ctx.setScreen(() -> new Sample(true, false));
-        ctx.getInput().setCursorPos(240, 160);
-        for (TooltipSettings.ImageFit fit : TooltipSettings.ImageFit.values()) {
-            ctx.runOnClient(mc -> TooltipSettings.imageFit = fit);
-            ctx.waitTicks(2);
-            ctx.takeScreenshot("skycosmetics-100f-tooltip-image-" + fit.name().toLowerCase(java.util.Locale.ROOT));
-        }
-        int imageVersion = TooltipImage.version();
-        Path broken = input.resolveSibling("tooltip-invalid-image-test.png");
-        Files.writeString(broken, "This is not a PNG. This must not replace the current image.");
-        ctx.runOnClient(mc -> TooltipImage.importFile(broken));
-        ctx.waitFor(mc -> !TooltipImage.busy(), 100);
-        check(TooltipImage.loaded() && TooltipImage.version() == imageVersion, "invalid image keeps the last good one");
-        ctx.runOnClient(mc -> TooltipImage.remove());
-        ctx.waitFor(mc -> !TooltipImage.busy(), 100);
-        check(!TooltipImage.loaded() && !Files.exists(TooltipImage.file()) && Files.exists(input), "Remove Image removes only our copy");
+    private static void cache(ClientGameTestContext ctx) {
         ctx.runOnClient(mc -> {
             for (int i = 0; i < 16; i++) {
                 TooltipSettings.color = 0xFF101020 + i;

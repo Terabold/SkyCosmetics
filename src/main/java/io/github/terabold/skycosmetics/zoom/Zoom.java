@@ -15,11 +15,11 @@ import static io.github.terabold.skycosmetics.zoom.ZoomSettings.*;
 
 /** Local camera state. No persistent vanilla options, items or player actions are changed. */
 public final class Zoom {
-    public static KeyMapping primaryKey, secondaryKey, inKey, outKey, resetKey;
+    public static KeyMapping primaryKey, inKey, outKey, resetKey;
     private static final ZoomTransition transition = new ZoomTransition();
     private static final ZoomTransition visibility = new ZoomTransition();
-    private static final double[] remembered = {primary.initial, secondary.initial};
-    private static final boolean[] toggled = new boolean[2];
+    private static final double[] remembered = {primary.initial};
+    private static final boolean[] toggled = new boolean[1];
     private static Object player;
     private static Object level;
     private static boolean waitForRelease;
@@ -35,7 +35,6 @@ public final class Zoom {
 
     public static void init(KeyMapping.Category category) {
         primaryKey = key("zoom", GLFW.GLFW_KEY_C, category);
-        secondaryKey = key("zoomSecondary", GLFW.GLFW_KEY_UNKNOWN, category);
         inKey = key("zoomIn", GLFW.GLFW_KEY_UNKNOWN, category);
         outKey = key("zoomOut", GLFW.GLFW_KEY_UNKNOWN, category);
         resetKey = key("zoomReset", GLFW.GLFW_KEY_UNKNOWN, category);
@@ -55,15 +54,15 @@ public final class Zoom {
 
     public static void reset() {
         transition.reset(); visibility.reset(); selected = -1; target = magnification = 1; amount = 0;
-        toggled[0] = toggled[1] = false; velocityX = velocityY = 0;
+        toggled[0] = false; velocityX = velocityY = 0;
     }
 
     public static void forgetLevels() {
-        remembered[0] = primary.initial; remembered[1] = secondary.initial; reset();
+        remembered[0] = primary.initial; reset();
     }
 
     public static void forgetLevel(Profile profile) {
-        remembered[profile == secondary ? 1 : 0] = profile.initial; reset();
+        remembered[0] = profile.initial; reset();
     }
 
     private static boolean allowed(Minecraft mc) {
@@ -75,7 +74,7 @@ public final class Zoom {
     public static void update() {
         Minecraft mc = Minecraft.getInstance();
         if (primaryKey == null) return;
-        int primaryClicks = clicks(primaryKey), secondaryClicks = clicks(secondaryKey);
+        int primaryClicks = clicks(primaryKey);
         int plus = clicks(inKey), minus = clicks(outKey), restore = clicks(resetKey);
         if (player != mc.player || level != mc.level) {
             waitForRelease |= selected >= 0;
@@ -83,22 +82,21 @@ public final class Zoom {
         }
         if (!allowed(mc)) {
             // Opening a screen clears KeyMapping.isDown before this update; retain the active hold too.
-            waitForRelease |= selected >= 0 || primaryKey.isDown() || secondaryKey.isDown();
+            waitForRelease |= selected >= 0 || primaryKey.isDown();
             reset(); return;
         }
         if (waitForRelease) {
-            if (primaryKey.isDown() || secondaryKey.isDown()) { reset(); return; }
+            if (primaryKey.isDown()) { reset(); return; }
             waitForRelease = false;
         }
         if ((primaryClicks & 1) != 0 && primary.mode == Mode.TOGGLE) toggled[0] = !toggled[0];
-        if ((secondaryClicks & 1) != 0 && secondary.mode == Mode.TOGGLE) toggled[1] = !toggled[1];
-        int next = active(secondary, secondaryKey, 1) ? 1 : active(primary, primaryKey, 0) ? 0 : -1;
+        int next = active(primary, primaryKey, 0) ? 0 : -1;
         double time = now();
         if (next != selected) {
             Profile previous = rendering;
             selected = next;
             if (next >= 0) {
-                rendering = next == 0 ? primary : secondary;
+                rendering = primary;
                 target = rendering.bounded(rendering.remember ? remembered[next] : rendering.initial);
                 remembered[next] = target;
                 transition.to(target, time, rendering.inSeconds, rendering.inCurve, true);

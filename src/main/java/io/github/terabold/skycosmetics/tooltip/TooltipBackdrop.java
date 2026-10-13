@@ -10,11 +10,10 @@ import net.minecraft.resources.Identifier;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** At most eight cached quads: gradients, patterns and image sampling are painted only on a cache miss. */
+/** At most eight cached quads: gradients and rounded borders are painted only on a cache miss. */
 public final class TooltipBackdrop {
     private record Key(int w, int h, int scale, int radius, int borderWidth, int a, int b, int border, boolean fill,
-                       TooltipSettings.Background background, TooltipSettings.Direction direction,
-                       TooltipSettings.Pattern pattern, int spacing, TooltipSettings.ImageFit fit, int imageOpacity, int imageVersion) {}
+                       TooltipSettings.Background background, TooltipSettings.Direction direction) {}
     private record Texture(Identifier id, int w, int h) {}
     private static final Map<Key, Texture> CACHE = new LinkedHashMap<>(8, 0.75f, true);
     private static int serial, builds;
@@ -30,8 +29,7 @@ public final class TooltipBackdrop {
         if (w < 1 || h < 1) return;
         Key key = new Key(w, h, Math.min(3, Minecraft.getInstance().getWindow().getGuiScale()), TooltipSettings.radius,
             border ? TooltipSettings.borderWidth : 0, TooltipSettings.color, TooltipSettings.colorEnd, border ? borderColor : 0, fill,
-            TooltipSettings.effectiveBackground(), TooltipSettings.direction, TooltipSettings.pattern, TooltipSettings.patternSize,
-            TooltipSettings.imageFit, TooltipSettings.imageOpacity, TooltipImage.version());
+            TooltipSettings.effectiveBackground(), TooltipSettings.direction);
         Texture texture = CACHE.get(key);
         if (texture == null) {
             texture = paint(key);
@@ -90,22 +88,6 @@ public final class TooltipBackdrop {
                 case VERTICAL -> y / k.h();
                 case DIAGONAL -> (x / k.w() + y / k.h()) / 2;
             });
-            case PATTERN -> {
-                float px = x % k.spacing(), py = y % k.spacing();
-                boolean mark = switch (k.pattern()) {
-                    case STRIPES -> (x + y) % k.spacing() < k.spacing() / 3f;
-                    case DOTS -> {
-                        float dx = px - k.spacing() / 2f, dy = py - k.spacing() / 2f, r = k.spacing() / 6f;
-                        yield dx * dx + dy * dy < r * r;
-                    }
-                    case GRID -> px < 1 || py < 1;
-                };
-                yield mark ? mix(k.a(), k.b(), .18f) : k.a();
-            }
-            case IMAGE -> {
-                int image = TooltipImage.sample(x, y, k.w(), k.h(), k.fit());
-                yield over(k.a(), image, k.imageOpacity() / 100f);
-            }
         };
     }
 

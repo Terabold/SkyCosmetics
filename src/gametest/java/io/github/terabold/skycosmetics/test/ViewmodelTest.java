@@ -36,20 +36,10 @@ public final class ViewmodelTest implements FabricClientGameTest {
                 Hand.setPose("item:TEST_VIEWMODEL_SWORD", HandPose.VANILLA.with(HandPose.Field.SIZE, .8f));
                 check(Hand.resolve(sword).equals(pose), "legacy SkyBlock rules cannot override the shared pose");
                 check(Hand.setup().getAsJsonObject("rules").size() == 2, "legacy rules remain saved for compatibility");
-                JsonObject current = JsonParser.parseString("{\"config\":[{\"name\":\"Animations\",\"enabled\":true,\"configSettings\":{\"X\":0.4,\"Item Scale\":0.2,\"Disable equip animation\":true}}]}").getAsJsonObject();
-                var found = HandImport.parse(HandImport.Source.NOAMM, current);
-                var legacy = current.deepCopy(); var array = new JsonArray();
-                for (var field : current.getAsJsonArray("config").get(0).getAsJsonObject().getAsJsonObject("configSettings").entrySet()) {
-                    var entry = new JsonObject(); entry.add(field.getKey(), field.getValue()); array.add(entry);
-                }
-                legacy.getAsJsonArray("config").get(0).getAsJsonObject().add("configSettings", array);
-                check(found != null && found.setup().equals(HandImport.parse(HandImport.Source.NOAMM, legacy).setup()), "old and current Noamm formats import the same pose");
-                var imported = HandPose.fromJson(found.setup().get("pose"));
-                check(imported.get(HandPose.Field.X) == .4f && imported.scaleX == 1.2f, "Noamm additive size and offsets import correctly");
                 JsonObject deep = new JsonObject(), tail = deep;
                 for (int i = 0; i < 30; i++) { var next = new JsonObject(); tail.add("nested", next); tail = next; }
-                check(HandImport.decode(HandImport.code(deep)) == null, "over-nested share data is rejected before applying anything");
-                check(HandImport.decode("skyhand1:" + "A".repeat(33 * 1024)) == null, "oversized share codes are rejected before decompression");
+                check(HandCode.decode(HandCode.code(deep)) == null, "over-nested share data is rejected before applying anything");
+                check(HandCode.decode("skyhand1:" + "A".repeat(33 * 1024)) == null, "oversized share codes are rejected before decompression");
             });
             ctx.setScreen(() -> new SettingsScreen(null, "hand")); ctx.waitTicks(2);
             ctx.runOnClient(mc -> check(((SettingsScreen)mc.screen).widget("handAdd") == null, "per-item controls are absent"));
@@ -66,7 +56,7 @@ public final class ViewmodelTest implements FabricClientGameTest {
                 Hand.setEnabled(enabled); Hand.save();
             });
         }
-        System.out.println("[SkyCosmeticsTest] viewmodel base-item rules, imports and picker passed");
+        System.out.println("[SkyCosmeticsTest] viewmodel shared pose, share codes and quick slots passed");
     }
     private static void thirdPersonSwing(ClientGameTestContext ctx,
         net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext world) {

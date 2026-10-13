@@ -1,33 +1,27 @@
 package io.github.terabold.skycosmetics.hand;
 
 import com.google.gson.JsonObject;
-import io.github.terabold.skycosmetics.Cosmetics;
-import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Hub;
 import io.github.terabold.skycosmetics.hub.Option;
 import io.github.terabold.skycosmetics.hub.Section;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
  * The Hand section of the settings: the options for every pose, the list of poses (edit, remove, add), presets,
- * imports from other mods and share codes. Poses themselves are edited in {@link HandScreen}, next to your hand.
+ * and share codes. Poses themselves are edited in {@link HandScreen}, next to your hand.
  */
 public final class HandSection {
     public static final String ID = "hand";
@@ -110,136 +104,13 @@ public final class HandSection {
             row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Edit slots"), 100, false,
                 b -> Minecraft.getInstance().setScreen(new HandPresetScreen(settings, null))), 0,
                 () -> !Hand.presets().isEmpty());
-            row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Import / share"), 100, false,
+            row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Share"), 100, false,
                 b -> Minecraft.getInstance().setScreen(new HandCodeScreen(settings))), 0);
             row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Reset"), 100, false,
                 b -> { Hand.apply(new JsonObject()); Hand.save(); rebuild(settings); }), 0);
             return row;
         })));
         return rows.stream().map(Option::compact).toList();
-    }
-
-    // -------------------------------------------------------------- poses ---
-
-    /** A pose: its name, Edit and Remove (Undo after), and what it changes under it. */
-    private static Option ruleRow(Screen settings, Hand.Rule r) {
-        boolean everything = r.key().equals(Hand.EVERYTHING);
-        Hand.Rule[] removed = {null};
-        Control control = new Control.Custom((host, w) -> {
-            ButtonRow row = new ButtonRow(w);
-            Button edit = Button.builder(tr("skycosmetics.hand.rule.edit"), b -> edit(settings, r.key())).build();
-            edit.setTooltip(Tooltip.create(tr(inWorld() ? "skycosmetics.hand.rule.edit.tooltip" : "skycosmetics.hand.option.edit.noWorld")));
-            row.add(edit, 0, () -> removed[0] == null && inWorld());
-            if (!everything) {
-                Button remove = Button.builder(tr("skycosmetics.hand.rule.remove"), b -> {
-                    if (removed[0] == null) {
-                        removed[0] = Hand.rule(r.key());
-                        Hand.removeRule(r.key());
-                        edit.setMessage(tr("skycosmetics.hand.rule.removed").withStyle(ChatFormatting.GRAY));
-                        b.setMessage(tr("skycosmetics.hand.undo"));
-                    } else {
-                        Hand.restoreRule(removed[0]);
-                        removed[0] = null;
-                        edit.setMessage(tr("skycosmetics.hand.rule.edit"));
-                        b.setMessage(tr("skycosmetics.hand.rule.remove"));
-                    }
-                    Hand.save();
-                }).build();
-                row.add(remove, Math.min(70, w / 3));
-            }
-            return row;
-        });
-        MutableComponent help = everything ? tr("skycosmetics.hand.rule.everything.help", summary(r.pose(), false))
-            : r.key().startsWith(Hand.ITEM) ? tr("skycosmetics.hand.rule.itemOnly", summary(r.pose(), false))
-            : summary(r.pose(), true);
-        return Option.of("handRule:" + r.key(), Hand.label(r.key()), help, control);
-    }
-
-    /** Add a Pose: what to add (kinds without a pose, then your SkyBlock items without one) and Add. */
-    private static Option addRow(Screen settings) {
-        return Option.of("handAdd", Component.literal("Item viewmodels"), Component.literal("Choose a profile item, or a vanilla item to affect every item with that base model."),
-            new Control.Action(Component.literal("Choose item…"), () -> Minecraft.getInstance().setScreen(new HandItemScreen(settings)),
-                HandSection::inWorld, tr("skycosmetics.hand.option.edit.noWorld")));
-    }
-    private static Component pickLabel(Map<String, Component> can, List<String> keys, int at) {
-        if (keys.isEmpty()) return tr("skycosmetics.hand.add.nothing");
-        return can.get(keys.get(at)).copy().append(keys.size() > 1 ? "  >" : "");
-    }
-
-    /** Kinds without a pose yet, then the SkyBlock items you hold or carry without one. */
-    static Map<String, Component> addable() {
-        Map<String, Component> out = new LinkedHashMap<>();
-        for (HandCategory c : HandCategory.values()) if (Hand.rule(c.key) == null) out.put(c.key, c.label());
-        LocalPlayer p = Minecraft.getInstance().player;
-        if (p == null) return out;
-        try {
-            List<ItemStack> mine = new ArrayList<>();
-            mine.add(p.getMainHandItem());
-            for (int i = 0; i < p.getInventory().getContainerSize(); i++) mine.add(p.getInventory().getItem(i));
-            for (ItemStack s : mine) {
-                Cosmetics.Ident id = s.isEmpty() ? null : Cosmetics.identify(s);
-                if (id == null || id.type() == null || id.type().startsWith("PET")) continue;
-                String key = Hand.ITEM + id.type();
-                if (out.containsKey(key) || Hand.rule(key) != null || !Hand.validKey(key)) continue;
-                String name = Hand.cleanName(Cosmetics.originalName(s).getString(), key);
-                out.put(key, tr("skycosmetics.hand.add.item", Hand.cleanName(stripReforge(name, key), key)));
-            }
-        } catch (RuntimeException e) {
-            Io.failed("Listing items for a hand pose", e);
-        }
-        return out;
-    }
-
-    /**
-     * The name for an item rule: Hypixel's name minus what one copy of the item has and another doesn't (stars,
-     * a reforge before the base name). When the name doesn't end with the id's words, the id's words are used.
-     */
-    static String stripReforge(String name, String key) {
-        String fromId = Hand.cleanName(null, key);
-        String plain = name.replaceAll("[^\\p{L}\\p{N}' -]", "").replaceAll("\\s+", " ").strip();
-        String[] words = plain.split(" "), idWords = fromId.split(" ");
-        if (words.length < idWords.length) return fromId;
-        StringBuilder tail = new StringBuilder();
-        for (int i = words.length - idWords.length; i < words.length; i++) {
-            if (!tail.isEmpty()) tail.append(' ');
-            tail.append(words[i]);
-        }
-        return tail.toString().equalsIgnoreCase(fromId) ? tail.toString() : fromId;
-    }
-
-    /** "Moved, turned, size 0.61x, in-place swing", or "As Minecraft"; lowercase first for use inside a sentence. */
-    static MutableComponent summary(HandPose p, boolean capital) {
-        List<Component> parts = new ArrayList<>();
-        if (p == null || p.isVanilla()) parts.add(tr("skycosmetics.hand.summary.vanilla"));
-        else describe(p, parts);
-        MutableComponent out = Component.empty();
-        for (int i = 0; i < parts.size(); i++) {
-            if (i > 0) out.append(", ");
-            out.append(i == 0 && capital ? capitalize(parts.get(i)) : parts.get(i));
-        }
-        return out;
-    }
-
-    private static void describe(HandPose p, List<Component> parts) {
-        if (p.offset) parts.add(tr("skycosmetics.hand.summary.moved"));
-        if (p.turned) parts.add(tr("skycosmetics.hand.summary.turned"));
-        if (p.resized) {
-            boolean uniform = p.scaleX == p.scaleY && p.scaleY == p.scaleZ;
-            parts.add(uniform ? tr("skycosmetics.hand.summary.size", PoseSlider.trim(p.scaleX) + "x")
-                : tr("skycosmetics.hand.summary.stretched"));
-        }
-        if (p.swing != HandPose.Swing.MOVING) parts.add(tr("skycosmetics.hand.summary.swing." + p.swing.key));
-        else if (p.swingScaled) parts.add(tr("skycosmetics.hand.summary.swingDistance"));
-        if (p.swing != HandPose.Swing.NONE && p.speed() != 1) {
-            parts.add(tr("skycosmetics.hand.summary.speed", PoseSlider.trim(p.speed()) + "x"));
-        }
-        if (p.swing != HandPose.Swing.NONE && p.swingTurned) parts.add(tr("skycosmetics.hand.summary.swingTurn"));
-        if (parts.isEmpty()) parts.add(tr("skycosmetics.hand.summary.pivot")); // only the pivot differs
-    }
-
-    private static Component capitalize(Component c) {
-        String s = c.getString();
-        return s.isEmpty() ? c : Component.literal(Character.toUpperCase(s.charAt(0)) + s.substring(1));
     }
 
     private static Component swayLabel(double v) {

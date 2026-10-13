@@ -15,7 +15,7 @@ public final class ZoomSettings {
 
     public static boolean enabled, thirdPerson = true;
     public static Modifier modifier = Modifier.NONE;
-    public static Profile primary = new Profile(), secondary = secondaryDefault();
+    public static Profile primary = new Profile();
 
     public static final class Profile {
         public Mode mode = Mode.HOLD;
@@ -38,29 +38,10 @@ public final class ZoomSettings {
     }
 
     private ZoomSettings() {}
-    private static Profile secondaryDefault() {
-        Profile p = new Profile(); p.initial = 8; p.inSeconds = .8; p.outSeconds = .5;
-        p.cinematic = Cinematic.CUSTOM; p.bars = .12; p.hideHud = true; p.indicator = false;
-        return p;
-    }
 
     public static void reset() {
         enabled = false; thirdPerson = true; modifier = Modifier.NONE;
-        primary = new Profile(); secondary = secondaryDefault(); Zoom.forgetLevels();
-    }
-
-    public static void preset(Profile p, String name) {
-        // Keep one profile's configuration independent of the other.
-        JsonObject defaults = writeProfile(new Profile()); readProfile(p, defaults);
-        switch (name) {
-            case "Instant" -> { p.inSeconds = p.outSeconds = p.scrollSeconds = 0; }
-            case "Classic cinematic" -> { p.cinematic = Cinematic.VANILLA; p.initial = 3; p.sensitivity = Sensitivity.RELATIVE; }
-            case "Persistent" -> { p.mode = Mode.PERSISTENT; p.initial = 1; p.remember = true; }
-            case "Cinematic" -> { p.inSeconds = .8; p.outSeconds = .5; p.cinematic = Cinematic.CUSTOM;
-                p.hideHud = true; p.indicator = false; p.bars = .12; p.initial = 8; }
-            default -> { }
-        }
-        Zoom.forgetLevel(p);
+        primary = new Profile(); Zoom.forgetLevels();
     }
 
     public static void read(JsonElement value) {
@@ -69,9 +50,8 @@ public final class ZoomSettings {
         thirdPerson = Settings.bool(o.get("thirdPerson"), thirdPerson);
         modifier = enumeration(o.get("modifier"), modifier);
         readProfile(primary, Settings.obj(o.get("primary")));
-        readProfile(secondary, Settings.obj(o.get("secondary")));
         if (!o.has("timingVersion")) {
-            upgradeStockTiming(primary); upgradeStockTiming(secondary);
+            upgradeStockTiming(primary);
         }
         Zoom.forgetLevels();
     }
@@ -80,7 +60,7 @@ public final class ZoomSettings {
         JsonObject o = new JsonObject(); o.addProperty("enabled", enabled); o.addProperty("thirdPerson", thirdPerson);
         o.addProperty("timingVersion", 1);
         o.addProperty("modifier", modifier.name());
-        o.add("primary", writeProfile(primary)); o.add("secondary", writeProfile(secondary)); return o;
+        o.add("primary", writeProfile(primary)); return o;
     }
 
     /** Migrate only the exact timings supplied by older styles; keep individually adjusted durations. */

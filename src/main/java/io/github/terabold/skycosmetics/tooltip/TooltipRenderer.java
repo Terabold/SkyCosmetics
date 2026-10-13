@@ -37,7 +37,6 @@ public final class TooltipRenderer {
     public static void init() {
         TooltipSettings.init();
         TooltipSection.register();
-        TooltipImage.load();
         ScreenEvents.AFTER_INIT.register((mc, s, w, h) -> {
             ScreenMouseEvents.allowMouseScroll(s).register((view, mx, my, dx, dy) -> {
                 try {
