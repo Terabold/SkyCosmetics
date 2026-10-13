@@ -155,7 +155,8 @@ public final class Hand {
     /** After any change: poses are looked up again on the next frame. Saving is the caller's (once per edit). */
     static void changed() {
         version++;
-        active = previewKey != null || enabled && !isVanillaSetup();
+        active = previewKey != null || enabled && (!everything.isVanilla() || equip != Equip.NORMAL || sway != 1
+            || !emptyAndMaps || ignoreEffects || fullSwings);
     }
 
     /**
@@ -298,22 +299,11 @@ public final class Hand {
     // ------------------------------------------------------------ lookup ---
 
     /**
-     * The rule key that decides how this stack is held: its item's rule, else its kind's, else everything's.
-     * Empty hands and maps use everything's pose only with "Empty Hand & Maps" on; null means vanilla.
+     * One shared pose. Older per-item rules remain in saved setups for compatibility, but no longer override it.
+     * Empty hands and maps use the shared pose only with "Empty Hand & Maps" on; null means vanilla.
      */
     public static String keyFor(ItemStack s) {
-        if (s == null || s.isEmpty()) {
-            if (RULES.containsKey(HandCategory.EMPTY.key)) return HandCategory.EMPTY.key;
-            return emptyAndMaps ? EVERYTHING : null;
-        }
-        Cosmetics.Ident id = Cosmetics.identify(s);
-        if (id != null && id.type() != null) {
-            String k = ITEM + id.type();
-            if (RULES.containsKey(k)) return k;
-        }
-        if (s.has(DataComponents.MAP_ID)) return emptyAndMaps ? EVERYTHING : null;
-        HandCategory c = HandCategory.of(s);
-        if (RULES.containsKey(c.key)) return c.key;
+        if (s == null || s.isEmpty() || s.has(DataComponents.MAP_ID)) return emptyAndMaps ? EVERYTHING : null;
         return EVERYTHING;
     }
 

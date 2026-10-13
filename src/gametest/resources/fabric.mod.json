@@ -3,8 +3,17 @@
   "id": "skycosmetics-test",
   "version": "1.0.0",
   "environment": "client",
+  "mixins": ["skycosmetics-test.mixins.json"],
   "entrypoints": {
     "fabric-client-gametest": [
+      "io.github.terabold.skycosmetics.test.MenuMemoryTest",
+      "io.github.terabold.skycosmetics.data.RepoBoundsTest",
+      "io.github.terabold.skycosmetics.test.NametagTest",
+      "io.github.terabold.skycosmetics.test.ModelTest",
+      "io.github.terabold.skycosmetics.test.ViewmodelTest",
+      "io.github.terabold.skycosmetics.test.MenuPolishTest",
+      "io.github.terabold.skycosmetics.test.ZoomTest",
+      "io.github.terabold.skycosmetics.test.PolishTest",
       "io.github.terabold.skycosmetics.test.SkyCosmeticsClientTest",
       "io.github.terabold.skycosmetics.test.SettingsClientTest",
       "io.github.terabold.skycosmetics.test.MenuClientTest",
@@ -12,8 +21,12 @@
       "io.github.terabold.skycosmetics.test.DataSafetyTest",
       "io.github.terabold.skycosmetics.test.StudioTabsClientTest",
       "io.github.terabold.skycosmetics.test.ThemeTest",
-      "io.github.terabold.skycosmetics.test.TimingLearnerTest",
-      "io.github.terabold.skycosmetics.test.SlotsTest"
+      "io.github.terabold.skycosmetics.test.BlinkTimingTest",
+      "io.github.terabold.skycosmetics.test.SlotsTest",
+      "io.github.terabold.skycosmetics.test.VariantsTest",
+      "io.github.terabold.skycosmetics.test.NoSkinDetectionTest",
+      "io.github.terabold.skycosmetics.test.UpdateTest",
+      "io.github.terabold.skycosmetics.test.TooltipTest"
     ]
   },
   "depends": { "skycosmetics": "*" }

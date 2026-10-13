@@ -3,8 +3,6 @@ package io.github.terabold.skycosmetics;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.terabold.skycosmetics.compat.OtherLooks;
 import io.github.terabold.skycosmetics.data.Repo;
-import io.github.terabold.skycosmetics.data.SkinLearner;
-import io.github.terabold.skycosmetics.data.TimingLearner;
 import io.github.terabold.skycosmetics.deploy.DeployedOrbs;
 import io.github.terabold.skycosmetics.gui.GeneralSection;
 import io.github.terabold.skycosmetics.gui.InventoryButton;
@@ -71,10 +69,10 @@ public class SkyCosmetics implements ClientModInitializer {
     public void onInitializeClient() {
         Migration.run(); // first: copies config/skinstudio before anything reads config/skycosmetics
         Settings.load();
+        io.github.terabold.skycosmetics.gui.MenuState.init();
         Looks.load();
         Favorites.load();
         Repo.reload(Looks::bump);
-        SkinLearner.init();
         PetTracker.init();
         DeployedOrbs.init();
         OwnedItems.init();
@@ -82,16 +80,21 @@ public class SkyCosmetics implements ClientModInitializer {
         Profiles.init();
         InventoryButton.register();
         Glints.init();
+        io.github.terabold.skycosmetics.render.Chroma.init();
+        io.github.terabold.skycosmetics.nametag.Nametags.init();
         OtherLooks.init();
         GeneralSection.register();
         StudioSection.register();
+        io.github.terabold.skycosmetics.tooltip.TooltipRenderer.init();
         io.github.terabold.skycosmetics.slots.RarityBackgrounds.init();
         io.github.terabold.skycosmetics.slots.HeadSize.init();
         io.github.terabold.skycosmetics.hand.Hand.init();
+        io.github.terabold.skycosmetics.update.Updater.init();
         // Last, so saves queued by the other stop hooks are written before exit.
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Io.flush());
 
         KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
+        io.github.terabold.skycosmetics.zoom.Zoom.init(category);
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
             "key.skycosmetics.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category)); // unbound: K clashed with other mods
 
@@ -125,7 +128,6 @@ public class SkyCosmetics implements ClientModInitializer {
                 .then(ClientCommands.literal("debug").executes(ctx -> {
                     ctx.getSource().sendFeedback(prefix().append(Component.literal("Usage: /skycosmetics debug pet|orb"
                         + " - what the pet or orb reskin sees near you").withStyle(ChatFormatting.GRAY)));
-                    ctx.getSource().sendFeedback(prefix().append(Component.literal(TimingLearner.status()).withStyle(ChatFormatting.GRAY)));
                     ctx.getSource().sendFeedback(prefix().append(Component.literal(io.github.terabold.skycosmetics.data.BlinkGuesser.status()).withStyle(ChatFormatting.GRAY)));
                     return 1;
                 }))));

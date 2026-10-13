@@ -74,6 +74,16 @@ public final class Tips {
      * with the hovered thing at (ax, ay); where none fits, on the side with the most room, kept on screen.
      */
     public static ClientTooltipPositioner beside(int x0, int y0, int x1, int y1, int ax, int ay, Side... order) {
+        return place(x0, y0, x1, y1, ax, ay, false, order);
+    }
+
+    /** Follows the mouse, offset just far enough to leave the hovered card and the tooltip's frame clear. */
+    public static ClientTooltipPositioner near(int x0, int y0, int x1, int y1) {
+        return place(x0, y0, x1, y1, 0, 0, true, BESIDE);
+    }
+
+    private static ClientTooltipPositioner place(int x0, int y0, int x1, int y1, int ax, int ay,
+                                                boolean followMouse, Side... order) {
         Side[] sides = order.length == 0 ? BESIDE : order;
         return (sw, sh, mx, my, tw, th) -> {
             Side best = null;
@@ -97,20 +107,20 @@ public final class Tips {
             int x, y;
             switch (best) {
                 case RIGHT -> {
-                    x = x1 + GAP;
-                    y = ay;
+                    x = followMouse ? Math.max(x1 + GAP, mx + 12) : x1 + GAP;
+                    y = followMouse ? my - 12 : ay;
                 }
                 case LEFT -> {
-                    x = x0 - GAP - tw;
-                    y = ay;
+                    x = followMouse ? Math.min(x0 - GAP - tw, mx - 12 - tw) : x0 - GAP - tw;
+                    y = followMouse ? my - 12 : ay;
                 }
                 case ABOVE -> {
-                    x = ax;
-                    y = y0 - GAP - th;
+                    x = followMouse ? mx + 12 : ax;
+                    y = followMouse ? Math.min(y0 - GAP - th, my - 12 - th) : y0 - GAP - th;
                 }
                 default -> {
-                    x = ax;
-                    y = y1 + GAP;
+                    x = followMouse ? mx + 12 : ax;
+                    y = followMouse ? Math.max(y1 + GAP, my + 12) : y1 + GAP;
                 }
             }
             return new Vector2i(Math.clamp(x, EDGE, Math.max(EDGE, sw - EDGE - tw)), Math.clamp(y, EDGE, Math.max(EDGE, sh - EDGE - th)));

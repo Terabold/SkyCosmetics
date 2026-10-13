@@ -185,8 +185,9 @@ final class SkyOceanLooks implements OtherLooks.Source {
                 Object material = v instanceof JsonObject o ? o.get("trimMaterial") : Reflect.field(v, "trimMaterial");
                 Object pattern = v instanceof JsonObject o ? o.get("trimPattern") : Reflect.field(v, "trimPattern");
                 String text = pattern != null && material != null
-                    ? Reflect.words(json(pattern)) + " · " + Reflect.words(json(material)) : "Custom";
-                yield new Change(this, item, Kind.TRIM, text, -1, null, handle, null, live);
+                    ? Reflect.words(json(pattern)) + " in " + Reflect.words(json(material)) : "Custom";
+                String token = pattern != null && material != null ? io.github.terabold.skycosmetics.render.Trims.token(String.valueOf(json(pattern)), String.valueOf(json(material))) : null;
+                yield new Change(this, item, Kind.TRIM, text, -1, null, handle, token == null ? null : l -> l.withTrim(token), live);
             }
             default -> null;
         };
@@ -222,7 +223,7 @@ final class SkyOceanLooks implements OtherLooks.Source {
         float[] at = new float[rgbs.length];
         for (int i = 0; i < at.length; i++) at[i] = i;
         String anim = Values.animatedDye(rgbs, at, false, ticks / 20f);
-        return new Change(this, item, Kind.DYE, "Gradient · " + Names.count(rgbs.length, "color"),
+        return new Change(this, item, Kind.DYE, "Gradient with " + Names.count(rgbs.length, "color"),
             rgbs.length == 0 ? -1 : rgbs[0] & 0xFFFFFF, null, handle, anim != null ? l -> l.withDye(anim) : null, live);
     }
 

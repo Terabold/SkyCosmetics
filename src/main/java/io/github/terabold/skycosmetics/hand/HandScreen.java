@@ -51,7 +51,7 @@ public final class HandScreen extends Screen {
     public HandScreen(Screen parent, String key) {
         super(Component.translatable("skycosmetics.hand.editor"));
         this.parent = parent;
-        this.key = Hand.pose(key) != null ? key : Hand.EVERYTHING;
+        this.key = Hand.EVERYTHING;
     }
 
     public String key() {
@@ -67,12 +67,6 @@ public final class HandScreen extends Screen {
         boolean rightHanded = minecraft.player == null || minecraft.player.getMainArm() == HumanoidArm.RIGHT;
         px = rightHanded ? PAD : width - PAD - pw;
         int inner = pw - 2 * IN;
-
-        // Header: which pose, with arrows to the others.
-        addRenderableWidget(Button.builder(Component.literal("<"), b -> step(-1)).bounds(px + IN, PAD + 16, 20, 20)
-            .tooltip(Tooltip.create(Component.translatable("skycosmetics.hand.editor.previous"))).build());
-        addRenderableWidget(Button.builder(Component.literal(">"), b -> step(1)).bounds(px + pw - IN - 20, PAD + 16, 20, 20)
-            .tooltip(Tooltip.create(Component.translatable("skycosmetics.hand.editor.next"))).build());
 
         // The pose's numbers, in a list that scrolls.
         int top = PAD + HEAD + 2, bottom = height - PAD - FOOT;

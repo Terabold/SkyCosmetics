@@ -1,0 +1,107 @@
+name: release
+
+# Pushing a tag such as v1.5.0 or v1.5.0-beta.1 publishes a GitHub release with the jar, named
+# skycosmetics-<version>+<minecraft>.jar, and a SHA256SUMS file. The in-game update checker reads exactly these:
+# it picks the jar by the Minecraft version in its name and installs it only when its SHA-256 matches.
+on:
+  push:
+    tags: ['v*']
+
+# Only this job writes, and only the release it creates.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version
+        id: v
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          prop="$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          mc="$(grep '^minecraft_version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$tag is not a version tag (v1.2.3 or v1.2.3-beta.1)"; exit 1
+          fi
+          if [ "$version" != "$prop" ]; then
+            echo "::error::$tag doesn't match mod_version=$prop in gradle.properties"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "mc=$mc" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "pre=true" >> "$GITHUB_OUTPUT"; else echo "pre=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build
+        run: chmod +x gradlew && ./gradlew build
+
+      - name: Install virtual display
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb
+
+      - name: Client gametest
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+
+      - name: Test screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-screenshots
+          path: build/run/clientGameTest/screenshots
+          if-no-files-found: ignore
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          MC: ${{ steps.v.outputs.mc }}
+        run: |
+          mkdir dist
+          cp "build/libs/skycosmetics-$VERSION.jar" "dist/skycosmetics-$VERSION+$MC.jar"
+          if unzip -Z1 "dist/skycosmetics-$VERSION+$MC.jar" | grep -E '/(Collector|SkinContribution|SkinSupplement|CollectorStatus|SkinLearner|TimingLearner|PreviewRecorder|MissingAnimations|ClientPacketListenerMixin|[^/$]+Test)(\$[^/]*)?\.class$' > /dev/null; then
+            echo "::error::skin detection, private collector or test classes were packaged in the release"; exit 1
+          fi
+          # The jar must say the version the tag does, or the update checker refuses it.
+          declared="$(unzip -p "dist/skycosmetics-$VERSION+$MC.jar" fabric.mod.json | grep -o '"version": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+          if [ "$declared" != "$VERSION" ]; then echo "::error::the jar says $declared, not $VERSION"; exit 1; fi
+          cd dist && sha256sum skycosmetics-*.jar > SHA256SUMS && cat SHA256SUMS
+
+      - name: Notes
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          MC: ${{ steps.v.outputs.mc }}
+        run: |
+          # This version's CHANGELOG section ("## 1.5.0 — 2026-10-07"), up to the next "## ".
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; h = $0; sub(/^## +\[?/, "", h); split(h, w, /[] ]/); if (w[1] == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "See [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/CHANGELOG.md)." > notes.md; fi
+          {
+            echo
+            echo "Minecraft: $MC"
+            echo
+            echo "SkyCosmetics' code is developed with Anthropic's Claude and OpenAI's Codex, directed and tested in game by the author."
+          } >> notes.md
+          cat notes.md
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+          PRE: ${{ steps.v.outputs.pre }}
+        run: |
+          flags=()
+          if [ "$PRE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "SkyCosmetics $VERSION" \
+            --notes-file notes.md "${flags[@]}"

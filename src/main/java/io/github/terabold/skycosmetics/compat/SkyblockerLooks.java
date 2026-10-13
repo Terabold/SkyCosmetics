@@ -125,11 +125,11 @@ final class SkyblockerLooks implements OtherLooks.Source {
         if (!link()) return fileTime();
         Object gen = generalConfig();
         if (gen == null) return null;
-        // Every save makes a new copy to draw with; the sizes catch an edit made in place.
+        // Commands can replace one entry without replacing the map or changing its size.
         long sizes = 0;
         for (Field f : fields.values()) {
             Map<?, ?> m = map(gen, f);
-            sizes = sizes * 31 + (m == null ? -1 : m.size());
+            sizes = sizes * 31 + (m == null ? -1 : m.hashCode());
         }
         return List.of(System.identityHashCode(gen), sizes);
     }
@@ -195,8 +195,9 @@ final class SkyblockerLooks implements OtherLooks.Source {
                 Object material = v instanceof JsonObject o ? o.get("material") : Reflect.call(v, "material");
                 Object pattern = v instanceof JsonObject o ? o.get("pattern") : Reflect.call(v, "pattern");
                 String text = pattern != null && material != null
-                    ? Reflect.words(json(pattern)) + " · " + Reflect.words(json(material)) : "Custom";
-                yield new Change(this, uuid, Kind.TRIM, text, -1, null, h, null, live);
+                    ? Reflect.words(json(pattern)) + " in " + Reflect.words(json(material)) : "Custom";
+                String token = pattern != null && material != null ? io.github.terabold.skycosmetics.render.Trims.token(String.valueOf(json(pattern)), String.valueOf(json(material))) : null;
+                yield new Change(this, uuid, Kind.TRIM, text, -1, null, h, token == null ? null : l -> l.withTrim(token), live);
             }
             case "customGlint" -> {
                 Boolean on = v instanceof Boolean b ? b : v instanceof JsonPrimitive p && p.isBoolean() ? p.getAsBoolean() : null;
@@ -235,7 +236,7 @@ final class SkyblockerLooks implements OtherLooks.Source {
         float[] at = new float[times.size()];
         for (int i = 0; i < at.length; i++) at[i] = times.get(i);
         String id = Values.animatedDye(rgbs, at, b, secs);
-        return new Change(this, uuid, Kind.DYE, "Animated · " + Names.count(rgbs.length, "color"),
+        return new Change(this, uuid, Kind.DYE, "Animated with " + Names.count(rgbs.length, "color"),
             rgbs.length == 0 ? -1 : rgbs[0] & 0xFFFFFF, null, h, id != null ? l -> l.withDye(id) : null, live);
     }
 

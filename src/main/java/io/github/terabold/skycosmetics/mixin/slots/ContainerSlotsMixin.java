@@ -26,6 +26,7 @@ public abstract class ContainerSlotsMixin {
     @Inject(method = "extractSlot", at = @At("HEAD"), require = 0)
     private void skycosmetics$enterSlot(GuiGraphicsExtractor g, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
         SlotArea.enterSlot(slot);
+        RarityBackgrounds.drawEquipmentSlot(g, slot);
     }
 
     @Inject(method = "extractSlot", at = @At("RETURN"), require = 0)

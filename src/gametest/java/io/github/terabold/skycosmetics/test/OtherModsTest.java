@@ -141,14 +141,14 @@ final class OtherModsTest {
         String aurora = ctx.computeOnClient(mc -> Repo.get().dye("DYE_AURORA").name);
         for (String want : new String[]{"Zephyr Helmet [HELMETS]", "  Skyblocker skin: " + knight + " [move]",
             "Spring Boots [ARMOR]", "  Skyblocker dye: #33CC77 [move]", "  Skyblocker name: Bouncy Boots [move]",
-            "  Skyblocker trim: Sentry · Gold", "Zephyr Chestplate [ARMOR]", "  SkyOcean dye: #8844FF [move]",
-            "  SkyOcean name: Storm Coat [move]", "  SkyOcean trim: Eye · Diamond", "Zephyr Sword [WEAPONS]",
+            "  Skyblocker trim: Sentry in Gold [move]", "Zephyr Chestplate [ARMOR]", "  SkyOcean dye: #8844FF [move]",
+            "  SkyOcean name: Storm Coat [move]", "  SkyOcean trim: Eye in Diamond [move]", "Zephyr Sword [WEAPONS]",
             "  Skyblocker glint: Off [move]", "  Skyblocker model: Stone Sword", "Plasmaflux Power Orb [ORBS]",
             "  SkyOcean dye: " + aurora + " [move]", "Every Zephyr Sword [TYPES]", "  SkyOcean skin: " + knight + " [move]",
-            "  SkyOcean glint: On [move]", "Unknown item [UNSEEN]", "  Skyblocker dye: Animated · 2 colors [move]"}) {
+            "  SkyOcean glint: On [move]", "Unknown item [UNSEEN]", "  Skyblocker dye: Animated with 2 colors [move]"}) {
             check(rows.contains(want), "Other Mods lists '" + want + "': " + rows);
         }
-        ctx.waitFor(mc -> screen(mc).footer().equals("13 changes · 7 items"), 120); // once the last message is old
+        ctx.waitFor(mc -> screen(mc).footer().equals("13 changes across 7 items"), 120); // once the last message is old
         ctx.takeScreenshot("skycosmetics-65-other-mods");
 
         // ×: SkyOcean's color comes off its item data, and SkyOcean is asked to save; Undo.
@@ -236,8 +236,8 @@ final class OtherModsTest {
         List<String> rows = rows(ctx);
         System.out.println("[SkyCosmeticsTest] Other Mods from files: " + rows);
         for (String want : new String[]{"  Skyblocker dye: #33CC77 (read-only)", "  Skyblocker name: Gale (read-only)",
-            "  Skyblocker trim: Sentry · Gold (read-only)", "  Skyblocker glint: On (read-only)",
-            "  Skyblocker model: Stone Sword (read-only)", "  Skyblocker dye: Animated · 2 colors (read-only)",
+            "  Skyblocker trim: Sentry in Gold (read-only)", "  Skyblocker glint: On (read-only)",
+            "  Skyblocker model: Stone Sword (read-only)", "  Skyblocker dye: Animated with 2 colors (read-only)",
             "  SkyOcean dye: #8844FF (read-only)", "  SkyOcean glint: On (read-only)"}) {
             check(rows.contains(want), "read from the file: '" + want + "': " + rows);
         }

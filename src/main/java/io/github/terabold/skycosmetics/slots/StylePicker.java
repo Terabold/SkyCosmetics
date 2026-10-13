@@ -39,8 +39,8 @@ public final class StylePicker<T> extends AbstractWidget {
         Mask.Style style(int i) {
             int op = Math.max(RarityBackgrounds.opacity, 60);
             return this == SHAPES
-                ? new Mask.Style(Mask.Shape.values()[i], RarityBackgrounds.fill, op, RarityBackgrounds.outline)
-                : new Mask.Style(RarityBackgrounds.shape, Mask.Fill.values()[i], op, RarityBackgrounds.outline);
+                ? new Mask.Style(Mask.Shape.values()[i], RarityBackgrounds.fill, op, RarityBackgrounds.outline, RarityBackgrounds.gradientMinimum, RarityBackgrounds.outlineOpacity)
+                : new Mask.Style(RarityBackgrounds.shape, Mask.Fill.values()[i], op, RarityBackgrounds.outline, RarityBackgrounds.gradientMinimum, RarityBackgrounds.outlineOpacity);
         }
 
         Identifier texture() {

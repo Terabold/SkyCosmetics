@@ -6,7 +6,6 @@
   "client": [
     "AbstractContainerScreenAccessor",
     "BufferSourceAccessor",
-    "ClientPacketListenerMixin",
     "CustomDataAccessor",
     "EquipmentLayerRendererMixin",
     "GuiMixin",
@@ -22,14 +21,24 @@
     "RecipeBookScreenAccessor",
     "RenderTypeAccessor",
     "SkinManagerMixin",
+    "TooltipGraphicsMixin",
+    "TooltipBackgroundMixin",
     "slots.ContainerSlotsMixin",
+    "slots.ExtraInventoryItemsMixin",
     "slots.HeadSizeMixin",
     "slots.HotbarSlotMixin",
     "slots.ItemStackFactsMixin",
     "slots.ItemStackRenderStateAccess",
     "slots.LayerRenderStateAccess",
     "hand.ItemInHandRendererMixin",
-    "hand.LivingEntitySwingMixin"
+    "hand.LivingEntitySwingMixin",
+    "nametag.EntityRendererMixin",
+    "nametag.NameTagFeatureRendererMixin",
+    "nametag.EntityRenderStateMixin",
+    "zoom.CameraMixin",
+    "zoom.MouseHandlerMixin",
+    "zoom.GameRendererMixin",
+    "zoom.GuiMixin"
   ],
   "injectors": {
     "defaultRequire": 1

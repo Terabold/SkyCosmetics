@@ -250,8 +250,8 @@ public class AnimatedDyeEditor {
         else if (keys.size() < MAX_KEYS && inChip(keys.size(), mouseX, mouseY)) g.requestCursor(CursorTypes.POINTING_HAND);
         // A chip's color and what clicks do, after a rest and beside the editor, never over the other chips.
         if (chipHover.settled(hoveredChip < 0 ? null : hoveredChip)) {
-            Tips.show(g, font, List.of(Component.literal("Color " + (hoveredChip + 1) + " · " + ColorPicker.hex(keys.get(hoveredChip))),
-                Component.literal(keys.size() > MIN_KEYS ? "Click to edit · Right-click to remove" : "Click to edit")
+            Tips.show(g, font, List.of(Component.literal("Color " + (hoveredChip + 1) + "; " + ColorPicker.hex(keys.get(hoveredChip))),
+                Component.literal(keys.size() > MIN_KEYS ? "Click to edit; Right-click to remove" : "Click to edit")
                     .withStyle(net.minecraft.ChatFormatting.YELLOW)), Tips.beside(x, y, x + width, y + height, x, y), mouseX, mouseY);
         }
     }

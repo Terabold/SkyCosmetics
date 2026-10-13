@@ -80,7 +80,9 @@ public class SlotsTest implements FabricClientGameTest {
             try {
                 fillInventory(sp, ctx);
                 menuBackgrounds(ctx);
+                equipmentAndOverlays(ctx);
                 exclusions(ctx);
+                menuVariants(ctx);
                 hotbar(ctx);
                 performance(ctx);
                 headSize(ctx);
@@ -130,6 +132,15 @@ public class SlotsTest implements FabricClientGameTest {
             Component.literal("§6§lLEGENDARY DUNGEON SWORD"), Component.empty(), Component.literal("§7Seller: §bSomeone"),
             Component.literal("§7Buy it now: §65,000,000 coins")));
         check(auction != null && auction.rarity() == Rarity.LEGENDARY, "auction lines under the rarity line");
+        Component bracket = Component.literal("Your Bracket: ").append(Component.literal("LEGENDARY")
+            .withStyle(style -> style.withBold(true).withColor(Rarity.LEGENDARY.hypixel)));
+        check(ItemFacts.rarityLine(List.of(bracket)).rarity() == Rarity.LEGENDARY, "styled inline reward bracket");
+        check(ItemFacts.rarityLine(List.of(Component.literal("§7Your Bracket: §6§lLEGENDARY"))).rarity() == Rarity.LEGENDARY,
+            "legacy inline reward bracket");
+        check(ItemFacts.rarityLine(List.of(bracket, Component.literal("RARE ACCESSORY"))).rarity() == Rarity.RARE,
+            "real item rarity takes priority over an inline bracket");
+        for (String line : List.of("§7Bracket: §6LEGENDARY", "§7Bracket: §c§lLEGENDARY", "§6§lLEGENDARYISH", "§6§lNOT_LEGENDARY"))
+            check(ItemFacts.rarityLine(List.of(Component.literal(line))) == null, "inline rarity needs bold, exact color and word boundaries");
         System.out.println(TAG + "rarity lines checked: " + rarity.size() + " read, 10 rejected");
     }
 
@@ -141,6 +152,26 @@ public class SlotsTest implements FabricClientGameTest {
         check(ItemFacts.of(mythic).rarity() == Rarity.MYTHIC, "a pet never goes above Mythic, even without a rarity line");
         ItemStack broken = stack(Items.PLAYER_HEAD, "PET", "not json", "§6§lLEGENDARY");
         check(ItemFacts.of(broken).rarity() == Rarity.LEGENDARY, "bad petInfo falls back to the rarity line");
+        ItemStack shopPet = petName("§7[Lvl 1] §6Tiger");
+        long petReads = ItemFacts.reads();
+        check(ItemFacts.of(shopPet).rarity() == Rarity.LEGENDARY && ItemFacts.of(shopPet).pet()
+            && ItemFacts.of(shopPet).skyblock(), "a pet shop head needs neither an item ID nor a rarity footer");
+        for (int i = 0; i < 100; i++) ItemFacts.of(shopPet);
+        check(ItemFacts.reads() == petReads + 1, "pet name parsing is cached");
+        shopPet.set(DataComponents.CUSTOM_NAME, Component.literal("[Lvl 1] ").withColor(0xAAAAAA)
+            .append(Component.literal("Tiger").withColor(Rarity.EPIC.hypixel)));
+        check(ItemFacts.of(shopPet).rarity() == Rarity.EPIC && ItemFacts.reads() == petReads + 2,
+            "a new styled name invalidates the cache and uses the pet color, not the level color");
+        shopPet.set(DataComponents.TOOLTIP_STYLE, net.minecraft.resources.Identifier.parse("hypixel_skyblock:rare"));
+        check(ItemFacts.of(shopPet).rarity() == Rarity.RARE, "server tooltip rarity takes precedence over the name fallback");
+        shopPet.set(DataComponents.TOOLTIP_STYLE, net.minecraft.resources.Identifier.parse("other:legendary"));
+        check(ItemFacts.of(shopPet).rarity() == Rarity.EPIC, "unrelated pack tooltip styles cannot supply a rarity");
+        for (String title : List.of("§6Tiger", "§7[Lvl 1] §7Tiger", "§6Pets", "§7[Lvl {LVL}] §6Tiger",
+            "§7[Lvl 1] §6" + "T".repeat(300)))
+            check(ItemFacts.of(petName(title)).rarity() == null, "not a rarity-bearing pet name: " + title.substring(0, Math.min(40, title.length())));
+        ItemStack footer = petName("§7[Lvl 1] §6Tiger");
+        footer.set(DataComponents.LORE, new ItemLore(List.of(Component.literal("EPIC"))));
+        check(ItemFacts.of(footer).rarity() == Rarity.EPIC, "item lore keeps priority over a name color");
 
         ItemStack upgraded = stack(Items.DIAMOND_SWORD, "HYPERION", null, "§6§lLEGENDARY DUNGEON SWORD");
         CompoundTag t = upgraded.get(DataComponents.CUSTOM_DATA).copyTag();
@@ -149,6 +180,11 @@ public class SlotsTest implements FabricClientGameTest {
         check(ItemFacts.of(upgraded).recombobulated() && ItemFacts.of(upgraded).skyblock(), "rarity_upgrades marks recombobulated");
         ItemStack button = stack(Items.GRAY_STAINED_GLASS_PANE, null, null, "§9§lRARE");
         check(ItemFacts.of(button).rarity() == Rarity.RARE && !ItemFacts.of(button).skyblock(), "a menu button is no SkyBlock item");
+        ItemStack reward = stack(Items.EMERALD, null, null, "§7Your Bracket: §6§lLEGENDARY", "§eClick to claim!");
+        long rewardReads = ItemFacts.reads();
+        check(ItemFacts.of(reward).rarity() == Rarity.LEGENDARY, "reward lore is read by the actual slot path");
+        for (int i=0; i<100; i++) ItemFacts.of(reward);
+        check(ItemFacts.reads() == rewardReads + 1, "inline bracket parsing is cached, never repeated per draw");
 
         long before = ItemFacts.reads();
         ItemStack s = stack(Items.BOW, "BOW", null, "§5§lEPIC BOW");
@@ -314,6 +350,30 @@ public class SlotsTest implements FabricClientGameTest {
         check(counts.get(RarityBackgrounds.OwnMenus.ALL) == 36, "Wardrobe, all items: 9 helmets + 27 armor pieces");
         check(counts.get(RarityBackgrounds.OwnMenus.NO_HEADS) == 27, "Wardrobe, no heads: the 27 armor pieces");
         check(counts.get(RarityBackgrounds.OwnMenus.NONE) == 0, "Wardrobe, nothing");
+        ctx.runOnClient(mc -> {
+            RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false);
+            for (var option : Hub.find(RarityBackgrounds.SECTION).rows().apply(null)) {
+                if (option.id().equals("rarityBackgrounds.wardrobeMenus"))
+                    ((io.github.terabold.skycosmetics.hub.Control.Choice<RarityBackgrounds.OwnMenus>)option.control()).set().accept(RarityBackgrounds.OwnMenus.NO_HEADS);
+                if (option.id().equals("rarityBackgrounds.loadoutMenus"))
+                    ((io.github.terabold.skycosmetics.hub.Control.Choice<RarityBackgrounds.OwnMenus>)option.control()).set().accept(RarityBackgrounds.OwnMenus.NONE);
+            }
+        });
+        ctx.setScreen(() -> wardrobe(Minecraft.getInstance()));
+        check(drawnInFrame(ctx) == 27, "Wardrobe can exclude heads independently of Loadouts");
+        ctx.setScreen(() -> {
+            var source = (AbstractContainerScreen<?>)wardrobe(Minecraft.getInstance());
+            return new ContainerScreen((ChestMenu)source.getMenu(), Minecraft.getInstance().player.getInventory(), Component.literal("Loadouts"));
+        });
+        check(drawnInFrame(ctx) == 0, "Loadouts has its own exclusion choice");
+        ctx.runOnClient(mc -> {
+            for (var option : Hub.find(RarityBackgrounds.SECTION).rows().apply(null)) {
+                if (option.id().equals("rarityBackgrounds.loadoutMenus"))
+                    ((io.github.terabold.skycosmetics.hub.Control.Choice<RarityBackgrounds.OwnMenus>)option.control()).set().accept(RarityBackgrounds.OwnMenus.NO_HEADS);
+            }
+        });
+        check(drawnInFrame(ctx) == 32, "Loadouts No Heads excludes only the four right-side heads, preserving the left preview");
+        ctx.takeScreenshot("skycosmetics-loadouts-right-heads-only");
         ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false));
         ctx.setScreen(() -> menu(Minecraft.getInstance(), AUCTIONS));
         check(drawnInFrame(ctx) > 40, "the rule leaves other menus alone");
@@ -342,6 +402,58 @@ public class SlotsTest implements FabricClientGameTest {
         }
         return new ContainerScreen(ChestMenu.sixRows(101, mc.player.getInventory(), box), mc.player.getInventory(),
             Component.literal(WARDROBE));
+    }
+
+    /** Formats omitted by ordinary item fixtures: saved setup buttons and Oringo's name-only pet heads. */
+    private static void menuVariants(ClientGameTestContext ctx) {
+        ctx.runOnClient(mc -> {
+            RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.ALL, false);
+            RarityBackgrounds.which(true, true, true);
+        });
+        ctx.setScreen(() -> {
+            var mc = Minecraft.getInstance(); var box = new SimpleContainer(54);
+            box.setItem(10, stack(Items.PLAYER_HEAD, "TEST_HELMET", null, "RARE HELMET"));
+            ItemStack style = stack(Items.PLAYER_HEAD, null, null, "§7Armor: Slot #1", "§eLeft-click to equip!");
+            style.set(DataComponents.CUSTOM_NAME, Component.literal("§6Combat"));
+            style.set(DataComponents.TOOLTIP_STYLE, net.minecraft.resources.Identifier.parse("hypixel_skyblock:legendary"));
+            box.setItem(14, style);
+            ItemStack named = stack(Items.PLAYER_HEAD, null, null, "§7Armor: Slot #2", "§eRight-click to edit");
+            named.set(DataComponents.CUSTOM_NAME, Component.literal("§dMining")); box.setItem(15, named);
+            box.setItem(16, petName("§7[Lvl 100] §5Tiger"));
+            box.setItem(23, petName("§7Empty Loadout"));
+            box.setItem(24, petName("§aCreate Loadout"));
+            // The same otherwise eligible name belongs to the left preview, not a saved-setup slot.
+            box.setItem(11, named.copy());
+            return new ContainerScreen(ChestMenu.sixRows(103, mc.player.getInventory(), box), mc.player.getInventory(), Component.literal("(1/3) Loadouts"));
+        });
+        check(drawnInFrame(ctx) == 4, "Loadouts All includes style-backed and name-backed right-hand buttons, never unrelated controls");
+        ctx.takeScreenshot("skycosmetics-loadout-button-formats");
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NO_HEADS, false));
+        check(drawnInFrame(ctx) == 1, "Loadouts No Heads still keeps only the left armor preview");
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false));
+        check(drawnInFrame(ctx) == 0, "Loadouts None excludes all its backgrounds");
+        ctx.setScreen(() -> {
+            var mc = Minecraft.getInstance(); var box = new SimpleContainer(27);
+            box.setItem(11, petName("§7[Lvl 1] §aElephant"));
+            box.setItem(13, petName("§7[Lvl 1] §9Monkey"));
+            box.setItem(15, petName("§7[Lvl 1] §6Tiger"));
+            box.setItem(22, petName("§aClose"));
+            return new ContainerScreen(ChestMenu.threeRows(104, mc.player.getInventory(), box), mc.player.getInventory(), Component.literal("Oringo"));
+        });
+        check(drawnInFrame(ctx) == 3, "Oringo shop pet names work independently of owned-menu exclusions and with SkyBlock Only");
+        ctx.takeScreenshot("skycosmetics-oringo-pet-formats");
+        ctx.runOnClient(mc -> RarityBackgrounds.which(true, false, true));
+        check(drawnInFrame(ctx) == 0, "Pets off excludes shop pets with no petInfo");
+        ctx.runOnClient(mc -> { RarityBackgrounds.which(true, true, false);
+            RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, false); });
+        ctx.setScreen(() -> null);
+        System.out.println(TAG + "Loadouts button and pet shop rarity formats checked");
+    }
+
+    private static ItemStack petName(String title) {
+        var item = new ItemStack(Items.PLAYER_HEAD);
+        item.set(DataComponents.CUSTOM_NAME, Component.literal(title));
+        return item;
     }
 
     /** The HUD hotbar draws backgrounds only with its switch on. */
@@ -426,6 +538,10 @@ public class SlotsTest implements FabricClientGameTest {
     /** Head sizes measured from the item states vanilla builds for one frame, then screenshots. */
     private static void headSize(ClientGameTestContext ctx) {
         ctx.runOnClient(mc -> {
+            HeadSize.setPercent(87); check(HeadSize.percent() == 87, "head size keeps one-percent steps");
+            HeadSize.setPercent(103); check(HeadSize.percent() == 103, "head size is not rounded to five percent");
+        });
+        ctx.runOnClient(mc -> {
             RarityBackgrounds.set(false, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, false);
             HeadSize.reset();
         });
@@ -434,7 +550,7 @@ public class SlotsTest implements FabricClientGameTest {
         // Menu slot ids: 5 helmet (SkyBlock head), 37 pet head, 36 sword, 44 head without a SkyBlock id.
         Map<Integer, ItemBox> base = items(ctx);
         check(!base.get(5).keyed && !base.get(37).keyed && base.get(5).oversized == null, "100%: heads are untouched");
-        for (int p : new int[]{75, 150}) {
+        for (int p : new int[]{75, 150, 200}) {
             ctx.runOnClient(mc -> HeadSize.setPercent(p));
             Map<Integer, ItemBox> now = items(ctx);
             for (int slot : new int[]{5, 37, 44}) {
@@ -576,9 +692,37 @@ public class SlotsTest implements FabricClientGameTest {
             setScale(ctx, scale);
             ctx.takeScreenshot("skycosmetics-69-settings-head-size-guiscale-" + scale);
         }
-        ctx.runOnClient(mc -> HeadSize.setPercent(100));
+        ctx.runOnClient(mc -> { HeadSize.setPercent(100); ((SettingsScreen)mc.screen).changed(); });
         ctx.waitTicks(2);
         ctx.takeScreenshot("skycosmetics-69-settings-head-size-default");
+        for (double[] point : new double[][]{{0, 90}, {1.0/3, 100}, {2.0/3, 110}, {1, 120}}) {
+            double[] mouse = ctx.computeOnClient(mc -> {
+                var slider = (io.github.terabold.skycosmetics.gui.hub.OptionSlider)((SettingsScreen)mc.screen).widget("headSize.size");
+                double scale = mc.getWindow().getGuiScale();
+                return new double[]{(slider.trackX() + point[0] * slider.trackW()) * scale,
+                    (slider.getY() + slider.getHeight() / 2.0) * scale};
+            });
+            ctx.getInput().setCursorPos(mouse[0], mouse[1]); ctx.waitTicks(1);
+            ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT); ctx.waitTicks(2);
+            check(Math.abs(ctx.computeOnClient(mc -> HeadSize.percent()) - point[1]) <= .2,
+                "head slider reaches " + point[1] + "% at " + point[0] + " of the track");
+        }
+        ctx.getInput().pressKey(GLFW.GLFW_KEY_HOME); ctx.waitTicks(2);
+        check(ctx.computeOnClient(mc -> HeadSize.percent()) == 90, "nominal 50 gives a gentle lower size");
+        ctx.getInput().pressKey(GLFW.GLFW_KEY_END); ctx.waitTicks(2);
+        check(ctx.computeOnClient(mc -> HeadSize.percent()) == 120, "nominal 200 gives a gentle upper size");
+        ctx.takeScreenshot("skycosmetics-head-size-gentle-slider");
+        ctx.runOnClient(mc -> { HeadSize.setPercent(100); ((SettingsScreen)mc.screen).changed(); }); ctx.waitTicks(2);
+        ctx.getInput().pressKey(GLFW.GLFW_KEY_RIGHT); ctx.waitTicks(2);
+        check(ctx.computeOnClient(mc -> HeadSize.percent()) == 100.2, "one keyboard step adjusts actual size by 0.2 percent");
+        ctx.runOnClient(mc -> {
+            try {
+                var write = HeadSize.class.getDeclaredMethod("write"); write.setAccessible(true);
+                var read = HeadSize.class.getDeclaredMethod("read", com.google.gson.JsonElement.class); read.setAccessible(true);
+                var saved = write.invoke(null); HeadSize.reset(); read.invoke(null, saved);
+                check(HeadSize.percent() == 100.2, "fractional sizes survive settings round trips");
+            } catch (ReflectiveOperationException e) { throw new AssertionError("head-size persistence", e); }
+        });
         ctx.setScreen(() -> null);
         System.out.println(TAG + "slot settings checked");
     }
@@ -635,6 +779,85 @@ public class SlotsTest implements FabricClientGameTest {
     // ---------------------------------------------------------------- helpers ---
 
     /** How many backgrounds one extraction of the open screen draws. */
+    private static void equipmentAndOverlays(ClientGameTestContext ctx) {
+        setScale(ctx, 2);
+        ctx.runOnClient(mc -> {
+            RarityBackgrounds.set(true, Mask.Shape.SQUARE, Mask.Fill.SOLID, 100, false);
+            RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, true);
+            for (var option : Hub.find(RarityBackgrounds.SECTION).rows().apply(null)) {
+                if (option.id().equals("rarityBackgrounds.markerSize")) ((io.github.terabold.skycosmetics.hub.Control.Slider)option.control()).set().accept(3);
+                if (option.id().equals("rarityBackgrounds.markerColor")) ((io.github.terabold.skycosmetics.hub.Control.Color)option.control()).set().accept(0xFFFF0000);
+                if (option.id().equals("rarityBackgrounds.outlineOpacity")) ((io.github.terabold.skycosmetics.hub.Control.Slider)option.control()).set().accept(25);
+            }
+            check(RarityBackgrounds.style().outlineOpacity() == 25 && RarityBackgrounds.style().opacity() == 100, "outline opacity is independent of fill opacity");
+        });
+        ctx.setScreen(() -> new InventoryScreen(Minecraft.getInstance().player)); ctx.waitTicks(2);
+        int regular = drawnInFrame(ctx);
+        ctx.runOnClient(mc -> {
+            var g = new GuiGraphicsExtractor(mc, new GuiRenderState(), -1, -1);
+            long before = RarityBackgrounds.drawn();
+            io.github.terabold.skycosmetics.slots.SlotArea.enter(io.github.terabold.skycosmetics.slots.SlotArea.INVENTORY);
+            try { g.fakeItem(stack(Items.DIAMOND, "T_CARRIED", null, "EPIC NECKLACE"), 12, 12); }
+            finally { io.github.terabold.skycosmetics.slots.SlotArea.leave(); }
+            check(RarityBackgrounds.drawn() == before, "equipment compatibility does not add a background to the carried item");
+            var decoration = new Slot(new net.minecraft.world.SimpleContainer(1), 0, 0, 0) {
+                @Override public boolean isActive() { throw new IllegalStateException("unrelated slot must not be queried"); }
+            };
+            RarityBackgrounds.drawEquipmentSlot(g, decoration);
+            var malformed = new Slot(mc.player.getInventory(), 36, 12, 12) {
+                @Override public int getContainerSlot() { throw new IllegalStateException("fixture equipment slot getter"); }
+            };
+            io.github.terabold.skycosmetics.slots.SlotArea.enterSlot(malformed);
+            try { g.fakeItem(stack(Items.DIAMOND, "T_EQUIPMENT", null, "EPIC NECKLACE"), 31, 12); }
+            finally { io.github.terabold.skycosmetics.slots.SlotArea.leaveSlot(); }
+            check(RarityBackgrounds.drawn() == before, "unrelated and malformed foreign slots leave native drawing intact");
+        });
+        ctx.setScreen(() -> new EquipmentOverlayScreen(Minecraft.getInstance().player)); ctx.waitTicks(3);
+        check(drawnInFrame(ctx) == regular + 1, "third-party equipment preview receives exactly one rarity background");
+        int[] marker = ctx.computeOnClient(mc -> {
+            var screen = (EquipmentOverlayScreen)mc.screen;
+            Slot slot = screen.getMenu().slots.stream().filter(s -> s.container == mc.player.getInventory() && s.getContainerSlot() == 5).findFirst().orElseThrow();
+            return new int[]{screen.left() + slot.x + 15, screen.top() + slot.y};
+        });
+        var red = ctx.takeScreenshot("skycosmetics-recomb-marker-small-red");
+        checkPixel(red, marker[0] * 2, marker[1] * 2, true);
+        ctx.runOnClient(mc -> ((EquipmentOverlayScreen)mc.screen).lock = true); ctx.waitTicks(2);
+        var green = ctx.takeScreenshot("skycosmetics-slot-lock-overlay");
+        checkPixel(green, marker[0] * 2, marker[1] * 2, false);
+        ctx.setScreen(() -> null);
+    }
+
+    private static void checkPixel(java.nio.file.Path image, int x, int y, boolean red) {
+        try (var in = java.nio.file.Files.newInputStream(image); var pixels = com.mojang.blaze3d.platform.NativeImage.read(in)) {
+            int rgb = pixels.getPixel(x, y);
+            check(red ? (rgb >>> 16 & 255) > 240 && (rgb & 0xFFFF) < 0x1010
+                : (rgb >>> 8 & 255) > 240 && (rgb & 0xFF00FF) < 0x100010,
+                red ? "a 3 px marker shows its chosen color" : "slot-lock overlay keeps full opacity over rarity backgrounds");
+        } catch (java.io.IOException e) { throw new AssertionError("slot overlay screenshot", e); }
+    }
+
+    private static final class EquipmentOverlayScreen extends InventoryScreen {
+        private final ItemStack equipment = stack(Items.DIAMOND, "T_EQUIPMENT", null, "EPIC NECKLACE");
+        private final Slot extra = new de.hysky.skyblocker.skyblock.item.SkyblockInventoryScreen.EquipmentSlot(
+            new net.minecraft.world.SimpleContainer(equipment), 0, 196, 8);
+        boolean lock;
+        EquipmentOverlayScreen(net.minecraft.world.entity.player.Player player) { super(player); }
+        int left() { return leftPos; } int top() { return topPos; }
+        @Override protected void extractSlot(GuiGraphicsExtractor g, Slot slot, int mx, int my) {
+            super.extractSlot(g, slot, mx, my);
+            if (lock && slot.getContainerSlot() == 5 && slot.container instanceof net.minecraft.world.entity.player.Inventory)
+                g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, RarityBackgrounds.textureId(),
+                    slot.x + 12, slot.y, 4, 4, 4, 4, Mask.CELL * 2, Mask.CELL, 0xFF00FF00);
+        }
+        @Override protected void extractSlots(GuiGraphicsExtractor g, int mx, int my) {
+            super.extractSlots(g, mx, my);
+            extractSlot(g, extra, mx, my);
+            // Fake button and catalogue items must not be mistaken for equipment slots.
+            g.fakeItem(equipment, 196, 40);
+            g.fakeItem(equipment, 220, 40);
+        }
+    }
+
     private static int drawnInFrame(ClientGameTestContext ctx) {
         return ctx.computeOnClient(mc -> {
             long before = RarityBackgrounds.drawn();

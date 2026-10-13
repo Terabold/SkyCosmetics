@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "skycosmetics",
   "version": "${version}",
-  "name": "SkyCosmetics",
+  "name": "${modName}",
   "description": "Any Hypixel skin, dye, name and glint on your own SkyBlock gear and pets, animated ones included. Purely visual: only you see it, and nothing is sent to the server.",
   "authors": [
     "Terabold"
@@ -39,10 +39,5 @@
     "skyblocker": "*",
     "firmament": "*",
     "modmenu": "*"
-  },
-  "custom": {
-    "modmenu": {
-      "update_checker": false
-    }
   }
 }

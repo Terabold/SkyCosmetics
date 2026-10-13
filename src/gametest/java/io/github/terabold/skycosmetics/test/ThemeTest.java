@@ -62,6 +62,17 @@ public class ThemeTest implements FabricClientGameTest {
         check(low.y() + 20 <= 300 - 5, "kept on screen at the bottom: " + low);
         Vector2ic wide = Tips.beside(100, 10, 300, 200, 100, 50).positionTooltip(400, 300, 0, 0, 150, 20);
         check(wide.x() + 150 <= 400 - 5 && wide.x() >= 5, "too wide for either side: on screen anyway: " + wide);
+        var card = Tips.near(100, 100, 150, 150);
+        Vector2ic near = card.positionTooltip(400, 300, 145, 120, 80, 40);
+        check(near.x() == 157 && near.y() == 108, "near the mouse, outside the hovered card: " + near);
+        Vector2ic moved = card.positionTooltip(400, 300, 149, 140, 80, 40);
+        check(moved.x() == 161 && moved.y() == 128, "follows the cursor inside a card: " + moved);
+        Vector2ic flipped = Tips.near(300, 100, 350, 150).positionTooltip(400, 300, 325, 120, 80, 40);
+        check(flipped.x() + 80 <= 300 - 7 && flipped.y() == 108, "switches left at the right edge: " + flipped);
+        Vector2ic vertical = Tips.near(150, 100, 200, 150).positionTooltip(400, 300, 175, 120, 230, 40);
+        check(vertical.y() + 40 <= 100 - 7, "a wide tooltip keeps above the card: " + vertical);
+        Vector2ic bottom = Tips.near(100, 250, 150, 300).positionTooltip(400, 300, 125, 295, 80, 60);
+        check(bottom.y() + 60 <= 295 && bottom.x() >= 157, "clamps at the bottom without covering the card: " + bottom);
         Tips.Hover h = new Tips.Hover();
         check(!h.settled("row") && !h.settled("row") && h.settled("row", 0) && !h.settled(null), "a hover waits, then settles");
         System.out.println("[SkyCosmeticsTest] tooltip placement checks passed");
@@ -149,8 +160,9 @@ public class ThemeTest implements FabricClientGameTest {
         check(ctx.computeOnClient(mc -> ((SettingsScreen) mc.screen).rowIds().contains("accentPresets")),
             "a search for a color finds the presets");
         clickPreset(ctx, "Blue");
-        check(ctx.computeOnClient(mc -> Theme.accent() == BLUE && Theme.ON_ACCENT == 0xFFFFFFFF),
-            "Blue from the search results, with white text on its gradient");
+        check(ctx.computeOnClient(mc -> Theme.accent() == BLUE && contrast(Theme.ON_ACCENT, Theme.GRADIENT_START) >= 3
+                && contrast(Theme.ON_ACCENT, Theme.GRADIENT_END) >= 3),
+            "Blue from search results, with readable text at both gradient ends");
         ctx.waitTicks(2);
         ctx.takeScreenshot("skycosmetics-72-theme-search-blue");
         ctx.runOnClient(mc -> ((SettingsScreen) mc.screen).search().setValue(""));
@@ -163,6 +175,11 @@ public class ThemeTest implements FabricClientGameTest {
         window(ctx, 854, 480, 0);
         settings(ctx);
         ctx.takeScreenshot("skycosmetics-73-theme-general-small-window");
+    }
+
+    private static double contrast(int a, int b) {
+        double x = Theme.luminance(a), y = Theme.luminance(b);
+        return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
     }
 
     /** settings.json: a value that isn't a color keeps the accent; a color is read. */

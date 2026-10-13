@@ -7,7 +7,6 @@ import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
-import io.github.terabold.skycosmetics.data.SkinLearner;
 import io.github.terabold.skycosmetics.deploy.DeployedOrbs;
 import io.github.terabold.skycosmetics.items.Mine;
 import io.github.terabold.skycosmetics.mixin.CustomDataAccessor;
@@ -77,12 +76,15 @@ public final class Cosmetics {
         DyeEntry dye;
         /** Plain leather piece to draw a dyed non-leather item as (iron boots...), else null. */
         Item leather;
+        Item armorModel;
         Boolean glint;
         /** Glint colour/speed, or null for Minecraft's own. */
         Glints.Style glintStyle;
         Component name;
         /** The name as typed, when it moves (chroma): drawn from {@link Names#live}, once per tick. */
         String liveName;
+        String trim;
+        Identifier model;
         int piece;
         ItemStack out;
         int outFrame = -2;
@@ -156,7 +158,7 @@ public final class Cosmetics {
         if (raw instanceof Output) return s;
         Entry e = fresh(s, data, (Entry) raw, typeLooks);
         if (e != raw) cache.skycosmetics$entry(e);
-        if (e.skin == null && e.dye == null && e.glint == null && e.glintStyle == null) return s;
+        if (e.skin == null && e.dye == null && e.glint == null && e.glintStyle == null && e.trim == null && e.model == null) return s;
 
         long tick = Util.getMillis() / 50;
 
@@ -172,7 +174,7 @@ public final class Cosmetics {
             }
         }
         int rgb = e.dye != null ? e.dye.rgbAt(tick, e.piece) : -1;
-        if (frame < 0 && rgb < 0 && e.glint == null && e.glintStyle == null) return s; // skin still downloading, nothing else to change
+        if (frame < 0 && rgb < 0 && e.glint == null && e.glintStyle == null && e.trim == null && e.model == null) return s; // skin still downloading, nothing else to change
 
         if (e.out != null && e.outFrame == frame && e.outRgb == rgb) return e.out;
 
@@ -182,6 +184,10 @@ public final class Cosmetics {
             out.set(DataComponents.PROFILE, Textures.profile(e.skin.textures[frame]));
             // Hypixel sometimes points item_model elsewhere; a head must render as a head.
             out.set(DataComponents.ITEM_MODEL, HEAD_MODEL);
+        } else if (e.armorModel != null) {
+            out = s.transmuteCopy(e.armorModel);
+            out.set(DataComponents.EQUIPPABLE, e.armorModel.components().get(DataComponents.EQUIPPABLE));
+            if (!io.github.terabold.skycosmetics.render.ItemModels.tintable(e.armorModel)) out.remove(DataComponents.DYED_COLOR);
         } else if (rgb >= 0 && e.leather != null) {
             // Only leather takes a tint. Hypixel makes some armour from iron or gives it
             // its own model (Helianthus boots and chestplate), so draw it as plain leather.
@@ -191,8 +197,11 @@ public final class Cosmetics {
         } else {
             out = s.copy();
         }
-        if (rgb >= 0) out.set(DataComponents.DYED_COLOR, new DyedItemColor(rgb));
+        if (rgb >= 0 && (e.armorModel == null || io.github.terabold.skycosmetics.render.ItemModels.tintable(e.armorModel)))
+            out.set(DataComponents.DYED_COLOR, new DyedItemColor(rgb));
         if (e.glint != null) out.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, e.glint);
+        io.github.terabold.skycosmetics.render.Trims.apply(out, e.trim);
+        if (e.model != null) out.set(DataComponents.ITEM_MODEL, e.model);
         ((StackCache) (Object) out).skycosmetics$entry(e.glintStyle == null ? PLAIN : new Output(e.glintStyle));
 
         e.out = out;
@@ -227,28 +236,39 @@ public final class Cosmetics {
         try {
             Ident id = identify(data);
             if (id == null) return e;
-            SkinLearner.seen(s, id.type());
             e.uuid = id.uuid();
             e.typeLook = Looks.byType(id.type()) != null;
             e.mineVersion = Mine.version();
             e.typeLooks = e.typeLook && (force != null ? force : Mine.allows(s, e.uuid));
             Looks.Look look = lookFor(id, e.typeLooks);
             if (look == null) return e;
+            return populate(e, s, look);
+        } catch (RuntimeException ex) {
+            Io.failed("Finding an item's look", ex);
+            return empty(data, version);
+        }
+    }
 
+    private static Entry populate(Entry e, ItemStack s, Looks.Look look) {
+        try {
             Catalog c = Repo.get();
-            e.skin = c.skin(look.skin());
+            e.model = io.github.terabold.skycosmetics.render.ItemModels.resolve(s, look.model());
+            e.armorModel = io.github.terabold.skycosmetics.render.ItemModels.armor(s, look.model());
+            boolean fixedModel = e.model != null || "original".equals(look.model());
+            e.skin = fixedModel ? null : c.skin(look.skin());
             e.dye = c.dye(look.dye());
-            e.leather = e.dye != null ? leatherFor(s) : null;
+            e.leather = e.dye != null && !fixedModel ? leatherFor(s) : null;
             e.glint = "on".equals(look.glint()) ? Boolean.TRUE : "off".equals(look.glint()) ? Boolean.FALSE : null;
             e.glintStyle = e.glint == Boolean.FALSE ? null : Glints.style(look.glintColor(), look.glintSpeed(), look.glintStrength());
             e.name = look.name() != null ? Names.parse(look.name()) : null;
             e.liveName = Names.animated(look.name()) ? look.name() : null;
+            e.trim = io.github.terabold.skycosmetics.render.Trims.allowed(s) ? look.trim() : null;
             e.piece = pieceIndex(s);
             if (e.skin != null) Textures.preload(e.skin);
             return e;
         } catch (RuntimeException ex) {
             Io.failed("Finding an item's look", ex);
-            return empty(data, version); // nothing half filled in
+            return empty(s.get(DataComponents.CUSTOM_DATA), Looks.version());
         }
     }
 
@@ -282,7 +302,9 @@ public final class Cosmetics {
                               own.glint() != null ? own.glint() : type.glint(),
                               own.glintColor() != null ? own.glintColor() : type.glintColor(),
                               own.glintSpeed() != null ? own.glintSpeed() : type.glintSpeed(),
-                              own.glintStrength() != null ? own.glintStrength() : type.glintStrength(), own.label());
+                              own.glintStrength() != null ? own.glintStrength() : type.glintStrength(), own.label(),
+                              own.trim() != null ? own.trim() : type.trim(),
+                              own.model() != null ? own.model() : type.model());
     }
 
     /**

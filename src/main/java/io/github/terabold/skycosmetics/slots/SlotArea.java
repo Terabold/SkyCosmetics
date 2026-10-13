@@ -32,6 +32,16 @@ public final class SlotArea {
         slot = null;
     }
 
+    public static boolean slotPosition(int x, int y) {
+        return slot != null && slot.x == x && slot.y == y;
+    }
+
+    /** Devonian draws equipment beside the armor slot currently being extracted. */
+    static boolean adjacentEquipment(int x, int y) {
+        return slot != null && armor(slot) && y == slot.y
+            && (x - slot.x == -25 || x - slot.x == 19 || x - slot.x == 52);
+    }
+
     public static void enter(int area) {
         forced = area;
     }

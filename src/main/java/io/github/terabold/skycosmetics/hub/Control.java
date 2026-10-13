@@ -35,13 +35,18 @@ public sealed interface Control {
     record Choice<T>(List<T> values, Function<T, Component> label, Supplier<T> get, Consumer<T> set) implements Control {}
 
     /** A key mapping, bound in place: click, then press a key. */
-    record Key(Supplier<KeyMapping> mapping) implements Control {}
+    record Key(Supplier<KeyMapping> mapping, boolean allowMiddleMouse) implements Control {
+        public Key(Supplier<KeyMapping> mapping) { this(mapping, false); }
+    }
 
     /** Does something now, e.g. Open Studio; grayed out with {@code inactiveTip} when {@code active} is false. */
     record Action(Component label, Runnable run, BooleanSupplier active, Component inactiveTip) implements Control {}
 
     /** A feature's own widget (a preview, preset swatches...), given the settings screen and the row width. */
-    record Custom(BiFunction<Host, Integer, AbstractWidget> widget) implements Control {}
+    /** Preview widgets can occupy a stationary column when the settings pane has room. */
+    record Custom(BiFunction<Host, Integer, AbstractWidget> widget, boolean preview) implements Control {
+        public Custom(BiFunction<Host, Integer, AbstractWidget> widget) { this(widget, false); }
+    }
 
     /**
      * A color: a swatch that opens a color picker next to it. Values are ARGB. Without {@code alpha} the picker

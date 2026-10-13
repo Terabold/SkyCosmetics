@@ -23,7 +23,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -71,20 +70,28 @@ public final class RarityBackgrounds {
         }
     }
 
-    /** Hypixel menus of your own gear, as {@link OwnedItems#menuSource} names them. */
-    private static final Set<String> GEAR_MENUS = Set.of("Wardrobe", "Equipment wardrobe", "Loadouts", "Equipment");
-
     // Settings; plain fields the draw loop reads directly.
     static boolean on = false;
     static Mask.Shape shape = Mask.Shape.ROUNDED;
     static Mask.Fill fill = Mask.Fill.SOLID;
     static int opacity = 55;
-    static boolean outline = false;
+    static int outlineOpacity = 66;
+    static boolean outline = true;
+    static int gradientMinimum = 20, markerSize = 6, markerColor = 0xFFFFFFFF;
+    enum MarkerCorner { TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT }
+    static MarkerCorner markerCorner = MarkerCorner.TOP_RIGHT;
     static Colors colors = Colors.HYPIXEL;
     static final int[] custom = Colors.HYPIXEL.rgb.clone();
     static boolean inventory = true, menus = true, armor = true, hotbar = true;
     static boolean common = true, pets = true, skyblockOnly = false, recombMark = false;
     static OwnMenus ownMenus = OwnMenus.ALL;
+    static OwnMenus wardrobeMenus = OwnMenus.ALL, loadoutMenus = OwnMenus.ALL, equipmentMenus = OwnMenus.ALL;
+    static boolean equipment = true;
+    private static final ClassValue<Boolean> EQUIPMENT_SLOT = new ClassValue<>() {
+        @Override protected Boolean computeValue(Class<?> type) {
+            return type.getName().equals("de.hysky.skyblocker.skyblock.item.SkyblockInventoryScreen$EquipmentSlot");
+        }
+    };
 
     /** The ARGB tint of each rarity in the colors in use; rebuilt when they change. */
     private static final int[] TINT = new int[Rarity.values().length];
@@ -94,6 +101,7 @@ public final class RarityBackgrounds {
     /** The menu whose title was matched last (weakly: a closed menu is never kept alive), and its rule. */
     private static WeakReference<Screen> ruleScreen = new WeakReference<>(null);
     private static OwnMenus rule = OwnMenus.ALL;
+    private static boolean loadouts;
     /** Backgrounds drawn since start, for tests. */
     static long drawn;
 
@@ -119,7 +127,13 @@ public final class RarityBackgrounds {
         try {
             if (ruleScreen.get() != screen) {
                 String source = OwnedItems.menuSource(screen.getTitle().getString());
-                rule = source != null && GEAR_MENUS.contains(source) ? ownMenus : OwnMenus.ALL;
+                loadouts = "Loadouts".equals(source);
+                rule = source == null ? OwnMenus.ALL : switch (source) {
+                    case "Wardrobe" -> wardrobeMenus;
+                    case "Loadouts" -> loadoutMenus;
+                    case "Equipment wardrobe", "Equipment" -> equipmentMenus;
+                    default -> OwnMenus.ALL;
+                };
                 ruleScreen = new WeakReference<>(screen); // a menu's title never changes while it is open
             }
             Identifier tex = texture();
@@ -129,11 +143,17 @@ public final class RarityBackgrounds {
                 if (s.isEmpty()) continue;
                 if (SlotArea.own(slot)) {
                     if (!(SlotArea.armor(slot) ? armor : inventory)) continue;
-                } else if (!menus || rule == OwnMenus.NONE || rule == OwnMenus.NO_HEADS && s.is(Items.PLAYER_HEAD)) {
+                } else if (!menus || rule == OwnMenus.NONE || rule == OwnMenus.NO_HEADS && s.is(Items.PLAYER_HEAD)
+                    && (!loadouts || slot.getContainerSlot() % 9 >= 5)) {
                     continue;
                 }
-                draw(g, tex, slot.x, slot.y, s);
+                int index = slot.getContainerSlot();
+                boolean loadoutButton = loadouts && !SlotArea.own(slot) && index >= 14 && index <= 43
+                    && index % 9 >= 5 && index % 9 <= 7;
+                draw(g, tex, slot.x, slot.y, s, loadoutButton);
             }
+            // Seal the background batch before any mod's per-slot icons are extracted.
+            g.nextStratum();
         } catch (RuntimeException e) {
             Io.failed("Drawing rarity backgrounds", e);
         }
@@ -149,9 +169,37 @@ public final class RarityBackgrounds {
         }
     }
 
+    /** Skyblocker's equipment slots are extracted outside the normal menu-slot list. */
+    public static void drawEquipmentSlot(GuiGraphicsExtractor g, Slot slot) {
+        if (!on || !equipment) return;
+        try {
+            if (!EQUIPMENT_SLOT.get(slot.getClass()) || !slot.isActive()) return;
+            var stack = slot.getItem(); if (stack.isEmpty()) return;
+            draw(g, texture(), slot.x, slot.y, stack);
+            g.nextStratum();
+        } catch (RuntimeException e) { Io.failed("Drawing an equipment-slot rarity background", e); }
+    }
+
+    /** Only known equipment positions, never arbitrary fake items such as buttons or catalogues. */
+    public static void drawExtraInventoryItem(GuiGraphicsExtractor g, int x, int y, ItemStack stack) {
+        if (!on || !equipment || stack.isEmpty() || SlotArea.forced != SlotArea.OTHER
+            || !(net.minecraft.client.Minecraft.getInstance().screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) return;
+        try {
+            if (!SlotArea.adjacentEquipment(x, y) || tintOf(ItemFacts.of(stack)) == 0) return;
+            draw(g, texture(), x, y, stack);
+            g.nextStratum();
+        } catch (RuntimeException e) { Io.failed("Drawing an equipment rarity background", e); }
+    }
+
     private static void draw(GuiGraphicsExtractor g, Identifier tex, int x, int y, ItemStack s) {
+        draw(g, tex, x, y, s, false);
+    }
+
+    private static void draw(GuiGraphicsExtractor g, Identifier tex, int x, int y, ItemStack s, boolean loadoutButton) {
         ItemFacts f = ItemFacts.of(s);
-        int tint = tintOf(f);
+        // Saved setups are menu buttons, not individual items. Only their known Loadouts slots use name color.
+        int tint = loadoutButton && f.rarity() == null && f.loadoutColor() != null
+            ? previewTint(f.loadoutColor()) : tintOf(f);
         if (tint == 0) return;
         drawTint(g, tex, x, y, tint, recombMark && f.recombobulated());
     }
@@ -160,7 +208,15 @@ public final class RarityBackgrounds {
     static void drawTint(GuiGraphicsExtractor g, Identifier tex, int x, int y, int tint, boolean mark) {
         int w = MAIN.texWidth(), h = MAIN.texHeight();
         g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, 0, 0, Mask.CELL, Mask.CELL, w, h, tint);
-        if (mark) g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, Mask.CELL, 0, Mask.CELL, Mask.CELL, w, h, 0xFFFFFFFF);
+        if (mark) {
+            g.pose().pushMatrix();
+            try {
+                g.pose().translate(x + 8, y + 8);
+                g.pose().scale(markerCorner == MarkerCorner.TOP_LEFT || markerCorner == MarkerCorner.BOTTOM_LEFT ? -1 : 1,
+                    markerCorner == MarkerCorner.BOTTOM_LEFT || markerCorner == MarkerCorner.BOTTOM_RIGHT ? -1 : 1);
+                g.blit(RenderPipelines.GUI_TEXTURED, tex, -9, -9, Mask.CELL, 0, Mask.CELL, Mask.CELL, w, h, markerColor);
+            } finally { g.pose().popMatrix(); }
+        }
         drawn++;
     }
 
@@ -180,17 +236,18 @@ public final class RarityBackgrounds {
     static Identifier texture() {
         return MAIN.ensure(styleKey(), (img, i, x0, y0, n, s) -> {
             if (i == 0) Mask.paint(img, x0, y0, n, s, style(), 4);
-            else Mask.paintMark(img, x0, y0, n, s);
+            else Mask.paintMark(img, x0, y0, n, s, markerSize);
         });
     }
 
     public static Mask.Style style() {
-        return new Mask.Style(shape, fill, opacity, outline);
+        return new Mask.Style(shape, fill, opacity, outline, gradientMinimum, outlineOpacity);
     }
 
     /** Everything the masks are painted from, in one number: a mask is repainted when it changes. */
     static long styleKey() {
-        return shape.ordinal() | (long) fill.ordinal() << 8 | (long) opacity << 16 | (outline ? 1L : 0L) << 32;
+        return shape.ordinal() | (long) fill.ordinal() << 8 | (long) opacity << 16 | (outline ? 1L : 0L) << 32
+            | (long) gradientMinimum << 40 | (long) markerSize << 48 | (long) outlineOpacity << 56;
     }
 
     /** A rarity's current color (RGB). */
@@ -242,6 +299,7 @@ public final class RarityBackgrounds {
         RarityBackgrounds.armor = armor;
         RarityBackgrounds.hotbar = hotbar;
         RarityBackgrounds.ownMenus = ownMenus;
+        wardrobeMenus = loadoutMenus = equipmentMenus = ownMenus;
         RarityBackgrounds.recombMark = recombMark;
         ruleScreen = new WeakReference<>(null);
     }
@@ -255,9 +313,12 @@ public final class RarityBackgrounds {
 
     /** Every setting back to its default, custom colors included. */
     public static void reset() {
-        set(false, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, false);
+        set(false, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, true);
+        outlineOpacity = 66;
+        gradientMinimum = 20; markerSize = 6; markerColor = 0xFFFFFFFF; markerCorner = MarkerCorner.TOP_RIGHT;
         where(true, true, true, true, OwnMenus.ALL, false);
         which(true, true, false);
+        equipment = true;
         System.arraycopy(Colors.HYPIXEL.rgb, 0, custom, 0, custom.length);
         colors(Colors.HYPIXEL);
     }
@@ -290,6 +351,12 @@ public final class RarityBackgrounds {
         fill = choice(o, "fill", Mask.Fill.values(), fill);
         opacity = (int) Math.round(Settings.num(o.get("opacity"), opacity, MIN_OPACITY, MAX_OPACITY));
         outline = Settings.bool(o.get("outline"), outline);
+        outlineOpacity = (int) Settings.num(o.get("outlineOpacity"), Math.min(100, Math.round(opacity * 1.2f)), 0, 100);
+        gradientMinimum = (int) Settings.num(o.get("gradientMinimum"), gradientMinimum, 0, 100);
+        markerSize = (int) Settings.num(o.get("markerSize"), markerSize, 2, 8);
+        markerColor = (int) Settings.num(o.get("markerColor"), markerColor, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        String corner = Settings.str(o.get("markerCorner"), markerCorner.name());
+        for (var value : MarkerCorner.values()) if (value.name().equals(corner)) markerCorner = value;
         colors = choice(o, "colors", Colors.values(), colors);
         JsonObject c = Settings.obj(o.get("custom"));
         for (Rarity r : Rarity.values()) {
@@ -306,6 +373,10 @@ public final class RarityBackgrounds {
         skyblockOnly = Settings.bool(o.get("skyblockOnly"), skyblockOnly);
         recombMark = Settings.bool(o.get("recombMark"), recombMark);
         ownMenus = choice(o, "gearMenus", OwnMenus.values(), ownMenus);
+        wardrobeMenus = choice(o, "wardrobeMenus", OwnMenus.values(), ownMenus);
+        loadoutMenus = choice(o, "loadoutMenus", OwnMenus.values(), ownMenus);
+        equipmentMenus = choice(o, "equipmentMenus", OwnMenus.values(), ownMenus);
+        equipment = Settings.bool(o.get("equipment"), equipment);
         ruleScreen = new WeakReference<>(null);
         colorsChanged();
     }
@@ -317,6 +388,9 @@ public final class RarityBackgrounds {
         o.addProperty("fill", fill.name());
         o.addProperty("opacity", opacity);
         o.addProperty("outline", outline);
+        o.addProperty("outlineOpacity", outlineOpacity);
+        o.addProperty("gradientMinimum", gradientMinimum); o.addProperty("markerSize", markerSize);
+        o.addProperty("markerColor", markerColor); o.addProperty("markerCorner", markerCorner.name());
         o.addProperty("colors", colors.name());
         JsonObject c = new JsonObject();
         for (Rarity r : Rarity.values()) c.addProperty(r.name(), String.format(Locale.ROOT, "#%06X", custom[r.ordinal()]));
@@ -330,6 +404,10 @@ public final class RarityBackgrounds {
         o.addProperty("skyblockOnly", skyblockOnly);
         o.addProperty("recombMark", recombMark);
         o.addProperty("gearMenus", ownMenus.name());
+        o.addProperty("wardrobeMenus", wardrobeMenus.name());
+        o.addProperty("loadoutMenus", loadoutMenus.name());
+        o.addProperty("equipmentMenus", equipmentMenus.name());
+        o.addProperty("equipment", equipment);
         return o;
     }
 
@@ -367,6 +445,13 @@ public final class RarityBackgrounds {
         rows.add(option("opacity", new Control.Slider(() -> opacity, v -> opacity = (int) Math.round(v),
             MIN_OPACITY, MAX_OPACITY, 5, v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn));
         rows.add(toggle("outline", () -> outline, v -> outline = v).enabledWhen(() -> on && shape.outlined()));
+        rows.add(Option.of("rarityBackgrounds.outlineOpacity", Component.literal("Outline opacity"), Component.empty(),
+            new Control.Slider(() -> outlineOpacity, v -> outlineOpacity = (int) Math.round(v), 0, 100, 1,
+                v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn).visibleWhen(() -> outline && shape.outlined()));
+        rows.add(Option.of("rarityBackgrounds.gradientMinimum", Component.literal("Gradient minimum opacity"),
+            Component.literal("Opacity at the faint end, relative to the main opacity."),
+            new Control.Slider(() -> gradientMinimum, v -> gradientMinimum = (int) v, 0, 100, 5, v -> Component.literal(Math.round(v) + "%")))
+            .enabledWhen(isOn).visibleWhen(() -> fill != Mask.Fill.SOLID && fill != Mask.Fill.BEVELED));
 
         rows.add(Option.header("rarityBackgrounds.groupColors", Component.translatable("skycosmetics.rarityBackgrounds.group.colors")));
         // Custom keeps your own colors; editing a swatch while a named set shows starts them from that set.
@@ -379,11 +464,10 @@ public final class RarityBackgrounds {
         rows.add(toggle("armor", () -> armor, v -> armor = v).enabledWhen(isOn));
         rows.add(toggle("hotbar", () -> hotbar, v -> hotbar = v).enabledWhen(isOn));
         rows.add(toggle("menus", () -> menus, v -> menus = v).enabledWhen(isOn));
-        rows.add(option("gearMenus", choice(List.of(OwnMenus.values()), OwnMenus::label, () -> ownMenus, v -> {
-            ownMenus = v;
-            ruleScreen = new WeakReference<>(null);
-        })).search(Component.translatable("skycosmetics.rarityBackgrounds.gearMenus.search").getString())
-            .enabledWhen(() -> on && menus));
+        rows.add(toggle("equipment", () -> equipment, v -> equipment = v).enabledWhen(isOn));
+        rows.add(menuRule("wardrobeMenus", () -> wardrobeMenus, v -> wardrobeMenus = v));
+        rows.add(menuRule("loadoutMenus", () -> loadoutMenus, v -> loadoutMenus = v));
+        rows.add(menuRule("equipmentMenus", () -> equipmentMenus, v -> equipmentMenus = v));
 
         rows.add(Option.header("rarityBackgrounds.groupWhich", Component.translatable("skycosmetics.rarityBackgrounds.group.which")));
         rows.add(toggle("common", () -> common, v -> common = v).enabledWhen(isOn));
@@ -391,7 +475,30 @@ public final class RarityBackgrounds {
         rows.add(toggle("skyblockOnly", () -> skyblockOnly, v -> skyblockOnly = v).enabledWhen(isOn));
         rows.add(toggle("recombMark", () -> recombMark, v -> recombMark = v)
             .search(Component.translatable("skycosmetics.rarityBackgrounds.recombMark.search").getString()).enabledWhen(isOn));
-        return rows;
+        rows.add(Option.of("rarityBackgrounds.markerCorner", Component.literal("Marker position"), Component.empty(),
+            new Control.Choice<>(List.of(MarkerCorner.values()), c -> Component.literal(switch (c) {
+                case TOP_RIGHT -> "Top right"; case TOP_LEFT -> "Top left"; case BOTTOM_RIGHT -> "Bottom right"; case BOTTOM_LEFT -> "Bottom left";
+            }), () -> markerCorner, v -> markerCorner = v)).visibleWhen(() -> recombMark).enabledWhen(isOn));
+        rows.add(Option.of("rarityBackgrounds.markerColor", Component.literal("Marker color"), Component.empty(),
+            new Control.Color(() -> markerColor, v -> markerColor = v, true)).visibleWhen(() -> recombMark).enabledWhen(isOn));
+        rows.add(Option.of("rarityBackgrounds.markerSize", Component.literal("Marker size"), Component.empty(),
+            new Control.Slider(() -> markerSize, v -> markerSize = (int) v, 2, 8, 1, v -> Component.literal(Math.round(v) + " px")))
+            .visibleWhen(() -> recombMark).enabledWhen(isOn));
+        return rows.stream().map(o -> {
+            Option compact = o.compact();
+            if (List.of("rarityBackgrounds.inventory", "rarityBackgrounds.armor", "rarityBackgrounds.hotbar", "rarityBackgrounds.menus").contains(o.id())) compact = compact.beside();
+            return compact.visibleWhen(() -> o.visible().getAsBoolean() && switch(o.id()) {
+                case "rarityBackgrounds.outline" -> shape.outlined();
+                case "rarityBackgrounds.wardrobeMenus", "rarityBackgrounds.loadoutMenus", "rarityBackgrounds.equipmentMenus" -> menus;
+                default -> true;
+            });
+        }).toList();
+    }
+
+    private static Option menuRule(String id, Supplier<OwnMenus> get, Consumer<OwnMenus> set) {
+        return option(id, choice(List.of(OwnMenus.values()), OwnMenus::label, get, v -> {
+            set.accept(v); ruleScreen = new WeakReference<>(null);
+        })).enabledWhen(() -> on && menus).beside();
     }
 
     private static <T> Control choice(List<T> values, Function<T, Component> label, Supplier<T> get, Consumer<T> set) {

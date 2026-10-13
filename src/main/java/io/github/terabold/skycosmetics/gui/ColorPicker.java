@@ -228,7 +228,7 @@ public class ColorPicker {
             }
             // Its hex code under the row, clear of the square above it.
             if (recentHover.settled(recentOver < 0 ? null : recentOver)) {
-                Tips.show(g, font, List.of(Component.literal(hex(recentOver) + " · recent")), Tips.beside(x, recentY,
+                Tips.show(g, font, List.of(Component.literal(hex(recentOver) + "; recent")), Tips.beside(x, recentY,
                     x + width, recentY + CHIP, recentX, recentY, Tips.Side.BELOW, Tips.Side.RIGHT, Tips.Side.LEFT), mouseX, mouseY);
             }
         }

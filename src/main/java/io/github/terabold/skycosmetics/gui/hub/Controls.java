@@ -80,7 +80,7 @@ public final class Controls {
             }
             case Control.Choice<?> c -> choice(c, o, width, host);
             case Control.Key k -> {
-                KeyBindButton b = new KeyBindButton(width, k.mapping(), keyChanged);
+                KeyBindButton b = new KeyBindButton(width, k.mapping(), keyChanged, k.allowMiddleMouse());
                 yield new Built(b, () -> b.active = o.enabled().getAsBoolean());
             }
             case Control.Action a -> {

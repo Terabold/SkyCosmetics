@@ -11,7 +11,7 @@ import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
-import io.github.terabold.skycosmetics.data.SkinLearner;
+import io.github.terabold.skycosmetics.data.SkinData;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import io.github.terabold.skycosmetics.pet.PetTracker;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -81,12 +81,15 @@ public class DataSafetyTest implements FabricClientGameTest {
         String t2 = Repo.get().skin("NECRON_DIAMOND_KNIGHT").textures[0];
         String elsewhere = Base64.getEncoder().encodeToString(("{\"textures\":{\"SKIN\":{\"url\":"
             + "\"http://evil.example/texture/" + "ab".repeat(32) + "\"}}}").getBytes(StandardCharsets.UTF_8));
-        check(SkinLearner.mojangTexture(t1), "a repo texture is a Mojang skin");
-        check(!SkinLearner.mojangTexture(elsewhere) && !SkinLearner.mojangTexture("A".repeat(40_000))
-            && !SkinLearner.mojangTexture("not base64!"), "anything else is not");
+        check(SkinData.mojangTexture(t1), "a repo texture is a Mojang skin");
+        check(!SkinData.mojangTexture(elsewhere) && !SkinData.mojangTexture("A".repeat(40_000))
+            && !SkinData.mojangTexture("not base64!"), "anything else is not");
 
         JsonObject skins = new JsonObject();
         skins.add("SSTEST_GOOD", still(t1, 1));
+        JsonObject orb = still(t1, 1);
+        orb.addProperty("use", "ORB"); orb.addProperty("swappable", 21);
+        skins.add("SSTEST_ORB", orb);
         skins.add("SSTEST_ELSEWHERE", still(elsewhere, 1));
         skins.add("SSTEST_HUGE", still("A".repeat(40_000), 1));
         skins.add("not an id!", still(t1, 1));
@@ -109,6 +112,10 @@ public class DataSafetyTest implements FabricClientGameTest {
 
         Catalog m = Repo.withLearned(root.toString());
         check(m.skin("SSTEST_GOOD") != null && m.skin("SSTEST_GOOD").learned, "a real learned skin is kept");
+        check(m.skin("SSTEST_GOOD").swappable == 0 && m.skin("SSTEST_GOOD").use == SkinEntry.Use.HELMET,
+            "old captured data keeps its defaults");
+        check(m.skin("SSTEST_ORB").swappable == 21 && m.orbSkinTab.contains(m.skin("SSTEST_ORB"))
+            && !m.helmetSkinTab.contains(m.skin("SSTEST_ORB")), "learned orb metadata keeps it in the correct filter");
         check(m.skin("SSTEST_ELSEWHERE") == null && m.skin("SSTEST_HUGE") == null && m.skin("not an id!") == null
             && m.skin("SSTEST_ANIM_JUNK") == null, "junk entries are dropped");
         SkinEntry anim = m.skin("SSTEST_ANIM");
@@ -299,6 +306,18 @@ public class DataSafetyTest implements FabricClientGameTest {
             }
         }
         ctx.runOnClient(mc -> Looks.put(false, "t-safe", null));
+        ctx.waitFor(mc -> Files.isRegularFile(settings), 100);
+        write(settings, " ".repeat(2 * 1024 * 1024 + 1));
+        Set<Path> beforeLarge = broken();
+        ctx.runOnClient(mc -> {
+            Settings.load();
+            check(Settings.brush == brush, "oversized settings keep the current preferences");
+            Settings.save();
+        });
+        Set<Path> large = broken(); large.removeAll(beforeLarge);
+        check(large.size() == 1 && read(large.iterator().next()).length() == 2 * 1024 * 1024 + 1,
+            "oversized settings are set aside with their exact contents");
+        try { Files.deleteIfExists(large.iterator().next()); } catch (IOException e) { throw new AssertionError(e); }
         System.out.println("[SkyCosmeticsTest] broken file checks passed");
     }
 

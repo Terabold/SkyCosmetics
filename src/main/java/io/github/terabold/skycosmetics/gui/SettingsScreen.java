@@ -57,7 +57,7 @@ import java.util.function.Consumer;
 /**
  * The settings: one window in the studio's colors. A header (logo, name, version, search, close), a sidebar of
  * sections (the studio's own first, then one per feature) and the open section's rows in a pane that scrolls. Each
- * row is its title and gray help on the left and its control on the right, or under the text when the window is too
+ * row is its title and optional gray help on the left and its control on the right, or under the text when the window is too
  * narrow for both. Every change applies and saves at once.
  *
  * The search looks through every section at once: each typed word must appear in a setting's title, help, group,
@@ -87,9 +87,11 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private static double lastScroll;
 
     private final Screen parent;
+    private final Tips.Hover helpHover = new Tips.Hover();
     private String sectionId;
     /** A row to scroll to and highlight once the rows are built, then null. */
     private String pendingOption;
+    private String revealedOption;
 
     // ------------------------------------------------------------- layout, set in layout()
     private boolean tooSmall, rail;
@@ -124,6 +126,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private String toastLine;
     private long toastAt;
     private int contentH;
+    private int previewW, previewH;
+    private Row sidePreview;
     /** The accent the rows' text was built with. */
     private int themeVersion;
 
@@ -144,9 +148,10 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private long flashAt;
     private final Anim openAnim = new Anim(150, 0), switchAnim = new Anim(170, 1), barHover = new Anim(100, 0);
 
-    /** On the studio's own section: what the tests and the studio's Settings button open. */
+    /** Generic opening returns to the last section closed; explicit feature links still choose their section. */
     public SettingsScreen(Screen parent) {
-        this(parent, Hub.STUDIO);
+        this(parent, MenuState.section());
+        if (sectionId.equals(lastSection)) scroll = shown = lastScroll;
     }
 
     /** On the section with this id; an unknown id opens the first section. */
@@ -162,11 +167,9 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         this.pendingOption = optionId;
     }
 
-    /** For Mod Menu and {@code /skycosmetics}: where the settings were last this session, else the studio's section. */
+    /** For Mod Menu and {@code /skycosmetics}: navigation is remembered across launches. */
     public static Screen create(Screen parent) {
-        SettingsScreen s = new SettingsScreen(parent, lastSection != null ? lastSection : Hub.STUDIO);
-        if (lastSection != null) s.scroll = s.shown = lastScroll;
-        return s;
+        return new SettingsScreen(parent);
     }
 
     // ============================================================ building
@@ -191,7 +194,6 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         section = Hub.find(sectionId);
         if (section == null) section = Hub.sections().getFirst();
         sectionId = section.id();
-        lastSection = sectionId;
         version = FabricLoader.getInstance().getModContainer(SkyCosmetics.MOD_ID)
             .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("");
         logoTitle = Component.translatable("skycosmetics.name").withStyle(ChatFormatting.BOLD).getVisualOrderText();
@@ -222,6 +224,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         sideMax = Math.max(0, tabs.size() * tabStep + 6 - sideH);
         sideScroll = sideShown = Math.clamp(sideScroll, 0, sideMax);
 
+        if (pendingOption != null) revealedOption = pendingOption;
         buildRows();
         if (pendingOption != null) {
             Row r = rowOf(section, pendingOption);
@@ -296,11 +299,36 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         keys.clear();
         flashRow = null;
         results = 0;
+        sidePreview = null;
+        previewW = previewH = 0;
+        vw = cw - 6 - (BAR_W + 6);
+        vy = bodyY + HEAD_H + 1;
+        vh = wy + wh - 4 - vy;
+        var currentOptions = options.get(section.id());
+        if (words.length == 0 && currentOptions != null
+            && currentOptions.stream().anyMatch(o -> o.control() instanceof Control.Custom c && c.preview())) {
+            if (vw >= 440) {
+                previewW = Math.clamp(vw / 3, 150, 180);
+                vw -= previewW + 12;
+            } else if (vh >= 240) {
+                previewH = 100;
+                vy += previewH + 8;
+                vh -= previewH + 8;
+            }
+        }
         if (words.length == 0) {
             List<Option> list = options.get(section.id());
             if (list == null) rows.add(message(Component.translatable("skycosmetics.menu.broken")));
             else if (list.isEmpty()) rows.add(message(Component.translatable("skycosmetics.menu.empty")));
-            else for (Option o : list) add(section, o);
+            else {
+                var visible = list.stream().filter(o -> o.visible().getAsBoolean() || o.id().equals(revealedOption)).toList();
+                for (int i = 0; i < visible.size(); i++) {
+                    Option o = visible.get(i);
+                    if (o.half() && i + 1 < visible.size() && visible.get(i + 1).half()) {
+                        add(section, o); add(section, visible.get(++i));
+                    } else add(section, o.fullWidth());
+                }
+            }
             for (SectionTab t : tabs) {
                 t.setCount(-1);
                 t.setSelected(t.section() == section);
@@ -390,27 +418,53 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private Row option(Section s, Option o) {
         boolean custom = o.control() instanceof Control.Custom;
         int inner = vw - 2 * ROW_X;
-        int w = custom ? inner : Controls.width(o, vw);
+        boolean docked = (previewW > 0 || previewH > 0) && o.control() instanceof Control.Custom c && c.preview();
+        int w = docked && previewW > 0 ? previewW : custom ? inner : Controls.width(o, vw);
         boolean stacked = custom || !(o.control() instanceof Control.Toggle) && inner - w - GAP < MIN_TEXT;
         if (stacked && !custom) w = Controls.stackedWidth(o, inner);
         Controls.Built b = Controls.build(o, w, this, this::keyChanged);
         Row r = new Row(custom ? Kind.CUSTOM : Kind.OPTION, s, o);
+        r.cellW = vw;
         r.widget = b.widget();
-        r.refresh = b.refresh();
+        if (docked) { sidePreview = r; r.widget.setHeight(previewH > 0 ? previewH : vh); }
+        r.refresh = () -> {
+            b.refresh().run();
+            if (!o.inlineHelp() && !custom) {
+                Component help = o.help();
+                if (o.control() instanceof Control.Action a && !r.widget.active && !a.inactiveTip().getString().isEmpty()) {
+                    help = a.inactiveTip().copy().append("\n").append(help);
+                }
+                Tips.set(r.widget, help);
+            }
+        };
         r.stacked = stacked;
         r.textX = ROW_X;
         r.textW = Math.max(40, stacked ? inner : inner - r.widget.getWidth() - GAP);
         r.titleText = words.length == 0 ? o.title() : highlight(o.title().getString(), words);
-        r.helpText = o.help();
+        r.helpText = inlineHelp(o);
+        r.detail = o.help().getString().isEmpty() ? List.of()
+            : font.split(o.title().copy().append("\n").append(o.help()), Math.min(300, width - 20));
         if (r.widget instanceof KeyBindButton k) {
             keys.add(k);
             r.key = k;
-            r.helpText = k.help(o.help(), Theme.MUTED);
+            r.helpText = k.help(inlineHelp(o), Theme.MUTED);
         } else if (words.length > 0) {
             r.helpText = highlight(o.help().getString(), words);
         }
         wrap(r);
+        if (words.length == 0 && o.half() && vw >= 280 && !custom) {
+            r.cellW = (vw - 8) / 2;
+            boolean toggle = o.control() instanceof Control.Toggle;
+            r.widget.setWidth(toggle ? ToggleSwitch.W : r.cellW - ROW_X * 2);
+            r.stacked = !toggle;
+            r.textW = r.cellW - ROW_X * 2 - (toggle ? ToggleSwitch.W + GAP : 0);
+            wrap(r);
+        }
         return r;
+    }
+
+    private Component inlineHelp(Option option) {
+        return option.inlineHelp() || words.length > 0 ? option.help() : Component.empty();
     }
 
     /** In search results: the section (and group) the rows under it come from; a click jumps there. */
@@ -439,22 +493,26 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
 
     /** Wraps a row's title and help to its text width and sizes the row around them and its control. */
     private void wrap(Row r) {
+        if (r == sidePreview) { r.h = 0; r.ctrlH = r.widget.getHeight(); return; }
         r.title = r.titleText.getString().isEmpty() ? List.of() : font.split(r.titleText, r.textW);
         r.help = r.helpText.getString().isEmpty() ? List.of() : font.split(r.helpText, r.textW);
         int textH = r.title.isEmpty() ? 0 : r.title.size() * 10 - 1;
         if (!r.help.isEmpty()) textH += (textH > 0 ? 3 : 0) + r.help.size() * 10 - 1;
         int ch = r.widget.getHeight();
+        int padding = r.cellW > 0 && r.cellW < vw ? 4 : ROW_Y;
+        r.ctrlH = ch;
         if (r.stacked) {
-            r.textY = ROW_Y;
+            r.textY = padding;
             r.ctrlX = ROW_X;
-            r.ctrlY = ROW_Y + textH + (textH > 0 ? 5 : 0);
-            r.h = r.ctrlY + ch + ROW_Y;
+            r.ctrlY = padding + textH + (textH > 0 ? 5 : 0);
+            // A feature's widget with nothing to show (an update card with no news) takes no room at all.
+            r.h = textH == 0 && ch == 0 ? 0 : r.ctrlY + ch + padding;
         } else {
             int inner = Math.max(textH, ch);
-            r.h = inner + 2 * ROW_Y;
-            r.textY = ROW_Y + (inner - textH) / 2;
-            r.ctrlX = vw - ROW_X - r.widget.getWidth();
-            r.ctrlY = ROW_Y + (inner - ch) / 2;
+            r.h = inner + 2 * padding;
+            r.textY = padding + (inner - textH) / 2;
+            r.ctrlX = (r.cellW > 0 ? r.cellW : vw) - ROW_X - r.widget.getWidth();
+            r.ctrlY = padding + (inner - ch) / 2;
         }
     }
 
@@ -462,16 +520,61 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     private void layoutRows() {
         int y = 0;
         Row prev = null;
+        Row pending = null;
         for (Row r : rows) {
+            r.cellX = 0;
+            if (r.cellW > 0 && r.cellW < vw) {
+                r.textX = ROW_X;
+                r.ctrlX = r.stacked ? ROW_X : r.cellW - ROW_X - r.widget.getWidth();
+                if (pending == null) {
+                    r.y = y; pending = r;
+                } else {
+                    r.y = pending.y; r.cellX = pending.cellW + 8;
+                    r.textX += r.cellX; r.ctrlX += r.cellX;
+                    y += Math.max(pending.h, r.h); pending = null;
+                }
+                r.line = false;
+                continue;
+            }
+            if (pending != null) { y += pending.h; pending = null; }
+            if (r.kind == Kind.HEADER) { // less room above the first one, whatever empty rows come before it
+                r.textY = y == 0 ? 3 : 12;
+                r.h = r.textY + 13;
+            }
             r.y = y;
             y += r.h;
+            if (r.h == 0) continue;
             r.line = prev != null && prev.setting() && r.setting();
             prev = r;
         }
+        if (pending != null) y += pending.h;
         contentH = y + 8;
         maxScroll = Math.max(0, contentH - vh);
         scroll = Math.clamp(scroll, 0, maxScroll);
         shown = Math.clamp(shown, 0, maxScroll);
+    }
+
+    /**
+     * A feature's own widget may change its height while the settings are open (the update card appears, grows
+     * with a download, goes): its row and the rows under it follow. Asked every frame; only ints are compared.
+     */
+    private void resized() {
+        boolean any = false;
+        for (Row r : rows) {
+            if (r.kind != Kind.CUSTOM || r.failed || r.widget == null) continue;
+            int ch;
+            try {
+                ch = r.widget.getHeight();
+            } catch (RuntimeException e) {
+                fail(r, "Sizing the setting " + r.id(), e);
+                continue;
+            }
+            if (ch != r.ctrlH) {
+                wrap(r);
+                any = true;
+            }
+        }
+        if (any) layoutRows();
     }
 
     /** The pane's header: the section, or what the search found. */
@@ -573,7 +676,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         closeOverlay();
         section = s;
         sectionId = s.id();
-        lastSection = sectionId;
+        revealedOption = option == null ? null : option.id();
         scroll = shown = 0;
         buildRows();
         switchAnim.set(0);
@@ -602,7 +705,16 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     @Override
     public void changed() {
         Settings.save();
-        refresh();
+        // Rebuild only when a choice reveals/hides controls. Ordinary sliders keep their drag/focus.
+        boolean visibilityChanged = false;
+        if (words.length == 0) {
+            var list = options.get(section.id());
+            if (list != null) for (Option o : list) {
+                boolean present = rowOf(section, o.id()) != null;
+                if (present != (o.visible().getAsBoolean() || o.id().equals(revealedOption))) { visibilityChanged = true; break; }
+            }
+        }
+        if (visibilityChanged) { closeOverlay(); buildRows(); } else refresh();
     }
 
     /** Every row's value and grayed-out state, read again. */
@@ -623,7 +735,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         boolean any = false;
         for (Row r : rows) {
             if (r.key == null) continue;
-            r.helpText = r.key.help(r.option.help(), Theme.MUTED);
+            r.helpText = r.key.help(inlineHelp(r.option), Theme.MUTED);
             wrap(r);
             any = true;
         }
@@ -690,7 +802,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         closeOverlay();
         section = s;
         sectionId = s.id();
-        lastSection = sectionId;
+        revealedOption = null;
         scroll = shown = 0;
         buildRows();
         switchAnim.set(0);
@@ -747,7 +859,11 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     @Override
     public void removed() {
         closeOverlay();
-        if (!tooSmall && words.length == 0) lastScroll = scroll;
+        if (!tooSmall) {
+            lastSection = sectionId;
+            lastScroll = words.length == 0 ? scroll : scrollBeforeSearch;
+            MenuState.remember(sectionId);
+        }
         super.removed();
     }
 
@@ -776,6 +892,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         }
         if (overlay != null && overlay.isClosed()) overlay = null;
         if (themeVersion != Theme.version()) retheme();
+        resized();
         // Under an open overlay nothing is hovered: no highlights, no tooltips.
         int mx = overlay != null ? -10000 : mouseX, my = overlay != null ? -10000 : mouseY;
         step();
@@ -790,13 +907,36 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         content(g, mx, my, delta);
         toast(g);
         g.pose().popMatrix();
-        if (overlay == null) Tips.widgets(g, font, children(), mx, my, this::tipPlace);
+        if (overlay == null) {
+            Tips.widgets(g, font, children(), mx, my, this::tipPlace);
+            rowHelp(g, mx, my);
+        } else helpHover.settled(null);
         if (overlay != null) {
             try {
                 overlay.render(g, mouseX, mouseY);
             } catch (RuntimeException e) {
                 overlayFailed(e);
             }
+        }
+    }
+
+    /** Explanations on the label as well as the control, including when the feature is disabled. */
+    private void rowHelp(GuiGraphicsExtractor g, int mx, int my) {
+        Row hovered = null;
+        if (words.length == 0 && inPane(mx, my)) {
+            for (Row r : rows) {
+                if (!r.setting() || r.failed || r.option.inlineHelp() || r.detail.isEmpty()) continue;
+                int ry = r.widget.getY() - r.ctrlY;
+                if (my >= ry && my < ry + r.h && mx >= vx + r.textX && mx < vx + r.textX + r.textW) {
+                    hovered = r;
+                    break;
+                }
+            }
+        }
+        if (helpHover.settled(hovered)) {
+            int ry = hovered.widget.getY() - hovered.ctrlY;
+            g.setTooltipForNextFrame(font, hovered.detail, Optional.empty(),
+                Tips.near(vx, ry, vx + vw, ry + hovered.h), mx, my, false, null);
         }
     }
 
@@ -901,6 +1041,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         int base = vy - (int) Math.round(shown) + slide;
         g.enableScissor(cx + 1, vy, cx + cw - 1, vy + vh);
         for (Row r : rows) {
+            if (r == sidePreview) continue;
             int ry = base + r.y;
             if (r.widget != null) r.widget.setPosition(vx + r.ctrlX, ry + r.ctrlY);
             if (ry + r.h <= vy || ry >= vy + vh) continue;
@@ -925,11 +1066,17 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         if (shown < maxScroll - 1) g.fillGradient(cx + 1, vy + vh - 8, cx + cw - 1, vy + vh, Theme.BODY & 0xFFFFFF, Theme.BODY);
         if (sw < 1) g.fill(cx + 1, vy, cx + cw - 1, vy + vh, Theme.fade(Theme.BODY, 1 - sw));
         g.disableScissor();
+        if (sidePreview != null) {
+            sidePreview.widget.setPosition(previewW > 0 ? vx + vw + 12 : vx + ROW_X,
+                previewH > 0 ? vy - previewH - 8 : vy);
+            sidePreview.widget.extractRenderState(g, mx, my, delta);
+        }
         scrollbar(g, mx, my);
     }
 
     private void row(GuiGraphicsExtractor g, Row r, int ry, int mx, int my, float delta) {
-        boolean over = mx >= vx && mx < vx + vw && my >= ry && my < ry + r.h;
+        int cellX = vx + r.cellX, cellW = r.cellW > 0 ? r.cellW : vw;
+        boolean over = mx >= cellX && mx < cellX + cellW && my >= ry && my < ry + r.h;
         switch (r.kind) {
             case HEADER -> {
                 int tx = vx + r.textX, ty = ry + r.textY;
@@ -970,7 +1117,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
                 float hv = r.hover.to(over ? 1 : 0);
                 // The whole row of a switch flips it.
                 if (over && r.widget instanceof ToggleSwitch t && t.isActive()) g.requestCursor(CursorTypes.POINTING_HAND);
-                if (hv > 0) Shapes.round(g, vx, ry, vw, r.h, 4, Theme.fade(Theme.ROW_HOVER, hv));
+                if (hv > 0) Shapes.round(g, cellX, ry, cellW, r.h, 4, Theme.fade(Theme.ROW_HOVER, hv));
                 flash(g, r, ry);
                 int tx = vx + r.textX, ty = ry + r.textY;
                 int titleColor = r.enabled ? Theme.TEXT : Theme.DIM, helpColor = r.enabled ? Theme.MUTED : Theme.DIM;
@@ -1060,7 +1207,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     }
 
     private int barX() {
-        return cx + cw - BAR_W - 4;
+        return previewW > 0 ? vx + vw + 3 : cx + cw - BAR_W - 4;
     }
 
     private int thumbH(int track) {
@@ -1085,13 +1232,14 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     }
 
     private boolean inPane(double x, double y) {
-        return x >= cx && x < cx + cw && y >= vy && y < vy + vh;
+        return x >= cx && x < (previewW > 0 ? vx + vw + 8 : cx + cw) && y >= vy && y < vy + vh;
     }
 
     private Row rowAt(double x, double y) {
         if (!inPane(x, y) || x < vx || x >= vx + vw) return null;
         double at = y - vy + shown;
-        for (Row r : rows) if (at >= r.y && at < r.y + r.h) return r;
+        for (Row r : rows) if (at >= r.y && at < r.y + r.h && x >= vx + r.cellX
+            && x < vx + r.cellX + (r.cellW > 0 ? r.cellW : vw)) return r;
         return null;
     }
 
@@ -1268,8 +1416,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
         KeyBindButton key;
         ItemStack icon = ItemStack.EMPTY;
         Component titleText = Component.empty(), helpText = Component.empty();
-        List<FormattedCharSequence> title = List.of(), help = List.of();
-        int y, h, textX, textY, textW, titleW, ctrlX, ctrlY;
+        List<FormattedCharSequence> title = List.of(), help = List.of(), detail = List.of();
+        int y, h, textX, textY, textW, titleW, ctrlX, ctrlY, ctrlH, cellX, cellW;
         boolean stacked, line, enabled = true, failed;
         final Anim hover = new Anim(110, 0);
 
@@ -1391,6 +1539,8 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             if (r.kind == Kind.GROUP || !r.id().equals(optionId)) continue;
             reveal(r, false);
             shown = scroll;
+            for (Row positioned : rows) if (positioned.widget != null && positioned != sidePreview)
+                positioned.widget.setPosition(vx + positioned.ctrlX, vy + positioned.y - (int) Math.round(shown) + positioned.ctrlY);
             return true;
         }
         return false;

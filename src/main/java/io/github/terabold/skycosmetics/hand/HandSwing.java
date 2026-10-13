@@ -9,9 +9,11 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 
 /**
- * SkyCosmetics' own swing timer for the first-person hand. It watches your swings (a read-only hook on
+ * SkyCosmetics' own cosmetic swing timer. It watches your swings (a read-only hook on
  * {@code LivingEntity.swing}) and times them itself, at the speed of the pose for the item swinging, so the
  * hand can swing faster, slower or never restart halfway, while the game's real swing, attack timing and what
  * the server sees stay exactly as they were. Nothing here writes to the player.
@@ -133,13 +135,22 @@ public final class HandSwing {
 
     /**
      * Swing progress for this frame, 0 to 1 (both are the rest pose). Replaces {@code getAttackAnim} only where the
-     * first-person hand reads it.
+     * first-person hand and the local player's third-person render state read it.
      */
     public static float progress(float partialTick) {
         if (!running) return 0;
         float x = (elapsed - 1 + partialTick) / duration;
         if (x < 0) return tailFrom + (1 - tailFrom) * Math.clamp(partialTick, 0, 1);
         return x >= 1 ? 0 : x;
+    }
+
+    /** Only the render copy changes; third-person item positions and the real player's timing stay vanilla. */
+    public static void thirdPerson(LivingEntity entity, HumanoidRenderState state, float partialTick) {
+        if (entity != Minecraft.getInstance().player || !Hand.enabled() || !Hand.active()) return;
+        float progress = progress(partialTick);
+        var attackArm = arm == InteractionHand.MAIN_HAND ? state.mainArm : state.mainArm.getOpposite();
+        state.attackTime = progress;
+        state.attackArm = attackArm;
     }
 
     /** The hand the current swing is in, as the player's {@code swingingArm} is for Minecraft's. */

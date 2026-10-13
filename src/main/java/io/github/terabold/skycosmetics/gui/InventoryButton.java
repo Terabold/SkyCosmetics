@@ -1,18 +1,15 @@
 package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Settings;
-import io.github.terabold.skycosmetics.SkyCosmetics;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.mixin.AbstractContainerScreenAccessor;
 import io.github.terabold.skycosmetics.mixin.RecipeBookScreenAccessor;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -34,9 +31,6 @@ public final class InventoryButton extends AbstractWidget {
     private static ItemStack icon;
 
     private final InventoryScreen inv;
-    private String hint = "";
-    /** The accent the tooltip was built with: its title is in the accent. */
-    private int tipTheme = -1;
 
     private InventoryButton(InventoryScreen inv) {
         super(0, 0, SIZE, SIZE, Component.literal("SkyCosmetics"));
@@ -66,14 +60,6 @@ public final class InventoryButton extends AbstractWidget {
         setX(a.skycosmetics$leftPos() + OFF_X);
         setY(a.skycosmetics$topPos() + OFF_Y);
         visible = !hidden();
-        String now = SkyCosmetics.openKeyHint();
-        if (!now.equals(hint) || tipTheme != Theme.version()) {
-            hint = now;
-            tipTheme = Theme.version();
-            setTooltip(Tooltip.create(Component.literal("SkyCosmetics").withColor(Theme.ACCENT & 0xFFFFFF)
-                .append(Component.literal("\nSkins, dyes and names for your gear").withStyle(ChatFormatting.GRAY))
-                .append(Component.literal("\nTip: " + now).withStyle(ChatFormatting.DARK_GRAY))));
-        }
     }
 
     @Override

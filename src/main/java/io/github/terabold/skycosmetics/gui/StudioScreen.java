@@ -37,9 +37,11 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -78,15 +80,12 @@ import java.util.function.UnaryOperator;
  */
 public class StudioScreen extends Screen {
     private enum Tab {
-        SKINS("Skins", "Skins"), DYES("Dyes", "Dyes"), STYLE("Name & Glint", "Name"), SAVED("Saved", "Saved"),
-        OTHER("Other Mods", "Mods");
+        SKINS("Skins"), DYES("Dyes"), STYLE("Name & Glint"), MODELS("Model & Trims"), SAVED("Saved"),
+        OTHER("Other Mods");
 
         final String label;
-        final String shortLabel;
-
-        Tab(String label, String shortLabel) {
+        Tab(String label) {
             this.label = label;
-            this.shortLabel = shortLabel;
         }
     }
 
@@ -150,6 +149,7 @@ public class StudioScreen extends Screen {
 
     private static final int BG = 0xE0101014;
     private static final Component TITLE = Component.literal("SkyCosmetics").withStyle(ChatFormatting.BOLD);
+    private static final Identifier LOGO = Identifier.fromNamespaceAndPath("skycosmetics", "icon.png");
     /** The title where the bold one would run under the Settings button (a narrow left column). */
     private static final Component TITLE_PLAIN = Component.literal("SkyCosmetics");
     private static final int TEXT = Theme.TEXT, MUTED = Theme.MUTED, GOLD = Theme.GOLD;
@@ -165,7 +165,7 @@ public class StudioScreen extends Screen {
     private static final List<Component> ITEMS_HELP_STORED_OFF = List.of(
         Component.literal("Where My Items come from").withStyle(ChatFormatting.AQUA),
         bullet("Always: ", "armor, held item, pet, inventory"),
-        Component.literal("• ").withStyle(ChatFormatting.DARK_GRAY)
+        Component.literal("- ").withStyle(ChatFormatting.DARK_GRAY)
             .append(Component.translatable("skycosmetics.studio.itemsHelp.storedOff").withStyle(ChatFormatting.GRAY)),
         bullet("Search: ", "name or item ID"));
     /** Room for a gradient: every letter carries its own {@code &#RRGGBB} (plus its styles again). */
@@ -188,9 +188,6 @@ public class StudioScreen extends Screen {
 
     /** A name gradient preset: its colours from the first letter to the last (0xRRGGBB). */
     private record Gradient(String name, int... stops) {}
-
-    /** How the chroma button is filled: the rainbow it moves through. */
-    private static final int[] CHROMA_STOPS = {0xFF5555, 0xFFFF55, 0x55FF55, 0x55FFFF, 0x5555FF, 0xFF55FF};
 
     private static final List<Gradient> GRADIENTS = List.of(
         new Gradient("Rainbow", 0xFF5555, 0xFFAA00, 0xFFFF55, 0x55FF55, 0x55FFFF, 0x5555FF, 0xFF55FF),
@@ -219,6 +216,8 @@ public class StudioScreen extends Screen {
     private String pendingName;
     private long pendingNameAt;
     private int listScroll;
+    private int draggedBar;
+    private double scrollbarGrab;
     private String itemQuery = "";
     private int builtFor = -1;
     private boolean byType;
@@ -235,10 +234,7 @@ public class StudioScreen extends Screen {
     private String status = "";
     private int statusColor = MUTED;
     private long statusAt;
-    /** The open tab's button, where its accent bar is drawn now (gliding after a switch), and the content's fade-in. */
-    private TabButton openTab;
-    private float tabBarX = -1, tabBarW;
-    private long tabBarAt = -1;
+    /** The new tab's content fades in after a switch. */
     private final Anim tabIn = new Anim(120, 1);
     /** What the item list, the grids and Other Mods' note have under the mouse: their tooltips wait for a rest. */
     private final Tips.Hover listHover = new Tips.Hover(), gridHover = new Tips.Hover(), noteHover = new Tips.Hover();
@@ -284,7 +280,8 @@ public class StudioScreen extends Screen {
     private int syncedAt;
     /** Name & Glint widgets and where they sit unscrolled: the tab scrolls when the window is too short for it. */
     private final Map<AbstractWidget, Integer> styleY = new HashMap<>();
-    private int styleScroll, styleMax;
+    private int styleScroll, styleMax, styleTop = PAD + 22;
+    private final ModelTrimEditor modelEditor = new ModelTrimEditor(this::rebuildWidgets, this::edit);
     private boolean codesShown;
     /** The colour or gradient pop-up over the middle column, or null. It gets every click and key first. */
     private StudioPopup popup;
@@ -327,6 +324,8 @@ public class StudioScreen extends Screen {
     private boolean compact, slim, tooSmall;
     private int leftW, prevW, midX, midW, prevX;
     private int gridY, gridH, cols, cardW = CARD_W, cardH = CARD_H;
+    private boolean resultList;
+    private SkinFilter pickedFilter;
     /** Card names: text scale, most lines, line pitch in font units. */
     private float labelScale = SMALL;
     private int labelLines = 2, labelStep = 10;
@@ -350,7 +349,7 @@ public class StudioScreen extends Screen {
     }
 
     private static Component bullet(String lead, String rest) {
-        return Component.literal("• ").withStyle(ChatFormatting.DARK_GRAY)
+        return Component.literal("- ").withStyle(ChatFormatting.DARK_GRAY)
             .append(Component.literal(lead).withStyle(ChatFormatting.WHITE))
             .append(Component.literal(rest).withStyle(ChatFormatting.GRAY));
     }
@@ -555,13 +554,17 @@ public class StudioScreen extends Screen {
     private void pickTabFor(ItemStack s) {
         Cosmetics.Ident id = s.isEmpty() ? null : Cosmetics.identify(s);
         if (id == null) return;
-        skinFilter = defaultFilter(s, id);
-        if (tab == Tab.STYLE || tab == Tab.SAVED || tab == Tab.OTHER) return; // keep the user's explicit choice
+        SkinFilter nextFilter = defaultFilter(s, id);
+        boolean changedKind = pickedFilter != nextFilter;
+        pickedFilter = nextFilter;
+        if (changedKind) skinFilter = nextFilter;
+        if (tab == Tab.STYLE || tab == Tab.MODELS || tab == Tab.SAVED || tab == Tab.OTHER) return; // keep the user's explicit choice
         Equippable eq = s.get(DataComponents.EQUIPPABLE);
         boolean body = eq != null && (eq.slot() == EquipmentSlot.CHEST || eq.slot() == EquipmentSlot.LEGS
                                      || eq.slot() == EquipmentSlot.FEET);
-        tab = body && skinFilter != SkinFilter.PET ? Tab.DYES : Tab.SKINS;
-        query = "";
+        Tab nextTab = body && nextFilter != SkinFilter.PET ? Tab.DYES : Tab.SKINS;
+        if (tab != nextTab || nextTab == Tab.SKINS && changedKind) query = "";
+        tab = nextTab;
         scroll = 0;
     }
 
@@ -657,7 +660,7 @@ public class StudioScreen extends Screen {
         undoButton = addRenderableWidget(new ActionButton(Component.literal("Undo"), uw, 11, ActionButton.Kind.SECONDARY,
             b -> runUndo()));
         undoButton.setPosition(midX + midW - uw, height - PAD - 11);
-        Tips.set(undoButton, Component.literal("Puts back the last removal · Ctrl+Z"));
+        Tips.set(undoButton, Component.literal("Undo the last removal with Ctrl+Z"));
         undoButton.visible = undoShown();
         refilter();
     }
@@ -938,10 +941,10 @@ public class StudioScreen extends Screen {
                 Settings.save();
             }
             // Opened from the settings: back to that same screen rather than stack another one.
-            minecraft.setScreen(parent instanceof SettingsScreen ? parent : new SettingsScreen(this, Hub.STUDIO));
+            minecraft.setScreen(parent instanceof SettingsScreen ? parent : SettingsScreen.create(this));
         }));
         settings.setPosition(PAD + leftW - 4 - sw, PAD + 3);
-        title = font.width(TITLE) <= settings.getX() - 4 - (PAD + 6) ? TITLE : TITLE_PLAIN;
+        title = font.width(TITLE) <= settings.getX() - 4 - (PAD + 26) ? TITLE : Component.empty();
         keyTip = !Settings.keyTipShown && SkyCosmetics.openKey() != null && SkyCosmetics.openKey().isUnbound();
         Tips.set(settings, Component.translatable(keyTip ? "skycosmetics.studio.settings.keyTip"
             : "skycosmetics.studio.settings.tooltip"));
@@ -1004,6 +1007,7 @@ public class StudioScreen extends Screen {
 
     private void initMiddle() {
         nameBox = null;
+        namePicker = null;
         nameInfo = null;
         glintPick = null;
         glintSquares.clear();
@@ -1012,16 +1016,24 @@ public class StudioScreen extends Screen {
         texBox = null;
         if (popup != null && !popupOwnerKey().equals(popupOwner)) popup = null; // no stale editor keeps input
         int y = PAD;
-        Tab[] tabs = OtherLooks.present() ? Tab.values() : Arrays.copyOf(Tab.values(), Tab.values().length - 1);
-        int tw = Math.min(96, (midW - (tabs.length - 1) * 2) / tabs.length);
-        for (int i = 0; i < tabs.length; i++) {
-            Tab t = tabs[i];
-            String label = font.width(t.label) + 8 <= tw ? t.label : t.shortLabel;
-            TabButton b = addRenderableWidget(new TabButton(Component.literal(label), tw, 18, t == tab, btn -> switchTab(t)).slidingBar());
-            b.setPosition(midX + i * (tw + 2), y);
-            if (t == tab) openTab = b;
+        var equipment = target().get(DataComponents.EQUIPPABLE);
+        boolean bodyArmor = equipment != null && (equipment.slot() == EquipmentSlot.CHEST
+            || equipment.slot() == EquipmentSlot.LEGS || equipment.slot() == EquipmentSlot.FEET);
+        boolean head = target().is(Items.PLAYER_HEAD) || equipment != null && equipment.slot() == EquipmentSlot.HEAD;
+        int tx = midX, ty = y;
+        for (Tab t : Tab.values()) {
+            if (t == Tab.OTHER && !OtherLooks.present() || t == Tab.SKINS && bodyArmor && tab != t
+                || t == Tab.DYES && head && tab != t) continue;
+            String label = t.label;
+            if (t == Tab.MODELS && !io.github.terabold.skycosmetics.render.Trims.allowed(target())) label = "Model";
+            int tw = Math.min(midW, font.width(label) + 14);
+            if (tx + tw > midX + midW) { tx = midX; ty += 24; }
+            TabButton b = addRenderableWidget(new TabButton(Component.literal(label), tw, 22, t == tab, btn -> switchTab(t)));
+            b.setPosition(tx, ty);
+            tx += tw + 3;
         }
-        y += 22;
+        y = ty + 26;
+        styleTop = y;
 
         switch (tab) {
             case SKINS -> {
@@ -1037,15 +1049,20 @@ public class StudioScreen extends Screen {
                     setInitialFocus(texBox);
                     y += 36;
                 } else {
-                    y = search(y, skinFilter.hint, Math.min(midW, SEARCH_W));
+                    viewButton(y);
+                    y = search(y, skinFilter.hint, Math.min(midW - 84, SEARCH_W));
                 }
             }
             case DYES -> {
-                int bw = font.width("Custom Dye…") + 12, sw = Math.min(midW - bw - 4, SEARCH_W);
+                int bw = font.width("Custom Dye…") + 12;
+                boolean wrap = midW < 280;
+                int sw = Math.min(midW - 84 - (wrap ? 0 : bw + 4), SEARCH_W);
+                viewButton(y);
                 y = search(y, "Search: aurora, warden…", sw);
                 Button custom = addRenderableWidget(new ActionButton(Component.literal("Custom Dye…"), bw, 16,
                     ActionButton.Kind.SECONDARY, b -> openDyePopup()));
-                custom.setPosition(midX + sw + 4, y - 22);
+                custom.setPosition(wrap ? midX : midX + sw + 4, wrap ? y : y - 22);
+                if (wrap) y += 20;
                 custom.active = ident() != null;
                 Tips.set(custom, Component.literal("Any color, or your own animated dye"));
             }
@@ -1060,6 +1077,11 @@ public class StudioScreen extends Screen {
                     end = initStyle(y);
                 }
                 y = end;
+                scrollStyle(first, y);
+            }
+            case MODELS -> {
+                int first = children().size();
+                y = initModels(y);
                 scrollStyle(first, y);
             }
             case SAVED -> y = search(y, "Search: necron, aurora, glint…", Math.min(midW, SEARCH_W));
@@ -1079,7 +1101,20 @@ public class StudioScreen extends Screen {
         labelStep = gs >= 2 ? 9 : 10;
         cardH = gs >= 3 ? 48 : gs == 2 ? 50 : CARD_H;
         nameLines.clear();
+        listLayout();
         placePopup();
+    }
+
+    /** Keep the view selector in the results toolbar without taking a row from the results. */
+    private void viewButton(int y) {
+        Button view = addRenderableWidget(new ActionButton(Component.literal(resultList ? "View: List" : "View: Grid"),
+            80, 16, ActionButton.Kind.SECONDARY, b -> {
+                resultList = !resultList;
+                scroll = 0;
+                rebuildWidgets();
+            }));
+        view.setPosition(midX + midW - 80, y);
+        Tips.set(view, Component.literal("List view shows full names at normal text size. Click to switch views."));
     }
 
     private int search(int y, String hint, int w) {
@@ -1107,9 +1142,9 @@ public class StudioScreen extends Screen {
             int w = font.width(f.label) + 12;
             if (cx + w > midX + midW) {
                 cx = midX;
-                cy += 16;
+                cy += 22;
             }
-            Button chip = addRenderableWidget(new ChipButton(Component.literal(f.label), w, 14, f == skinFilter, b -> {
+            Button chip = addRenderableWidget(new TabButton(Component.literal(f.label), w, 20, f == skinFilter, b -> {
                 skinFilter = f;
                 scroll = 0;
                 rebuildWidgets();
@@ -1118,7 +1153,7 @@ public class StudioScreen extends Screen {
             Tips.set(chip, Component.literal(f.help));
             cx += w + 2;
         }
-        return cy + 18;
+        return cy + 24;
     }
 
     /** The custom dye pop-up: starts from the dye the item shows now, applies every change live. */
@@ -1228,12 +1263,13 @@ public class StudioScreen extends Screen {
             namePicker.setOnCommit(rgb -> pickBase = null);
             pickBase = null;
             syncedValue = null;
-            int noteY = gradients(rx, pos[1], right - rx, rowH) + 5;
+            int gradientBottom = gradients(rx, pos[1], right - rx, rowH);
+            int noteY = gradientBottom + 5;
             List<FormattedCharSequence> note =
                 font.split(Component.literal("Any color for the selection, or the whole name"), right - rx);
             pickerNote = noteY + note.size() * 10 - 2 <= pos[1] + PICKER_H ? note : List.of(); // whole, or not at all
             pickerNoteAt = new int[]{rx, noteY};
-            pos[1] += PICKER_H;
+            pos[1] = Math.max(pos[1] + PICKER_H, gradientBottom);
         } else {
             pos[1] = gradients(midX, pos[1], right - midX, 16) + 2;
             place(pos, right, 2, keepFocus(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, 16,
@@ -1290,7 +1326,7 @@ public class StudioScreen extends Screen {
             });
 
         String colour = l.glintColor() != null ? l.glintColor() : t.glintColor();
-        int sq = roomy ? 18 : 14;
+        int sq = 18;
         int[] pos = {midX, Math.max(glintIconY + 2 * step + rowH, glintIconY + glintIcon) + 4};
         for (String[] c : GLINT_COLOURS) {
             int rgb = Integer.parseInt((c[1] != null ? c[1] : PURPLE).substring(1), 16);
@@ -1311,6 +1347,14 @@ public class StudioScreen extends Screen {
         pos[0] += 1; // the usual 2 px before a button
         place(pos, right, 2, new ActionButton(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, sq,
             ActionButton.Kind.SECONDARY, b -> openGlintColour()));
+        place(pos, right, 2, new io.github.terabold.skycosmetics.gui.hub.ChromaButton(66, sq, b -> {
+                pendingGlint = null;
+                edit(look -> look.withGlintColor("chroma").withGlint("on"));
+                rebuildWidgets();
+            }));
+        Button chromaSettings = place(pos, right, 2, new ActionButton(Component.literal("…"), sq, sq,
+            ActionButton.Kind.SECONDARY, b -> minecraft.setScreen(new SettingsScreen(this, "chroma"))));
+        Tips.set(chromaSettings, Component.literal("Chroma settings: colors, speed and wave"));
         Button undo = undoButton(b -> {
             pendingGlint = null;
             edit(look -> look.withGlintColor(null));
@@ -1321,6 +1365,10 @@ public class StudioScreen extends Screen {
         colourReset.active = l.glintColor() != null;
         Tips.set(colourReset, Component.literal("Reset to default (purple)"));
         return pos[1] + sq;
+    }
+
+    private int initModels(int y) {
+        return modelEditor.build(this::addRenderableWidget, target(), look(), inherited(), midX, y, midW, styleBottom());
     }
 
     /** In windows too short for the tab, it scrolls with the wheel; rows out of view are hidden. */
@@ -1336,7 +1384,7 @@ public class StudioScreen extends Screen {
     private void placeStyle() {
         styleY.forEach((w, y) -> {
             w.setY(y - styleScroll);
-            w.visible = w.getY() >= PAD + 22 && w.getBottom() <= styleBottom();
+            w.visible = w.getY() >= styleTop && w.getBottom() <= styleBottom();
         });
     }
 
@@ -1515,10 +1563,10 @@ public class StudioScreen extends Screen {
         int gw = (w + 2) / perRow - 2;
         List<Button> all = new ArrayList<>();
         for (Gradient gr : GRADIENTS) all.add(gradientSwatch(gr.name(), gr.stops(), gw, h, null));
-        Button chroma = new SwatchButton(Component.literal("Chroma"), gw, h, CHROMA_STOPS, btn -> applyChroma()).keepFocus();
-        Tips.set(chroma, Names.parse(Names.chroma() + "Chroma").append(Component.literal(" · a moving rainbow")
+        int chromaW = Math.min(80, w - 22);
+        Button chroma = new io.github.terabold.skycosmetics.gui.hub.ChromaButton(chromaW, 18, btn -> applyChroma()).keepFocus();
+        Tips.set(chroma, Names.parse(Names.chroma() + "Animated chroma").append(Component.literal(" uses your shared animated palette")
             .withStyle(ChatFormatting.GRAY)));
-        all.add(chroma);
         for (int[] st : own) {
             Button b = gradientSwatch("Your Gradient", st, gw, h, "Right-click to remove");
             customGradients.put(b, st);
@@ -1532,7 +1580,14 @@ public class StudioScreen extends Screen {
             b.setPosition(x + i % perRow * (gw + 2), y + i / perRow * (h + 2));
             addRenderableWidget(b);
         }
-        return y + (all.size() + perRow - 1) / perRow * (h + 2) - 2;
+        int nextY = y + (all.size() + perRow - 1) / perRow * (h + 2) + 2;
+        chroma.setPosition(x, nextY); addRenderableWidget(chroma);
+        boolean fullLabel = chromaW + 4 + 104 <= w;
+        var chromaSettings = addRenderableWidget(new ActionButton(Component.literal(fullLabel ? "Chroma settings…" : "…"), fullLabel ? 104 : 18, 18, ActionButton.Kind.SECONDARY,
+            b -> minecraft.setScreen(new SettingsScreen(this, "chroma"))));
+        chromaSettings.setPosition(x + chromaW + 4, nextY);
+        Tips.set(chromaSettings, Component.literal("Edit the shared animated palette, speed and wave"));
+        return chromaSettings.getBottom();
     }
 
     /** A gradient button filled with its colours; the name box keeps the keyboard and its selection. */
@@ -1692,6 +1747,30 @@ public class StudioScreen extends Screen {
         // Favorites first; starring a card re-sorts at once.
         skinResults = tab == Tab.SKINS ? Favorites.first(Catalog.filter(base, query), e -> Favorites.skin(e.id)) : List.of();
         dyeResults = tab == Tab.DYES ? Favorites.first(Catalog.filterDyes(c.dyeTab, query), d -> Favorites.dye(d.id)) : List.of();
+        listLayout();
+    }
+
+    /** Wrap once after filtering/resizing; drawing a row never measures or shrinks its name. */
+    private void listLayout() {
+        if (!resultList || midW < 1) return;
+        cols = 1;
+        cardW = midW;
+        cardH = 36;
+        nameLines.clear();
+        for (SkinEntry e : skinResults) listName(e.id, e.name);
+        for (DyeEntry e : dyeResults) listName(e.id, e.name);
+    }
+
+    private void listName(String id, String name) {
+        List<FormattedCharSequence> wrapped = font.split(Component.literal(name), Math.max(24, cardW - 68));
+        List<String> text = new ArrayList<>();
+        for (FormattedCharSequence line : wrapped) {
+            StringBuilder b = new StringBuilder();
+            line.accept((i, style, cp) -> { b.appendCodePoint(cp); return true; });
+            text.add(b.toString());
+        }
+        nameLines.put(id, text.toArray(String[]::new));
+        cardH = Math.max(cardH, text.size() * 10 + 10);
     }
 
     // ----------------------------------------------------------- actions ---
@@ -1768,8 +1847,13 @@ public class StudioScreen extends Screen {
     @Override
     protected void rebuildWidgets() {
         NameBox old = nameBox != null && getFocused() == nameBox ? nameBox : null;
+        SearchBox search = getFocused() instanceof SearchBox b ? b : null;
+        int cursor = search == null ? 0 : search.getCursorPosition();
         int from = old != null ? old.selectionStart() : 0, to = old != null ? old.selectionEnd() : 0;
         super.rebuildWidgets();
+        if (search != null) for (var child : children()) if (child instanceof SearchBox b && b.getMessage().equals(search.getMessage())) {
+            setFocused(b); b.setCursorPosition(cursor); break;
+        }
         if (old != null && nameBox != null && nameBox.visible && nameBox.getValue().equals(old.getValue())) {
             setFocused(nameBox);
             nameBox.select(from, to);
@@ -1869,14 +1953,22 @@ public class StudioScreen extends Screen {
                 Theme.SMALL_RADIUS + 3, Theme.fade(Theme.ACCENT, pulse));
         }
 
-        g.text(font, title, PAD + 6, PAD + 9, Theme.ACCENT, false);
-        drawList(g, mx, my);
+        {
+            g.blit(RenderPipelines.GUI_TEXTURED, LOGO, PAD + 6, PAD + 5, 0, 0, 16, 16, 128, 128, 128, 128);
+            g.text(font, title, PAD + 26, PAD + 9, Theme.ACCENT, false);
+            drawList(g, mx, my);
+        }
         if (prevW > 0) drawPreview(g, mx, my, mouseX, mouseY, tick);
         else drawCompactPreview(g, mx, my, tick);
 
         switch (tab) {
             case DYES -> drawDyes(g, mx, my, tick);
             case STYLE -> drawStyle(g, mx, my);
+            case MODELS -> {
+                g.enableScissor(midX, styleTop, midX + midW, styleBottom());
+                modelEditor.draw(g, styleScroll);
+                g.disableScissor();
+            }
             case SAVED -> drawSaved(g, mx, my, tick);
             case OTHER -> drawOther(g, mx, my, tick);
             default -> {
@@ -1895,7 +1987,7 @@ public class StudioScreen extends Screen {
             case SAVED -> Names.count(savedTab.shown(), "look");
             case OTHER -> {
                 int[] n = otherTab.shown();
-                yield Names.count(n[1], "change") + " · " + Names.count(n[0], "item");
+                yield Names.count(n[1], "change") + " across " + Names.count(n[0], "item");
             }
             default -> "";
         };
@@ -1936,24 +2028,13 @@ public class StudioScreen extends Screen {
     }
 
     /**
-     * A tab switch, on the same clock and easing as the settings' section switch: the accent bar glides to the
-     * open tab, and the new tab's content fades in from the panel.
+     * A tab switch fades the new content in from the panel.
      */
     private void tabSwitch(GuiGraphicsExtractor g) {
-        if (openTab != null && openTab.visible) {
-            long now = Anim.now(), dt = tabBarAt < 0 ? Long.MAX_VALUE : now - tabBarAt;
-            tabBarAt = now;
-            float tx = openTab.getX() + 6, tw = openTab.getWidth() - 12;
-            boolean jump = tabBarX < 0 || dt > 250 || Math.abs(tabBarX - tx) > midW;
-            tabBarX = jump ? tx : Anim.glide(tabBarX, tx, dt);
-            tabBarW = jump ? tw : Anim.glide(tabBarW, tw, dt);
-            if (Math.abs(tabBarX - tx) < 0.3f) tabBarX = tx;
-            Shapes.round(g, Math.round(tabBarX), openTab.getY() + openTab.getHeight() - 3, Math.round(tabBarW), 2, 1, Theme.ACCENT);
-        }
         float in = tabIn.to(1);
         if (in < 1) {
             g.nextStratum(); // over the content's items and text too
-            g.fill(midX - 2, PAD + 22, midX + midW + 4, height - PAD - 11, Theme.fade(Theme.BODY, 1 - in));
+            g.fill(midX - 2, styleTop, midX + midW + 4, height - PAD - 11, Theme.fade(Theme.BODY, 1 - in));
         }
     }
 
@@ -1961,8 +2042,8 @@ public class StudioScreen extends Screen {
     private String dyeNote() {
         ItemStack s = target();
         if (s.isEmpty()) return "";
-        if (s.get(DataComponents.EQUIPPABLE) == null || s.is(Items.PLAYER_HEAD)) return " · this item can't be dyed";
-        return s.getItem().toString().contains("leather") ? "" : " · shown as leather armor";
+        if (s.get(DataComponents.EQUIPPABLE) == null || s.is(Items.PLAYER_HEAD)) return " (this item cannot be dyed)";
+        return s.getItem().toString().contains("leather") ? "" : " (shown as leather armor)";
     }
 
     // -------------------------------------------------------------- left ---
@@ -2077,8 +2158,36 @@ public class StudioScreen extends Screen {
         // As big as the room allows, but narrow enough to stay inside the column while it turns to the mouse.
         int scale = Math.max(12, Math.min(w * 2 / 5, (h - 6) * 5 / 12));
         float lift = (h / 2f - 3) / scale - 0.9f; // feet 3 px above the bottom, 0.6 blocks free above the head
-        InventoryScreen.extractEntityInInventoryFollowsMouse(g, prevX + 4, top, prevX + prevW - 4, bottom,
-            scale, lift, mouseX, mouseY, minecraft.player);
+        try {
+            var state = (net.minecraft.client.renderer.entity.state.AvatarRenderState) minecraft.getEntityRenderDispatcher()
+                .getRenderer(minecraft.player).createRenderState(minecraft.player, 1);
+            ItemStack shown = Cosmetics.forRender(target(), null);
+            var eq = target().get(DataComponents.EQUIPPABLE);
+            if (eq != null && !target().is(Items.PLAYER_HEAD)) switch (eq.slot()) {
+                case HEAD -> {
+                    state.headEquipment = shown;
+                    state.headItem.clear(); state.heldOnHead.clear();
+                    state.wornHeadType = null; state.wornHeadProfile = null;
+                }
+                case CHEST -> state.chestEquipment = shown;
+                case LEGS -> state.legsEquipment = shown;
+                case FEET -> state.feetEquipment = shown;
+                default -> {}
+            }
+            float yaw = (float)Math.atan((prevX + prevW / 2f - mouseX) / 40f);
+            float pitch = (float)Math.atan(((top + bottom) / 2f - mouseY) / 40f);
+            state.bodyRot = 180 + yaw * 20; state.yRot = yaw * 40; state.xRot = -pitch * 20;
+            state.nameTag = state.scoreText = null; state.shadowPieces.clear(); state.outlineColor = 0;
+            state.scale = state.ageScale = 1; state.boundingBoxHeight = 1.8f; state.boundingBoxWidth = .6f;
+            g.entity(state, scale, new org.joml.Vector3f(0, .9f + lift, 0),
+                new org.joml.Quaternionf().rotateZ((float)Math.PI).rotateX(pitch * 20 * ((float)Math.PI / 180)),
+                new org.joml.Quaternionf().rotateX(pitch * 20 * ((float)Math.PI / 180)),
+                prevX + 4, top, prevX + prevW - 4, bottom);
+        } catch (RuntimeException e) {
+            io.github.terabold.skycosmetics.Io.failed("Drawing Studio armor preview", e);
+            InventoryScreen.extractEntityInInventoryFollowsMouse(g, prevX + 4, top, prevX + prevW - 4, bottom,
+                scale, lift, mouseX, mouseY, minecraft.player);
+        }
         modelY0 = top;
         modelY1 = bottom;
         modelScale = scale;
@@ -2192,6 +2301,10 @@ public class StudioScreen extends Screen {
                 : Names.parse(name + all(l.name(), t.name()))),
             label("Glint").append(Component.literal(glint.text()).withColor(glint.color() & 0xFFFFFF))));
         // No room for chips here: other mods' changes are listed instead (Other Mods removes them).
+        String trim = l.trim() != null ? l.trim() : t.trim();
+        if (trim != null) lines.add(label("Trim").append(Component.literal(trim)));
+        String model = l.model() != null ? l.model() : t.model();
+        if (model != null) lines.add(label("Model").append(Component.literal(model)));
         for (OtherLooks.Change c : chipsFor) lines.add(c.chip().copy().withColor(c.source().color() & 0xFFFFFF));
         return lines;
     }
@@ -2304,6 +2417,10 @@ public class StudioScreen extends Screen {
     /** Under the icon; at GUI scale 3 and up one step smaller, which keeps it crisp. Centred on a whole pixel. */
     private void drawCardName(GuiGraphicsExtractor g, int cx, int cy, String id, String name, int color) {
         String[] l = lines(id, name);
+        if (resultList) {
+            for (int i = 0; i < l.length; i++) g.text(font, l[i], cx + 36, cy + 5 + i * 10, color, false);
+            return;
+        }
         g.pose().pushMatrix();
         g.pose().translate(cx + cardW / 2, cy + (labelLines > 2 ? 29 : 30));
         g.pose().scale(labelScale, labelScale);
@@ -2313,7 +2430,7 @@ public class StudioScreen extends Screen {
 
     private void drawIcon(GuiGraphicsExtractor g, ItemStack icon, int cx, int cy) {
         g.pose().pushMatrix();
-        g.pose().translate(cx + (cardW - 24) / 2, cy + 3);
+        g.pose().translate(resultList ? cx + 6 : cx + (cardW - 24) / 2, cy + 3);
         g.pose().scale(1.5f, 1.5f);
         g.item(icon, 0, 0);
         g.pose().popMatrix();
@@ -2326,11 +2443,6 @@ public class StudioScreen extends Screen {
         } else if (hover) {
             Shapes.round(g, cx + 1, cy + 1, cardW - 2, cardH - 2, Theme.SMALL_RADIUS + 1, Theme.SURFACE);
         }
-    }
-
-    /** A small "play" triangle in a card's top-right corner: animated (gray: frames not known yet). */
-    private static void animatedBadge(GuiGraphicsExtractor g, int x, int y, int color) {
-        for (int i = 0; i < 4; i++) g.fill(x + i, y + i, x + i + 1, y + 7 - i, color);
     }
 
     /**
@@ -2377,11 +2489,8 @@ public class StudioScreen extends Screen {
                 if (frame > 0) movedAt.put(e.id, tick);
             }
             drawCardName(g, cx, cy, e.id, e.name, e.color);
-            if (e.animated() || e.missingFrames) animatedBadge(g, cx + cardW - 8, cy + 3, e.animated() ? Theme.ACCENT : MUTED);
             boolean fav = Favorites.skin(e.id);
             if (fav) star(g, cx, cy);
-            int ly = fav ? cy + 12 : cy + 3; // under the star
-            if (e.learned) g.fill(cx + 3, ly, cx + 6, ly + 3, 0xFF66DD88);
             if (hover) {
                 hovered = e;
                 hx = cx;
@@ -2398,13 +2507,18 @@ public class StudioScreen extends Screen {
             List<Component> tip = new ArrayList<>();
             tip.add(Component.literal(hovered.name).withColor(hovered.color & 0xFFFFFF));
             if (hovered.animated()) {
-                tip.add(Component.literal("Animated · " + hovered.textures.length + " frames").withStyle(ChatFormatting.LIGHT_PURPLE));
+                tip.add(Component.literal("Animated with " + hovered.textures.length + " frames").withStyle(ChatFormatting.LIGHT_PURPLE));
                 if (hovered.timing == SkinEntry.Timing.GUESSED) tip.add(Component.literal("Timing estimated").withStyle(ChatFormatting.GRAY));
-                else if (hovered.timing == SkinEntry.Timing.LEARNED) tip.add(Component.literal("Timing learned in game").withStyle(ChatFormatting.GRAY));
+                else if (hovered.timing == SkinEntry.Timing.LEARNED) tip.add(Component.literal("Previously saved timing").withStyle(ChatFormatting.GRAY));
             } else if (hovered.missingFrames) {
-                tip.add(Component.literal("Animated on Hypixel · preview it once to learn its frames").withStyle(ChatFormatting.GRAY));
+                tip.add(Component.literal("Animation frames are missing from the catalog").withStyle(ChatFormatting.GRAY));
             }
-            if (hovered.learned) tip.add(Component.literal("Learned in game").withStyle(ChatFormatting.GREEN));
+            if (hovered.learned) tip.add(Component.literal("Previously saved skin").withStyle(ChatFormatting.GREEN));
+            if (hovered.name.endsWith("(Captured style)")) {
+                tip.add(Component.literal("Variant name not yet known").withStyle(ChatFormatting.GRAY));
+                if (!hovered.animated()) tip.add(Component.literal("Only a still texture has been captured").withStyle(ChatFormatting.GRAY));
+            }
+            variantHint(tip, hovered);
             tip.add(Component.literal(hovered.id.equals(current) ? "Click to remove" : "Click to apply")
                 .withStyle(ChatFormatting.YELLOW));
             tip.add(favoriteHint(Favorites.skin(hovered.id)));
@@ -2491,10 +2605,11 @@ public class StudioScreen extends Screen {
             if (icon != null) {
                 drawIcon(g, icon, cx, cy);
             } else {
-                g.fill(cx + (cardW - 20) / 2, cy + 5, cx + (cardW + 20) / 2, cy + 25, rgb);
-                g.outline(cx + (cardW - 20) / 2, cy + 5, 20, 20, 0xFF000000);
+                int dx = resultList ? cx + 8 : cx + (cardW - 20) / 2;
+                g.fill(dx, cy + 5, dx + 20, cy + 25, rgb);
+                g.outline(dx, cy + 5, 20, 20, 0xFF000000);
             }
-            g.fill(cx + 8, cy + 27, cx + cardW - 8, cy + 29, rgb); // live colour, animated dyes cycle here
+            g.fill(cx + 8, cy + 27, resultList ? cx + 28 : cx + cardW - 8, cy + 29, rgb); // live colour, animated dyes cycle here
             drawCardName(g, cx, cy + 1, d.id, d.name.replace(" Dye", ""), d.nameColor);
             if (Favorites.dye(d.id)) star(g, cx, cy);
             if (hover) {
@@ -2510,7 +2625,7 @@ public class StudioScreen extends Screen {
             tip.add(Component.literal(hovered.name).withColor(hovered.nameColor & 0xFFFFFF));
             tip.add(Component.literal(String.format(Locale.ROOT, "#%06X", rgb)).withColor(rgb));
             if (hovered.animated()) {
-                tip.add(Component.literal("Animated · " + hovered.colors.length + " colors")
+                tip.add(Component.literal("Animated with " + hovered.colors.length + " colors")
                     .withStyle(ChatFormatting.LIGHT_PURPLE));
             }
             tip.add(Component.literal(hovered.id.equals(current) ? "Click to remove" : "Click to apply")
@@ -2520,9 +2635,21 @@ public class StudioScreen extends Screen {
         }
     }
 
-    /** A card's tooltip: beside the grid (over the preview, or the item list), level with the card. */
+    /** Follows the mouse beside just the hovered card, switching sides when it reaches the window's edge. */
     private ClientTooltipPositioner gridTip(int cx, int cy) {
-        return Tips.beside(midX - 2, gridY - 2, midX + midW + 4, gridY + gridH + 2, cx, cy);
+        return Tips.near(cx, Math.max(gridY, cy), cx + cardW, Math.min(gridY + gridH, cy + cardH));
+    }
+
+    /**
+     * For a skin Hypixel lets you swap between more variants than the catalog has (the repo lacks them): how many
+     * are available in the catalog.
+     */
+    private static void variantHint(List<Component> tip, SkinEntry e) {
+        Catalog c = Repo.get();
+        SkinEntry root = c.root(e);
+        int known = 1 + c.variantCount(root);
+        if (root.swappable <= known) return;
+        tip.add(Component.literal(root.swappable + " variants on Hypixel, " + known + " known").withStyle(ChatFormatting.GRAY));
     }
 
     /** A gold star in a card's top-left corner: a favorite, listed first. */
@@ -2534,7 +2661,7 @@ public class StudioScreen extends Screen {
     private static Component favoriteHint(boolean favorite) {
         if (favorite) {
             return Component.literal("★ Favorite").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal("; ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(Component.literal("Right-click").withStyle(ChatFormatting.YELLOW))
                 .append(Component.literal(" to unfavorite").withStyle(ChatFormatting.GRAY));
         }
@@ -2561,7 +2688,7 @@ public class StudioScreen extends Screen {
             g.text(font, "Pick an item on the left", midX, gridY + 6, MUTED);
             return;
         }
-        int top = PAD + 22, bottom = styleBottom(), dy = styleScroll;
+        int top = styleTop, bottom = styleBottom(), dy = styleScroll;
         boolean inView = mouseY >= top && mouseY < bottom;
         g.enableScissor(midX, top, midX + midW, bottom);
         g.text(font, "Name", midX, nameTop + 3 - dy, Theme.ACCENT, false);
@@ -2655,6 +2782,7 @@ public class StudioScreen extends Screen {
                 return true;
             }
         }
+        if (!tooSmall && event.button() == 0 && grabScrollbar(mx, my)) return true;
         if (super.mouseClicked(event, doubleClick)) return true;
         if (tooSmall) return false;
         if (nameBox != null && getFocused() == nameBox) setFocused(null); // a click elsewhere shows the styled name
@@ -2688,6 +2816,7 @@ public class StudioScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (draggedBar != 0 && event.button() == 0) { dragScrollbar(event.y()); return true; }
         if (popup != null) return popup.mouseDragged(event.x(), event.y(), event.button());
         if (namePicker != null && namePicker.mouseDragged(event.x(), event.y(), event.button())) return true;
         return super.mouseDragged(event, dx, dy);
@@ -2695,6 +2824,7 @@ public class StudioScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (draggedBar != 0) { draggedBar = 0; setDragging(false); return true; }
         if (popup != null) {
             popup.mouseReleased(event.x(), event.y(), event.button());
             super.mouseReleased(event); // ends the screen's own drag state; a release never presses a button
@@ -2797,7 +2927,8 @@ public class StudioScreen extends Screen {
         if (tooSmall) return false;
         if (popup != null) return true;
         if (prevW > 0 && ident() != null && tooltip.mouseScrolled(mx, my, dy)) return true;
-        if (tab == Tab.STYLE && styleMax > 0 && mx >= midX && mx < midX + midW) {
+        if (tab == Tab.MODELS && modelEditor.wheel(mx, my + styleScroll, dy)) return true;
+        if ((tab == Tab.STYLE || tab == Tab.MODELS) && styleMax > 0 && mx >= midX && mx < midX + midW) {
             styleScroll = Math.clamp(styleScroll - (long) Math.signum(dy) * 20, 0, styleMax);
             placeStyle();
             return true;
@@ -2817,6 +2948,40 @@ public class StudioScreen extends Screen {
         return super.mouseScrolled(mx, my, dx, dy);
     }
 
+    /** Selection lists own the wheel; their hover tips must never steal it. */
+    public boolean scrollsContent(double mx, double my) {
+        return !tooSmall && popup == null && mx >= PAD && mx < midX + midW && my >= PAD + 22 && my < styleBottom();
+    }
+
+    private boolean grabScrollbar(double mx, double my) {
+        int max = Math.max(0, rowsHeight() - (listBottom - listTop));
+        if (max > 0 && mx >= PAD + leftW - 10 && mx < PAD + leftW && my >= listTop && my < listBottom) {
+            draggedBar = 1;
+        } else if ((tab == Tab.STYLE || tab == Tab.MODELS) && styleMax > 0 && mx >= midX + midW - 6
+            && mx < midX + midW + 4 && my >= styleTop && my < styleBottom()) {
+            draggedBar = 2;
+        } else return false;
+        int top = draggedBar == 1 ? listTop : styleTop;
+        int track = (draggedBar == 1 ? listBottom : styleBottom()) - top;
+        int content = draggedBar == 1 ? rowsHeight() : track + styleMax;
+        int thumb = Math.max(12, track * track / content);
+        int offset = draggedBar == 1 ? listScroll : styleScroll;
+        int limit = content - track;
+        double thumbTop = top + (track - thumb) * offset / (double)limit;
+        scrollbarGrab = my >= thumbTop && my < thumbTop + thumb ? my - thumbTop : thumb / 2.0;
+        setDragging(true); dragScrollbar(my); return true;
+    }
+
+    private void dragScrollbar(double my) {
+        int top = draggedBar == 1 ? listTop : styleTop;
+        int track = (draggedBar == 1 ? listBottom : styleBottom()) - top;
+        int content = draggedBar == 1 ? rowsHeight() : track + styleMax;
+        int thumb = Math.max(12, track * track / Math.max(1, content));
+        int value = (int)Math.round(Math.clamp((my - top - scrollbarGrab) / Math.max(1, track - thumb), 0, 1) * Math.max(0, content - track));
+        if (draggedBar == 1) { listScroll = value;  }
+        else { styleScroll = value; placeStyle(); }
+    }
+
     // -------------------------------------------------------- test hooks ---
 
     /** The item list in order: "# Header" lines and where each item is listed ("worn:HEAD", "inv:0", "uuid:..."). */
@@ -2824,6 +2989,12 @@ public class StudioScreen extends Screen {
         List<String> out = new ArrayList<>();
         for (Row r : rows) out.add(r.isHeader() ? "# " + r.header() : r.role());
         return out;
+    }
+
+    /** Scrollbar hit area, current offset and maximum offset for client interaction tests. */
+    public int[] itemScrollbar() {
+        return new int[]{PAD + leftW - 6, listTop, listBottom, listScroll,
+            Math.max(0, rowsHeight() - (listBottom - listTop))};
     }
 
     public String skinFilterLabel() {

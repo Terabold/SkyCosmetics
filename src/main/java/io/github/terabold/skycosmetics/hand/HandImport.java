@@ -64,7 +64,10 @@ public final class HandImport {
         try {
             Path f = file(s, configDir);
             if (!Files.isRegularFile(f) || Files.size(f) > MAX_FILE) return null;
-            return parse(s, JsonParser.parseString(Files.readString(f, StandardCharsets.UTF_8)));
+            try (var input = Files.newBufferedReader(f, StandardCharsets.UTF_8)) {
+                var bounded = new com.google.gson.stream.JsonReader(input); bounded.setNestingLimit(24);
+                return parse(s, JsonParser.parseReader(bounded));
+            }
         } catch (Exception e) {
             // Another mod's file mid-write or in a format we don't know: no import offered, nothing logged loudly.
             SkyCosmetics.LOG.debug("Could not read {}'s config: {}", s.name, e.toString());
@@ -166,6 +169,11 @@ public final class HandImport {
         }
         if (module == null) return null;
         JsonObject s = Settings.obj(module.get("configSettings"));
+        // Noamm's pre-v1 format stored one setting object per array entry.
+        if (module.get("configSettings") instanceof JsonArray settings) {
+            for (JsonElement value : settings) if (value instanceof JsonObject entry)
+                for (var setting : entry.entrySet()) s.add(setting.getKey(), setting.getValue());
+        }
         boolean noSwing = Settings.bool(s.get("Disable swing animation"), false);
         boolean termOnly = Settings.bool(s.get("Terminator Only"), false);
         HandPose pose = HandPose.of(HandPose.Pivot.ITEM, noSwing && !termOnly ? HandPose.Swing.NONE : HandPose.Swing.MOVING,
@@ -247,11 +255,13 @@ public final class HandImport {
             byte[] buf = new byte[4096];
             while (!inf.finished()) {
                 int n = inf.inflate(buf);
-                if (n == 0 && (inf.needsInput() || inf.needsDictionary())) return null;
+                if (n == 0 && !inf.finished()) return null;
                 out.write(buf, 0, n);
                 if (out.size() > MAX_JSON) return null;
             }
-            JsonElement e = JsonParser.parseString(out.toString(StandardCharsets.UTF_8));
+            var bounded = new com.google.gson.stream.JsonReader(new java.io.StringReader(out.toString(StandardCharsets.UTF_8)));
+            bounded.setNestingLimit(24);
+            JsonElement e = JsonParser.parseReader(bounded);
             return e instanceof JsonObject o ? o : null;
         } catch (IllegalArgumentException | DataFormatException | com.google.gson.JsonParseException e) {
             return null;

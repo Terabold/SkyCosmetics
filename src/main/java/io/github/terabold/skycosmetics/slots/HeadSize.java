@@ -41,16 +41,17 @@ import java.util.function.Supplier;
  * At 100% the hook is a single comparison.
  */
 public final class HeadSize {
-    public static final int MIN = 50, MAX = 150, STEP = 5, DEFAULT = 100;
+    public static final int MIN = 50, MAX = 200, STEP = 1, DEFAULT = 100;
 
-    /** The size in percent; 100 is off. */
-    static int percent = DEFAULT;
+    /** Five adjustment units per actual percent keep the ordinary slider gentle and uniformly precise. */
+    private static final int UNITS = 5;
+    static int sizeUnits = DEFAULT * UNITS;
     static boolean inventory = true, menus = true, hotbar = true, elsewhere = false, skyblockOnly = false;
 
     /** One identity element per size, made once: appended to the model identity of every resized head. */
-    private record Key(int percent) {}
+    private record Key(int units) {}
 
-    private static final Key[] KEYS = new Key[MAX + 1];
+    private static final Key[] KEYS = new Key[MAX * UNITS + 1];
     /** The last extents seen and the head center they give: heads share one model, so this is nearly always a hit. */
     private static Supplier<Vector3fc[]> pivotFor;
     private static final Vector3f PIVOT = new Vector3f(), SCRATCH = new Vector3f();
@@ -58,7 +59,7 @@ public final class HeadSize {
     private static final Vector3fc FALLBACK = new Vector3f(0.5f, 0.25f, 0.5f);
 
     static {
-        for (int i = MIN; i <= MAX; i++) KEYS[i] = new Key(i);
+        for (int i = MIN * UNITS; i <= MAX * UNITS; i++) KEYS[i] = new Key(i);
     }
 
     private HeadSize() {}
@@ -70,13 +71,13 @@ public final class HeadSize {
             () -> new ItemStack(Items.PLAYER_HEAD), HeadSize::rows));
     }
 
-    public static int percent() {
-        return percent;
+    public static double percent() {
+        return sizeUnits / (double) UNITS;
     }
 
-    /** For the settings and tests; clamped to the range and rounded to the step. */
-    public static void setPercent(int p) {
-        percent = Math.clamp(Math.round(p / (float) STEP) * STEP, MIN, MAX);
+    /** Actual size, including legacy values; rounded to one fifth of a percent. */
+    public static void setPercent(double p) {
+        sizeUnits = (int)Math.round(Math.clamp(Double.isFinite(p) ? p : DEFAULT, MIN, MAX) * UNITS);
     }
 
     /** For tests: where heads are resized, and which. */
@@ -90,7 +91,7 @@ public final class HeadSize {
 
     /** Every setting back to its default. */
     public static void reset() {
-        percent = DEFAULT;
+        sizeUnits = DEFAULT * UNITS;
         where(true, true, true, false, false);
     }
 
@@ -103,7 +104,7 @@ public final class HeadSize {
 
     /** Resizes the head layers of a GUI item just built. Never throws: the mixin catches. */
     public static void apply(ItemStackRenderState out, ItemStack stack, ItemDisplayContext context) {
-        if (percent == DEFAULT || context != ItemDisplayContext.GUI) return;
+        if (sizeUnits == DEFAULT * UNITS || context != ItemDisplayContext.GUI) return;
         int area = SlotArea.current();
         if (!applies(area)) return;
         ItemStackRenderStateAccess state = (ItemStackRenderStateAccess) out;
@@ -113,9 +114,9 @@ public final class HeadSize {
         for (int i = 0; i < n && !any; i++) any = isHead(((LayerRenderStateAccess) layers[i]).skycosmetics$specialRenderer());
         if (!any) return;
         if (skyblockOnly && area != SlotArea.PREVIEW && !ItemFacts.of(stack).skyblock()) return;
-        float s = percent / 100f;
+        float s = sizeUnits / (100f * UNITS);
         // The key first: a failure below never leaves a resized image under an unresized key.
-        out.appendModelIdentityElement(KEYS[percent]);
+        out.appendModelIdentityElement(KEYS[sizeUnits]);
         if (s > 1) out.setOversizedInGui(true);
         for (int i = 0; i < n; i++) {
             LayerRenderStateAccess layer = (LayerRenderStateAccess) layers[i];
@@ -168,7 +169,7 @@ public final class HeadSize {
 
     private static void read(JsonElement v) {
         JsonObject o = Settings.obj(v);
-        setPercent((int) Math.round(Settings.num(o.get("percent"), percent, MIN, MAX)));
+        setPercent(Settings.num(o.get("percent"), percent(), MIN, MAX));
         inventory = Settings.bool(o.get("inventory"), inventory);
         menus = Settings.bool(o.get("menus"), menus);
         hotbar = Settings.bool(o.get("hotbar"), hotbar);
@@ -178,7 +179,7 @@ public final class HeadSize {
 
     private static JsonElement write() {
         JsonObject o = new JsonObject();
-        o.addProperty("percent", percent);
+        o.addProperty("percent", percent());
         o.addProperty("inventory", inventory);
         o.addProperty("menus", menus);
         o.addProperty("hotbar", hotbar);
@@ -191,25 +192,27 @@ public final class HeadSize {
         List<Option> rows = new ArrayList<>();
         rows.add(Option.of("headSize.size", Component.translatable("skycosmetics.headSize.size"),
                 Component.translatable("skycosmetics.headSize.size.tooltip"),
-                new Control.Slider(() -> percent, v -> setPercent((int) Math.round(v)), MIN, MAX, STEP, HeadSize::sizeLabel))
+                new Control.Slider(() -> 100 + (percent() - 100) * UNITS,
+                    v -> setPercent(100 + (v - 100) / UNITS), 50, 200, STEP, HeadSize::sizeLabel))
             .search(Component.translatable("skycosmetics.headSize.search").getString()));
         rows.add(Option.of("headSize.preview", Component.empty(), Component.empty(),
             new Control.Custom((host, w) -> new SlotPreview(w, SlotPreview.Kind.HEADS))));
         rows.add(Option.header("headSize.groupWhere", Component.translatable("skycosmetics.headSize.group.where")));
-        BooleanSupplier on = () -> percent != DEFAULT;
+        BooleanSupplier on = () -> sizeUnits != DEFAULT * UNITS;
         rows.add(toggle("inventory", () -> inventory, v -> inventory = v).enabledWhen(on));
         rows.add(toggle("menus", () -> menus, v -> menus = v).enabledWhen(on));
         rows.add(toggle("hotbar", () -> hotbar, v -> hotbar = v).enabledWhen(on));
         rows.add(toggle("elsewhere", () -> elsewhere, v -> elsewhere = v).enabledWhen(on));
         rows.add(Option.header("headSize.groupWhich", Component.translatable("skycosmetics.headSize.group.which")));
         rows.add(toggle("skyblockOnly", () -> skyblockOnly, v -> skyblockOnly = v).enabledWhen(on));
-        return rows;
+        return rows.stream().map(o -> o.control() instanceof Control.Toggle ? o.beside() : o.compact()).toList();
     }
 
-    /** "Default" at 100%, else "125%". */
+    /** Adjustment units, not percentages: 150 means 110% actual size. */
     static Component sizeLabel(double v) {
-        int p = (int) Math.round(v);
-        return p == DEFAULT ? Component.translatable("skycosmetics.menu.default") : Component.literal(p + "%");
+        // A legacy size beyond the gentler adjustment range stays visible until the player adjusts it.
+        if (percent() < 90 || percent() > 120) return Component.literal(Math.round(percent()) + "%");
+        return Component.literal(Integer.toString((int)Math.round(v)));
     }
 
     private static Option toggle(String id, BooleanSupplier get, Consumer<Boolean> set) {

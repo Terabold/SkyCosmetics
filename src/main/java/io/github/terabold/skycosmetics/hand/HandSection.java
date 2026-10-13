@@ -10,13 +10,11 @@ import io.github.terabold.skycosmetics.hub.Section;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -33,8 +31,7 @@ import java.util.function.Consumer;
  */
 public final class HandSection {
     public static final String ID = "hand";
-    /** How long a button shows what it just did ("Copied") before its label comes back. */
-    private static final long FLASH_MS = 2500;
+    private static int presetPage;
 
     private HandSection() {}
 
@@ -51,10 +48,6 @@ public final class HandSection {
             new Control.Action(tr("skycosmetics.hand.option.edit"), () -> edit(settings, Hand.EVERYTHING), HandSection::inWorld,
                 tr("skycosmetics.hand.option.edit.noWorld"))).enabledWhen(Hand::enabled));
 
-        rows.add(Option.header("handPoses", tr("skycosmetics.hand.group.poses")));
-        for (Hand.Rule r : Hand.rules()) rows.add(ruleRow(settings, r));
-        rows.add(addRow(settings));
-
         rows.add(Option.header("handSwing", tr("skycosmetics.hand.group.swing")));
         rows.add(toggle("handFullSwings", Hand::fullSwings, Hand::setFullSwings));
         rows.add(toggle("handIgnoreEffects", Hand::ignoreEffects, Hand::setIgnoreEffects));
@@ -68,19 +61,62 @@ public final class HandSection {
         rows.add(toggle("handEmptyAndMaps", Hand::emptyAndMaps, Hand::setEmptyAndMaps));
 
         rows.add(Option.header("handPresets", tr("skycosmetics.hand.group.presets")));
-        for (Hand.Preset p : Hand.presets()) rows.add(presetRow(settings, p));
-        rows.add(Option.of("handVanilla", tr("skycosmetics.hand.option.handVanilla"), tr("skycosmetics.hand.option.handVanilla.tooltip"),
-            new Control.Action(tr("skycosmetics.hand.option.handVanilla.use"), () -> {
-                Hand.apply(new JsonObject());
-                Hand.save();
-                rebuild(settings);
-            }, () -> !Hand.isVanillaSetup(), tr("skycosmetics.hand.option.handVanilla.already"))));
-        rows.add(saveRow(settings));
-
-        rows.add(Option.header("handImport", tr("skycosmetics.hand.group.import")));
-        for (HandImport.Source s : HandImport.Source.values()) rows.add(importRow(settings, s));
-        rows.add(shareRow(settings));
-        return rows;
+        rows.add(Option.of("handSavedSlots", Component.empty(), Component.empty(), new Control.Custom((host, width) -> {
+            var row = new ButtonRow(width, width >= 380 ? 6 : 3, 32);
+            var setups = Hand.presets().stream().filter(p -> !p.name().equals(Hand.PREVIOUS)).toList();
+            int pages = Math.max(1, (setups.size() + 1 + 5) / 6);
+            presetPage = Math.clamp(presetPage, 0, pages - 1);
+            for (int i = 0; i < 6; i++) {
+                int index = presetPage * 6 + i;
+                if (index < setups.size()) {
+                    var preset = setups.get(index);
+                    var tile = new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal(preset.name()), 70, 32,
+                        io.github.terabold.skycosmetics.gui.hub.ActionButton.Kind.SECONDARY, b -> {
+                            Hand.apply(preset.setup().deepCopy()); Hand.save(); rebuild(settings);
+                        }) {
+                        @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+                            if (event.button() == 1 && active && visible && isMouseOver(event.x(), event.y())) {
+                                Minecraft.getInstance().setScreen(new HandPresetScreen(settings, preset.name())); return true;
+                            }
+                            return super.mouseClicked(event, doubleClick);
+                        }
+                    };
+                    tile.setTooltip(Tooltip.create(Component.literal(preset.name() + "\nClick to apply. Right-click to edit.")));
+                    row.add(tile, 0);
+                } else {
+                    var tile = new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("+"), 70, 32,
+                        io.github.terabold.skycosmetics.gui.hub.ActionButton.Kind.SECONDARY, b -> {
+                            var saved = Hand.savePreset(null); Hand.save();
+                            var all = Hand.presets().stream().filter(p -> !p.name().equals(Hand.PREVIOUS)).toList();
+                            presetPage = all.indexOf(saved) / 6; rebuild(settings);
+                        });
+                    tile.setTooltip(Tooltip.create(Component.literal("Save the current viewmodel setup")));
+                    row.add(tile, 0, () -> Hand.presets().size() < Hand.MAX_PRESETS);
+                }
+            }
+            return row;
+        })));
+        if (Hand.presets().stream().filter(p -> !p.name().equals(Hand.PREVIOUS)).count() >= 6) {
+            rows.add(Option.of("handSlotPages", Component.empty(), Component.empty(), new Control.Custom((host, width) -> {
+                var row = new ButtonRow(width);
+                row.add(Button.builder(Component.literal("Previous slots"), b -> { presetPage--; rebuild(settings); }).build(), 0, () -> presetPage > 0);
+                row.add(Button.builder(Component.literal("Next slots"), b -> { presetPage++; rebuild(settings); }).build(), 0,
+                    () -> (presetPage + 1) * 6 <= Hand.presets().stream().filter(p -> !p.name().equals(Hand.PREVIOUS)).count());
+                return row;
+            })));
+        }
+        rows.add(Option.of("handSetupTools", Component.empty(), Component.empty(), new Control.Custom((host, width) -> {
+            var row = new ButtonRow(width);
+            row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Edit slots"), 100, false,
+                b -> Minecraft.getInstance().setScreen(new HandPresetScreen(settings, null))), 0,
+                () -> !Hand.presets().isEmpty());
+            row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Import / share"), 100, false,
+                b -> Minecraft.getInstance().setScreen(new HandCodeScreen(settings))), 0);
+            row.add(new io.github.terabold.skycosmetics.gui.hub.ActionButton(Component.literal("Reset"), 100, false,
+                b -> { Hand.apply(new JsonObject()); Hand.save(); rebuild(settings); }), 0);
+            return row;
+        })));
+        return rows.stream().map(Option::compact).toList();
     }
 
     // -------------------------------------------------------------- poses ---
@@ -121,29 +157,10 @@ public final class HandSection {
 
     /** Add a Pose: what to add (kinds without a pose, then your SkyBlock items without one) and Add. */
     private static Option addRow(Screen settings) {
-        Map<String, Component> can = addable();
-        List<String> keys = new ArrayList<>(can.keySet());
-        int[] at = {0};
-        Control control = new Control.Custom((host, w) -> {
-            ButtonRow row = new ButtonRow(w);
-            Button pick = Button.builder(pickLabel(can, keys, at[0]), b -> {
-                at[0] = (at[0] + 1) % Math.max(1, keys.size());
-                b.setMessage(pickLabel(can, keys, at[0]));
-            }).build();
-            pick.setTooltip(Tooltip.create(tr("skycosmetics.hand.add.pick.tooltip")));
-            row.add(pick, 0, () -> keys.size() > 1);
-            row.add(Button.builder(tr("skycosmetics.hand.add"), b -> {
-                String key = keys.get(at[0]);
-                Hand.Rule added = Hand.addRule(key, key.startsWith(Hand.ITEM) ? can.get(key).getString() : null);
-                Hand.save();
-                if (added != null && inWorld()) edit(settings, key);
-                else rebuild(settings);
-            }).build(), Math.min(60, w / 3), () -> !keys.isEmpty());
-            return row;
-        });
-        return Option.of("handAdd", tr("skycosmetics.hand.add.title"), tr("skycosmetics.hand.add.tooltip"), control);
+        return Option.of("handAdd", Component.literal("Item viewmodels"), Component.literal("Choose a profile item, or a vanilla item to affect every item with that base model."),
+            new Control.Action(Component.literal("Choose item…"), () -> Minecraft.getInstance().setScreen(new HandItemScreen(settings)),
+                HandSection::inWorld, tr("skycosmetics.hand.option.edit.noWorld")));
     }
-
     private static Component pickLabel(Map<String, Component> can, List<String> keys, int at) {
         if (keys.isEmpty()) return tr("skycosmetics.hand.add.nothing");
         return can.get(keys.get(at)).copy().append(keys.size() > 1 ? "  >" : "");
@@ -229,120 +246,6 @@ public final class HandSection {
         if (v == 0) return tr("skycosmetics.menu.off");
         if (v == 1) return tr("skycosmetics.hand.sway.normal");
         return Component.literal(Math.round(v * 100) + "%");
-    }
-
-    // ------------------------------------------------------------ presets ---
-
-    /** A saved preset: Use and Delete (Undo after). */
-    private static Option presetRow(Screen settings, Hand.Preset p) {
-        Hand.Preset[] removed = {null};
-        Control control = new Control.Custom((host, w) -> {
-            ButtonRow row = new ButtonRow(w);
-            Button use = Button.builder(tr("skycosmetics.hand.preset.use"), b -> {
-                Hand.apply(p.setup().deepCopy());
-                Hand.save();
-                rebuild(settings);
-            }).build();
-            row.add(use, 0, () -> removed[0] == null);
-            row.add(Button.builder(tr("skycosmetics.hand.rule.remove"), b -> {
-                if (removed[0] == null) {
-                    removed[0] = Hand.removePreset(p.name());
-                    use.setMessage(tr("skycosmetics.hand.preset.removed").withStyle(ChatFormatting.GRAY));
-                    b.setMessage(tr("skycosmetics.hand.undo"));
-                } else {
-                    Hand.restorePreset(removed[0]);
-                    removed[0] = null;
-                    use.setMessage(tr("skycosmetics.hand.preset.use"));
-                    b.setMessage(tr("skycosmetics.hand.rule.remove"));
-                }
-                Hand.save();
-            }).build(), Math.min(70, w / 3));
-            return row;
-        });
-        Component help = p.name().equals(Hand.PREVIOUS) ? tr("skycosmetics.hand.preset.previous.tooltip")
-            : summary(HandPose.fromJson(p.setup().get("pose")), true);
-        return Option.of("handPreset:" + p.name(), Component.literal(p.name()), help, control);
-    }
-
-    /** Save as Preset: a name box and Save. */
-    private static Option saveRow(Screen settings) {
-        Control control = new Control.Custom((host, w) -> {
-            ButtonRow row = new ButtonRow(w);
-            Minecraft mc = Minecraft.getInstance();
-            EditBox name = new EditBox(mc.font, 0, 0, 100, 20, tr("skycosmetics.hand.preset.name"));
-            name.setMaxLength(Hand.MAX_NAME);
-            name.setHint(tr("skycosmetics.hand.preset.name").withStyle(ChatFormatting.DARK_GRAY));
-            row.add(name, 0);
-            row.add(Button.builder(tr("skycosmetics.hand.preset.save"), b -> {
-                Hand.savePreset(name.getValue());
-                Hand.save();
-                rebuild(settings);
-            }).build(), Math.min(60, w / 3), () -> !Hand.isVanillaSetup());
-            return row;
-        });
-        return Option.of("handSavePreset", tr("skycosmetics.hand.preset.saveTitle"), tr("skycosmetics.hand.preset.save.tooltip"), control);
-    }
-
-    // ----------------------------------------------------- import & share ---
-
-    private static Option importRow(Screen settings, HandImport.Source s) {
-        HandImport.Found found = HandImport.find(s);
-        Component help = found == null ? tr("skycosmetics.hand.import.missing", s.name)
-            : found.on() ? tr("skycosmetics.hand.import.on", s.name).withStyle(ChatFormatting.GOLD)
-            : tr("skycosmetics.hand.import.found", s.name);
-        return Option.of("handImport:" + s.modId, Component.literal(s.name), help,
-            new Control.Action(tr("skycosmetics.hand.import"), () -> {
-                Hand.apply(found.setup().deepCopy());
-                Hand.save();
-                rebuild(settings);
-            }, () -> found != null, tr("skycosmetics.hand.import.missing", s.name)));
-    }
-
-    /** Copy Code and Paste Code; each says what happened on its own label for a moment. */
-    private static Option shareRow(Screen settings) {
-        Control control = new Control.Custom((host, w) -> {
-            ButtonRow row = new ButtonRow(w);
-            Minecraft mc = Minecraft.getInstance();
-            row.add(flashing(tr("skycosmetics.hand.share.copy"), b -> {
-                mc.keyboardHandler.setClipboard(HandImport.code(Hand.setup()));
-                return tr("skycosmetics.hand.share.copied").withStyle(ChatFormatting.GREEN);
-            }), 0);
-            row.add(flashing(tr("skycosmetics.hand.share.paste"), b -> {
-                JsonObject setup = HandImport.decode(mc.keyboardHandler.getClipboard());
-                if (setup == null) return tr("skycosmetics.hand.share.notCode").withStyle(ChatFormatting.RED);
-                Hand.apply(setup);
-                Hand.save();
-                rebuild(settings);
-                return tr("skycosmetics.hand.share.pasted").withStyle(ChatFormatting.GREEN);
-            }), 0);
-            return row;
-        });
-        return Option.of("handShare", tr("skycosmetics.hand.share"), tr("skycosmetics.hand.share.tooltip"), control);
-    }
-
-    /** A button that shows what its press did (returned by {@code press}) for a moment, then its label again. */
-    private static Button flashing(Component label, java.util.function.Function<Button, Component> press) {
-        long[] until = {0};
-        return new Button.Plain(0, 0, 100, 20, label, b -> {
-            Component said;
-            try {
-                said = press.apply(b);
-            } catch (RuntimeException e) {
-                Io.failed("A hand share code", e);
-                said = tr("skycosmetics.hand.share.notCode").withStyle(ChatFormatting.RED);
-            }
-            b.setMessage(said);
-            until[0] = Util.getMillis() + FLASH_MS;
-        }, java.util.function.Supplier::get) {
-            @Override
-            protected void extractContents(net.minecraft.client.gui.GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-                if (until[0] != 0 && Util.getMillis() > until[0]) {
-                    until[0] = 0;
-                    setMessage(label);
-                }
-                super.extractContents(g, mouseX, mouseY, delta);
-            }
-        };
     }
 
     // ------------------------------------------------------------ helpers ---

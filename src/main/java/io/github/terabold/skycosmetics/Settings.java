@@ -6,7 +6,8 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import net.fabricmc.loader.api.FabricLoader;
 
-import java.io.Reader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,8 +29,6 @@ public final class Settings {
     public static boolean brush = true;
     /** Reskin your summoned pet (and deployed power orbs) in the world. */
     public static boolean worldReskin = true;
-    /** Learn skins the repo does not have yet from items and Elizabeth previews. */
-    public static boolean learnSkins = true;
     /**
      * My Items also lists what menus you open showed (Wardrobe, Ender Chest, Backpacks...). Off: only what you
      * wear and carry; nothing more is learned and items.json stays as it is, so On brings them back.
@@ -43,11 +42,11 @@ public final class Settings {
     private static final Map<String, Key> KEYS = new LinkedHashMap<>();
     /** The file as last read: its unknown keys are written back, and features registered later read from it. */
     private static JsonObject last = new JsonObject();
+    private static final int MAX_BYTES = 2 * 1024 * 1024;
 
     static {
         flag("brush", () -> brush, v -> brush = v);
         flag("worldReskin", () -> worldReskin, v -> worldReskin = v);
-        flag("learnSkins", () -> learnSkins, v -> learnSkins = v);
         flag("storedItems", () -> storedItems, v -> storedItems = v);
         flag("keyTipShown", () -> keyTipShown, v -> keyTipShown = v);
     }
@@ -78,8 +77,11 @@ public final class Settings {
         Path f = file();
         if (!Files.isRegularFile(f)) return;
         JsonObject o;
-        try (Reader r = Files.newBufferedReader(f, StandardCharsets.UTF_8)) {
-            o = JsonParser.parseReader(r).getAsJsonObject();
+        try (InputStream in = Files.newInputStream(f)) {
+            if (Files.size(f) > MAX_BYTES) throw new IOException("settings.json exceeds 2 MiB");
+            byte[] bytes = in.readNBytes(MAX_BYTES + 1);
+            if (bytes.length > MAX_BYTES) throw new IOException("settings.json exceeds 2 MiB");
+            o = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
         } catch (Exception e) {
             Io.setAside(f, "Could not read settings.json", e); // the settings in memory stay as they were
             return;

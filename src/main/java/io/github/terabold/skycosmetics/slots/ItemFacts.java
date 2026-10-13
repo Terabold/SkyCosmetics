@@ -10,22 +10,29 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * What the slot features need to know about a stack: its rarity, whether it is recombobulated, a SkyBlock item or a
  * pet. Read once per stack and kept on it ({@link Holder}); read again only when the stack's lore or SkyBlock data
- * is replaced, so drawing a menu never parses anything.
+ * or the original name/tooltip style is replaced, so drawing an unchanged menu never parses anything.
  *
  * @param lore the lore component the facts were read from (by identity)
  * @param data the custom data component the facts were read from (by identity)
- * @param rarity null when the item has no rarity line (menu buttons, vanilla items)
+ * @param name the original custom name component (by identity)
+ * @param tooltipStyle the server's tooltip style (by identity)
+ * @param rarity null when no item rarity can be determined (ordinary menu buttons, vanilla items)
+ * @param loadoutColor a saved setup button's name color, used only in the Loadouts selection area
  */
-public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombobulated, boolean skyblock, boolean pet) {
+public record ItemFacts(Object lore, Object data, Object name, Object tooltipStyle, Rarity rarity,
+                        boolean recombobulated, boolean skyblock, boolean pet, Rarity loadoutColor) {
     /** Mixed into ItemStack: the facts last read for it. */
     public interface Holder {
         ItemFacts skycosmetics$facts();
@@ -34,17 +41,20 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
     }
 
     private static final String TIER_BOOST = "PET_ITEM_TIER_BOOST";
+    private static final Pattern PET_NAME = Pattern.compile("^(?:⭐ )?\\[Lvl [0-9,]{1,5}] (?:\\[[0-9]+[✦⚔]] )?([\\w '-]+?)(?: ✦)?$");
     /** Stacks read since start, for tests: drawing the same menu again must read none. */
     private static long reads;
 
-    /** The stack's facts; read now only if its lore or data changed since the last call. */
+    /** The stack's facts; read now only if a relevant component changed since the last call. */
     public static ItemFacts of(ItemStack s) {
         ItemLore lore = s.get(DataComponents.LORE);
         CustomData data = s.get(DataComponents.CUSTOM_DATA);
+        Component name = s.getCustomName();
+        Identifier tooltipStyle = s.get(DataComponents.TOOLTIP_STYLE);
         Holder h = (Holder) (Object) s;
         ItemFacts f = h.skycosmetics$facts();
-        if (f != null && f.lore == lore && f.data == data) return f;
-        f = read(lore, data);
+        if (f != null && f.lore == lore && f.data == data && f.name == name && f.tooltipStyle == tooltipStyle) return f;
+        f = read(lore, data, name, tooltipStyle, s.is(Items.PLAYER_HEAD));
         h.skycosmetics$facts(f);
         return f;
     }
@@ -53,7 +63,7 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
         return reads;
     }
 
-    static ItemFacts read(ItemLore lore, CustomData data) {
+    static ItemFacts read(ItemLore lore, CustomData data, Component name, Identifier tooltipStyle, boolean head) {
         reads++;
         CompoundTag tag = null;
         String id = "";
@@ -66,12 +76,51 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
         boolean pet = id.equals("PET");
         Line line = lore == null ? null : rarityLine(lore.lines());
         Rarity rarity = line == null ? null : line.rarity;
+        Rarity namedPet = head ? nameRarity(name, true) : null;
+        pet |= namedPet != null;
         if (pet) {
             Rarity tier = petTier(tag);
             if (tier != null) rarity = tier;
         }
+        Rarity styled = tooltipStyle != null && tooltipStyle.getNamespace().equals("hypixel_skyblock")
+            ? Rarity.named(tooltipStyle.getPath()) : null;
+        if (rarity == null) rarity = styled != null ? styled : namedPet;
+        Rarity loadoutColor = null;
+        if (head && lore != null && lore.lines().stream().anyMatch(c -> {
+            String raw = c.getString();
+            String text = raw.length() <= 128 ? ChatFormatting.stripFormatting(raw) : null;
+            return "Left-click to equip!".equals(text) || "Right-click to edit".equals(text);
+        })) loadoutColor = nameRarity(name, false);
         boolean recomb = line != null && line.recombobulated || tag != null && tag.getIntOr("rarity_upgrades", 0) > 0;
-        return new ItemFacts(lore, data, rarity, recomb, !id.isEmpty(), pet);
+        return new ItemFacts(lore, data, name, tooltipStyle, rarity, recomb, !id.isEmpty() || styled != null || namedPet != null, pet, loadoutColor);
+    }
+
+    /** Pet shop heads have no rarity footer. Read the pet name's color, not the gray level prefix. */
+    private static Rarity nameRarity(Component name, boolean pet) {
+        if (name == null || name.getString().length() > 256) return null;
+        StringBuilder text = new StringBuilder();
+        int[] colors = new int[128];
+        net.minecraft.util.StringDecomposer.iterateFormatted(name, net.minecraft.network.chat.Style.EMPTY, (index, style, cp) -> {
+            int size = Character.charCount(cp);
+            if (text.length() + size > colors.length) return false;
+            int color = style.getColor() == null ? -1 : style.getColor().getValue();
+            for (int i = 0; i < size; i++) colors[text.length() + i] = color;
+            text.appendCodePoint(cp);
+            return true;
+        });
+        if (text.isEmpty() || text.length() == colors.length) return null;
+        int at = 0;
+        if (pet) {
+            var match = PET_NAME.matcher(text);
+            if (!match.matches()) return null;
+            at = match.start(1);
+        }
+        int color = colors[at];
+        for (Rarity rarity : FORMATTED_RARITIES) {
+            if (pet && rarity.ordinal() > Rarity.MYTHIC.ordinal()) break;
+            if (rarity.hypixel == color) return rarity;
+        }
+        return null;
     }
 
     /** A rarity line, and whether Hypixel wrapped it in the obfuscated letters of a recombobulated item. */
@@ -88,8 +137,53 @@ public record ItemFacts(Object lore, Object data, Rarity rarity, boolean recombo
             Line l = parse(lines.get(i).getString());
             if (l != null) return l;
         }
+        // Reward buttons can put a bracket inside a sentence. Require Hypixel's bold rarity color,
+        // and only fall back after looking for an item's normal rarity line.
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            Rarity rarity = formattedRarity(lines.get(i));
+            if (rarity != null) return new Line(rarity, false);
+        }
         return null;
     }
+
+    private static Rarity formattedRarity(Component line) {
+        if (line.getString().length() > 512) return null;
+        StringBuilder run = new StringBuilder();
+        int[] color = {-1};
+        Rarity[] found = {null};
+        net.minecraft.util.StringDecomposer.iterateFormatted(line, net.minecraft.network.chat.Style.EMPTY, (index, style, cp) -> {
+            int next = style.isBold() && style.getColor() != null ? style.getColor().getValue() : -1;
+            if (next != color[0]) {
+                found[0] = rarityInRun(run, color[0]);
+                if (found[0] != null) return false;
+                run.setLength(0); color[0] = next;
+            }
+            if (next != -1) run.appendCodePoint(cp);
+            return true;
+        });
+        return found[0] != null ? found[0] : rarityInRun(run, color[0]);
+    }
+
+    private static final Rarity[] FORMATTED_RARITIES = Rarity.values();
+    private static Rarity rarityInRun(StringBuilder run, int color) {
+        if (run.isEmpty() || color < 0) return null;
+        String text = run.toString();
+        // Check VERY SPECIAL before SPECIAL, which shares its color.
+        for (int i = FORMATTED_RARITIES.length - 1; i >= 0; i--) {
+            Rarity rarity = FORMATTED_RARITIES[i];
+            if (rarity.hypixel != color) continue;
+            String name = rarity.name().replace('_', ' ');
+            int from = 0, at;
+            while ((at = text.indexOf(name, from)) >= 0) {
+                int end = at + name.length();
+                if ((at == 0 || !word(text.charAt(at - 1))) && (end == text.length() || !word(text.charAt(end)))) return rarity;
+                from = end;
+            }
+        }
+        return null;
+    }
+
+    private static boolean word(char c) { return Character.isLetterOrDigit(c) || c == '_'; }
 
     static Line parse(String raw) {
         String t = ChatFormatting.stripFormatting(raw);

@@ -8,7 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.tooltip.TooltipRenderUtil;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -80,7 +79,16 @@ public final class TooltipPanel {
         int fit = Math.min(lore.size(), Math.max(0, (room - below) / line));
         lastFit = fit;
         int ch = (int) Math.ceil((fit > 0 ? below + fit * line : head) * ts);
-        TooltipRenderUtil.extractTooltipBackground(g, cx, cy, cw, ch, null);
+        var rarity = io.github.terabold.skycosmetics.slots.ItemFacts.of(s).rarity();
+        if (io.github.terabold.skycosmetics.tooltip.TooltipSettings.enabled
+            && io.github.terabold.skycosmetics.tooltip.TooltipSettings.customBackground) {
+            io.github.terabold.skycosmetics.tooltip.TooltipBackdrop.drawBox(g, x, y, w, ch + 2 * FRAME, true, false, 0);
+        } else Shapes.round(g, x, y, w, ch + 2 * FRAME, 1, 0xF0100010);
+        if (rarity != null) {
+            g.nextStratum();
+            Shapes.frame(g, x, y, w, ch + 2 * FRAME, 1,
+                0xFF000000 | io.github.terabold.skycosmetics.slots.RarityBackgrounds.color(rarity));
+        }
 
         g.pose().pushMatrix();
         g.pose().translate(cx, cy);

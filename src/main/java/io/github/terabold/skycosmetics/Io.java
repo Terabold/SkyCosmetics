@@ -26,18 +26,20 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * One background thread for every config write, so saving looks, pets or the
- * item list never stalls a frame. Writes are atomic (temp file + move) and run
- * in submission order, so the last save always wins.
+ * item list never stalls a frame. Writes are atomic (temp file + move). Pending snapshots of the same file
+ * are coalesced, so rapid slider edits cannot queue hundreds of obsolete writes ahead of the final save.
  *
  * Also where a file that could not be read is set aside, so the next save never
  * writes over it, and where caught failures are logged without flooding the log.
@@ -49,6 +51,8 @@ public final class Io {
         t.setDaemon(true);
         return t;
     });
+    private static final Map<Path, JsonElement> PENDING = new LinkedHashMap<>();
+    private static boolean draining;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
     /** Unreadable files that could not be set aside either: never written this session. */
     private static final Set<Path> KEEP = ConcurrentHashMap.newKeySet();
@@ -65,13 +69,44 @@ public final class Io {
 
     /** Serialises {@code json} off-thread. Build the JSON on the caller's thread; it must not be mutated afterwards. */
     public static void writeAsync(Path file, JsonElement json) {
-        WRITER.execute(() -> write(file, json));
+        synchronized (PENDING) {
+            PENDING.put(file, json);
+            if (!draining) {
+                draining = true;
+                try {
+                    WRITER.execute(Io::drain);
+                } catch (RejectedExecutionException e) {
+                    draining = false;
+                    PENDING.remove(file);
+                    throw e;
+                }
+            }
+        }
+    }
+
+    private static void drain() {
+        while (true) {
+            Path file;
+            JsonElement json;
+            synchronized (PENDING) {
+                if (PENDING.isEmpty()) { draining = false; return; }
+                var it = PENDING.entrySet().iterator();
+                var entry = it.next();
+                file = entry.getKey(); json = entry.getValue(); it.remove();
+            }
+            write(file, json);
+        }
     }
 
     public static void write(Path file, JsonElement json) {
+        writeChecked(file, json);
+    }
+
+    /** Same atomic write, with its actual result for explicit exports. Off-thread only. */
+    public static boolean writeChecked(Path file, JsonElement json) {
         if (KEEP.contains(file)) {
             SkyCosmetics.LOG.warn("Not saving {}: it could not be read or set aside", file);
-            return;
+            return false;
         }
         try {
             Files.createDirectories(file.getParent());
@@ -84,8 +119,10 @@ public final class Io {
                 ch.force(true); // on disk before it replaces the old file: a crash cannot leave an empty one
             }
             replace(tmp, file);
+            return true;
         } catch (Exception e) {
             SkyCosmetics.LOG.error("Could not save {}", file, e);
+            return false;
         }
     }
 

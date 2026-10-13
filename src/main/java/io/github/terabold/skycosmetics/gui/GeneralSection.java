@@ -9,6 +9,7 @@ import io.github.terabold.skycosmetics.hub.Host;
 import io.github.terabold.skycosmetics.hub.Hub;
 import io.github.terabold.skycosmetics.hub.Option;
 import io.github.terabold.skycosmetics.hub.Section;
+import io.github.terabold.skycosmetics.update.UpdateRows;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
@@ -21,8 +22,8 @@ import java.util.Locale;
 
 /**
  * General, first in the settings' sidebar: the accent color of the settings and the studio (switches, sliders,
- * selections, headings, highlights). Stored as {@code "accent": "#RRGGBB"} in settings.json; a value that isn't a
- * color keeps the current one.
+ * selections, headings, highlights), and updates (the card on top and the Updates group, from {@code update.UpdateRows}).
+ * The accent is stored as {@code "accent": "#RRGGBB"} in settings.json; a value that isn't a color keeps the current one.
  */
 public final class GeneralSection {
     public static final String ID = "general";
@@ -33,6 +34,7 @@ public final class GeneralSection {
     private GeneralSection() {}
 
     public static void register() {
+        Settings.register("cornerRadius", v -> Theme.rounding((int) Settings.num(v, 3, 0, 10)), () -> new JsonPrimitive(Theme.RADIUS));
         Settings.register("accent", v -> {
             Integer rgb = parse(Settings.str(v, null));
             if (rgb != null) Theme.setAccent(rgb);
@@ -45,7 +47,10 @@ public final class GeneralSection {
 
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
+        rows.addAll(UpdateRows.group(settings));
         rows.add(Option.header("groupAppearance", Component.translatable("skycosmetics.menu.group.appearance")));
+        rows.add(Option.of("cornerRadius", Component.literal("Menu corner rounding"), Component.literal("Zero gives square menus. Tooltips have a separate rounding control."),
+            new Control.Slider(() -> Theme.RADIUS, v -> Theme.rounding((int) v), 0, 10, 1, v -> Component.literal((int) v + " px"))).compact());
         rows.add(Option.of("accent", Component.translatable("skycosmetics.option.accent"),
             Component.translatable("skycosmetics.option.accent.tooltip"), new Control.Color(Theme::accent, Theme::setAccent))
             .search(Component.translatable("skycosmetics.option.accent.search").getString()));
@@ -61,7 +66,7 @@ public final class GeneralSection {
                 if (settings instanceof Host host) host.changed(); // saves, and the swatch and pills show it
                 else Settings.save();
             }, () -> Theme.accent() != Theme.DEFAULT_ACCENT, Component.empty())));
-        return rows;
+        return rows.stream().map(o -> o.id().equals("accent") || o.id().equals("accentPresets") ? o.compact() : o).toList();
     }
 
     private static List<ColorPresets.Preset> presets() {

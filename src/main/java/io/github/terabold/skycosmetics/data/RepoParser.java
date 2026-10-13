@@ -40,6 +40,8 @@ final class RepoParser {
     static final Pattern COSMETIC = Pattern.compile("^[A-Z]+(?: [A-Z]+)? COSMETIC$");
     /** Runes, statues and Ditto blobs are COSMETIC skulls too; only skins end in "Skin". */
     static final Pattern SKIN_NAME = Pattern.compile("(?:^| )Skin$");
+    /** "This skin is swappable between 21" (the lore goes on: "flying Wyvern variants!"). */
+    private static final Pattern SWAPPABLE = Pattern.compile("swappable\\s+between\\s+(\\d{1,4})\\b");
     private static final String[] TIERS = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine"};
     private static final String[] VANILLA_DYES = {"Ink Sac", "Red Dye", "Green Dye", "Cocoa Beans",
         "Lapis Lazuli", "Purple Dye", "Cyan Dye", "Light Gray Dye", "Gray Dye", "Pink Dye", "Lime Dye",
@@ -76,7 +78,7 @@ final class RepoParser {
 
     /** What one item file contributes; decoded on a worker thread. */
     private record ItemInfo(String id, String name, int color, String texture, SkinEntry.Kind kind,
-                            boolean animatedLore, SkinEntry.Use use) {}
+                            boolean animatedLore, SkinEntry.Use use, int swappable) {}
 
     private record Named(String name, int color) {}
 
@@ -118,27 +120,15 @@ final class RepoParser {
             // resolvable, but only the first of each texture is listed in the grid.
             SkinEntry entry = SkinEntry.still(it.id, name, it.color, it.kind, it.texture, null);
             entry.use = it.use;
+            entry.swappable = it.swappable;
             if (it.kind == SkinEntry.Kind.HEAD && !headTextures.add(it.texture)) entry.listed = false;
             skins.put(it.id, entry);
         }
 
         // Names and colours for variants that exist only in animatedskulls.json.
-        Map<String, Named> helpNames = new HashMap<>();
-        Set<String> indexed = new HashSet<>();
         JsonObject help = animated.getAsJsonObject("help");
-        if (help != null) {
-            for (Map.Entry<String, JsonElement> e : help.entrySet()) {
-                if (!e.getValue().isJsonArray()) continue;
-                JsonArray lines = e.getValue().getAsJsonArray();
-                if (lines.size() > 0 && lines.get(0).getAsString().contains(":number")) indexed.add(e.getKey());
-                for (int i = 1; i < lines.size(); i++) {
-                    String line = lines.get(i).getAsString();
-                    String n = strip(line).trim();
-                    if (n.isEmpty()) continue;
-                    helpNames.put(n.toUpperCase(Locale.ROOT).replace(' ', '_'), new Named(n, colorOf(line)));
-                }
-            }
-        }
+        Set<String> indexed = indexed(help);
+        Map<String, Named> helpNames = helpNames(help, anim, indexed);
 
         // Every "ID" and "ID_" prefix that has real frames, to spot animated items without any.
         Set<String> framed = new HashSet<>();
@@ -161,6 +151,7 @@ final class RepoParser {
             if (existing != null) {
                 SkinEntry entry = new SkinEntry(id, existing.name, existing.color, existing.kind, frames, ticks, null);
                 entry.use = existing.use;
+                entry.swappable = existing.swappable;
                 entry.perFrame = perFrame;
                 skins.put(id, entry);
                 continue;
@@ -240,6 +231,55 @@ final class RepoParser {
         return new Parsed(label, items, skins, dyes, names, order, missing);
     }
 
+    // ------------------------------------------------------------- help ---
+
+    /** Help entries that pick frames by number ({@code FERMENTO_ULTIMATE:47}): a sheet, not an animation. */
+    static Set<String> indexed(JsonObject help) {
+        Set<String> out = new HashSet<>();
+        if (help == null) return out;
+        for (Map.Entry<String, JsonElement> e : help.entrySet()) {
+            if (e.getValue() instanceof JsonArray lines && !lines.isEmpty() && lines.get(0).isJsonPrimitive()
+                && lines.get(0).getAsString().contains(":number")) out.add(e.getKey());
+        }
+        return out;
+    }
+
+    /**
+     * The name and colour each help list gives its family's variants, by animatedskulls key: "§cSentinel Warden
+     * Red" is SENTINEL_WARDEN_RED, "§5Pet Skin Wolf Spirit Night to use the night version" is
+     * PET_SKIN_WOLF_SPIRIT_NIGHT. Lines are matched by their last words to the family's keys, since a list does not
+     * always spell the family as its id does ("Four Season Griffin" for FOUR_SEASONS_GRIFFIN) and some start with a
+     * variant instead of a usage line. The longest matching key wins (BLACK_ICE over BLACK).
+     */
+    static Map<String, Named> helpNames(JsonObject help, JsonObject anim, Set<String> indexed) {
+        Map<String, Named> out = new HashMap<>();
+        if (help == null) return out;
+        for (Map.Entry<String, JsonElement> e : help.entrySet()) {
+            String family = e.getKey();
+            if (indexed.contains(family) || !(e.getValue() instanceof JsonArray lines)) continue;
+            String prefix = family + "_";
+            List<String> suffixes = new ArrayList<>();
+            for (String k : anim.keySet()) if (k.startsWith(prefix)) suffixes.add(k.substring(prefix.length()));
+            for (JsonElement le : lines) {
+                if (!le.isJsonPrimitive()) continue;
+                String line = le.getAsString();
+                String n = strip(line).replace("\"", "").trim();
+                int use = n.toLowerCase(Locale.ROOT).indexOf(" to use");
+                if (use >= 0) n = n.substring(0, use).trim();
+                if (n.isEmpty() || n.indexOf('(') >= 0 || n.indexOf(':') >= 0) continue; // "X (colour) to use..."
+                String norm = n.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_");
+                String best = null;
+                for (String sfx : suffixes) {
+                    if ((norm.equals(sfx) || norm.endsWith("_" + sfx)) && (best == null || sfx.length() > best.length())) best = sfx;
+                }
+                // Without a key, the line still names an id-shaped variant (a learned one may use it later).
+                String key = best != null ? prefix + best : norm;
+                out.putIfAbsent(key, new Named(n, legible(colorOf(line))));
+            }
+        }
+        return out;
+    }
+
     // ------------------------------------------------------------ items ---
 
     /** Reads and decodes every item file on a few threads; slot i holds paths[i] (null if unreadable). */
@@ -288,7 +328,7 @@ final class RepoParser {
 
         String nbt = str(o, "nbttag");
         Matcher m = nbt == null ? null : TEXTURE.matcher(nbt);
-        if (m == null || !m.find()) return new ItemInfo(id, name, color, null, SkinEntry.Kind.HEAD, false, SkinEntry.Use.HELMET);
+        if (m == null || !m.find()) return new ItemInfo(id, name, color, null, SkinEntry.Kind.HEAD, false, SkinEntry.Use.HELMET, 0);
         String texture = m.group(1);
 
         List<String> lore = new ArrayList<>();
@@ -300,22 +340,25 @@ final class RepoParser {
         SkinEntry.Kind kind = id.startsWith("PET_SKIN_") ? SkinEntry.Kind.PET_SKIN
             : skin ? SkinEntry.Kind.SKIN : SkinEntry.Kind.HEAD;
         boolean animatedLore = false;
+        int swappable = swappable(lore);
         if (kind != SkinEntry.Kind.HEAD) {
             for (String l : lore) {
-                if (l.toLowerCase(Locale.ROOT).contains("animated")) {
-                    animatedLore = true;
-                    break;
-                }
+                if (l.toLowerCase(Locale.ROOT).contains("animated")) animatedLore = true;
             }
         }
         return new ItemInfo(id, name, color, texture, kind, animatedLore,
-            kind == SkinEntry.Kind.SKIN ? useOf(lore) : SkinEntry.Use.HELMET);
+            kind == SkinEntry.Kind.SKIN ? useOf(lore) : SkinEntry.Use.HELMET, swappable);
     }
 
     /**
      * "This skin can be applied to Wither Goggles." Power orb and backpack skins
      * name those; minion, barn and greenhouse skins have no such line at all.
      */
+    static int swappable(List<String> lore) {
+        Matcher sw = SWAPPABLE.matcher(String.join(" ", lore).toLowerCase(Locale.ROOT));
+        return sw.find() ? Integer.parseInt(sw.group(1)) : 0;
+    }
+
     static SkinEntry.Use useOf(List<String> lore) {
         String text = String.join(" ", lore);
         int at = text.indexOf("can be applied to");
@@ -382,13 +425,18 @@ final class RepoParser {
         group.clear();
     }
 
-    /** Longest skin id that {@code id} extends with "_SUFFIX": NECRON_DIAMOND_KNIGHT_BLACK -> NECRON_DIAMOND_KNIGHT. */
+    /**
+     * Longest skin id that {@code id} extends with "_SUFFIX": NECRON_DIAMOND_KNIGHT_BLACK_ICE -> NECRON_DIAMOND_KNIGHT.
+     * Only a sold skin (or pet skin) is a parent, never another variant: BLACK_ICE is not a variant of BLACK, and
+     * FERMENTO_ULTIMATE_CACTUS_RED belongs to FERMENTO_ULTIMATE like FERMENTO_ULTIMATE_CACTUS does. Variants are listed
+     * after their parent, so one with a variant for a parent would never be listed at all.
+     */
     static String parentOf(String id, Map<String, SkinEntry> skins) {
         int i = id.length();
         while ((i = id.lastIndexOf('_', i - 1)) > 0) {
             String p = id.substring(0, i);
             SkinEntry e = skins.get(p);
-            if (e != null && e.kind != SkinEntry.Kind.HEAD) return p;
+            if (e != null && (e.kind == SkinEntry.Kind.SKIN || e.kind == SkinEntry.Kind.PET_SKIN)) return p;
         }
         return null;
     }
@@ -417,6 +465,18 @@ final class RepoParser {
             from = Math.min(i + 2, s.length());
         }
         return b.append(s, from, s.length()).toString();
+    }
+
+    /**
+     * A help list's colour as a name colour on SkyCosmetics' dark cards and tooltips: Black (Black Ice, Void) shows as
+     * Dark Gray and Dark Blue as Blue, the nearest that can be read there.
+     */
+    static int legible(int argb) {
+        return switch (argb & 0xFFFFFF) {
+            case 0x000000 -> 0xFF555555;
+            case 0x0000AA -> 0xFF5555FF;
+            default -> argb;
+        };
     }
 
     /** ARGB of the first colour code in a formatted string; white if none. */

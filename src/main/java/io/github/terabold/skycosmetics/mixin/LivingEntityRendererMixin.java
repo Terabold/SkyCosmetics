@@ -18,6 +18,13 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(LivingEntityRenderer.class)
 public class LivingEntityRendererMixin {
+    @WrapOperation(method="shouldShowName(Lnet/minecraft/world/entity/LivingEntity;D)Z",
+        at=@At(value="INVOKE",target="Lnet/minecraft/client/Minecraft;renderNames()Z"))
+    private boolean skycosmetics$hud(Operation<Boolean> original, LivingEntity entity, double distance) {
+        return original.call() || io.github.terabold.skycosmetics.nametag.Nametags.selected(entity)
+            && !io.github.terabold.skycosmetics.nametag.Nametags.hideHud(io.github.terabold.skycosmetics.nametag.Nametags.kind(entity));
+    }
+
     @WrapOperation(
         method = "extractRenderState(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;F)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;getItemBySlot(Lnet/minecraft/world/entity/EquipmentSlot;)Lnet/minecraft/world/item/ItemStack;"))

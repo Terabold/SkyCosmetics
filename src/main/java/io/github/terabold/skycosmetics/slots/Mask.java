@@ -42,9 +42,15 @@ public final class Mask {
     }
 
     /** Everything a mask depends on. */
-    public record Style(Shape shape, Fill fill, int opacity, boolean outline) {
+    public record Style(Shape shape, Fill fill, int opacity, boolean outline, int gradientMinimum, int outlineOpacity) {
+        public Style(Shape shape, Fill fill, int opacity, boolean outline, int gradientMinimum) {
+            this(shape, fill, opacity, outline, gradientMinimum, Math.min(100, Math.round(opacity * 1.2f)));
+        }
+        public Style(Shape shape, Fill fill, int opacity, boolean outline) { this(shape, fill, opacity, outline, 20); }
         public Style {
             opacity = Math.clamp(opacity, 0, 100);
+            gradientMinimum = Math.clamp(gradientMinimum, 0, 100);
+            outlineOpacity = Math.clamp(outlineOpacity, 0, 100);
         }
     }
 
@@ -120,7 +126,7 @@ public final class Mask {
     /** Paints one style into a cell. {@code ss} is the samples per texel side (4 for slots, 3 for pickers). */
     static void paint(NativeImage img, int x0, int y0, int n, int s, Style style, int ss) {
         float op = style.opacity() / 100f;
-        float edge = Math.min(1f, op * 1.5f + 0.25f);
+        float edge = style.outlineOpacity() / 100f;
         boolean outline = style.outline() && style.shape().outlined();
         float inv = 1f / (ss * ss);
         for (int ty = 0; ty < n; ty++) {
@@ -133,9 +139,12 @@ public final class Mask {
                         float cov = coverage(style.shape(), px, py);
                         if (cov <= 0) continue;
                         float[] bm = fill(style.fill(), style.shape(), px, py);
-                        float al = cov * bm[1] * op, b = bm[0];
+                        float gradient = bm[1];
+                        if (style.fill() != Fill.SOLID && style.fill() != Fill.BEVELED)
+                            gradient = style.gradientMinimum() / 100f + (1 - style.gradientMinimum() / 100f) * (gradient - .2f) / .8f;
+                        float al = cov * gradient * op, b = bm[0];
                         if (outline && isEdge(style.shape(), px, py)) {
-                            al = Math.max(al, edge);
+                            al = edge;
                             b = 1f;
                         }
                         a += al;
@@ -150,8 +159,11 @@ public final class Mask {
         }
     }
 
-    /** The recombobulated mark: a small white corner with a dark edge, top right, drawn untinted. */
+    /** A white corner mask: every covered pixel takes the user's marker color. */
     static void paintMark(NativeImage img, int x0, int y0, int n, int s) {
+        paintMark(img, x0, y0, n, s, 5.5f);
+    }
+    static void paintMark(NativeImage img, int x0, int y0, int n, int s, float size) {
         int ss = 4;
         float inv = 1f / (ss * ss);
         for (int ty = 0; ty < n; ty++) {
@@ -162,11 +174,10 @@ public final class Mask {
                     for (int sx = 0; sx < ss; sx++) {
                         float px = (tx + (sx + 0.5f) / ss) / s;
                         float qx = 17 - px, qy = py - 1;
-                        if (qx < 0 || qy < 0 || qx + qy > 5.5f) continue;
-                        boolean rim = qx + qy > 4.5f || qx < 1 || qy < 1;
-                        float al = rim ? 0.8f : 0.95f;
+                        if (qx < 0 || qy < 0 || qx + qy > size) continue;
+                        float al = 1f;
                         a += al;
-                        lum += al * (rim ? 0.1f : 1f);
+                        lum += al;
                     }
                 }
                 if (a <= 0) continue;

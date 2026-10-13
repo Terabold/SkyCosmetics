@@ -1,6 +1,6 @@
 # SkyCosmetics
 
-**Every Hypixel SkyBlock skin, dye, name and glint, on your own gear and pets.** Put any skin Hypixel has ever made
+**Hypixel SkyBlock skins, dyes, names and glint, on your own gear and pets.** Choose catalog skins
 on your helmets, items and pets, dye any armor with any dye (animated ones included), rename items and restyle their
 glint, and see it everywhere: in every menu, in your hand, on your player model and on your summoned pet.
 
@@ -14,23 +14,32 @@ clicks nothing, and other players see Hypixel's items as usual.
 
 ## Features
 
-- **Every skin.** Helmet skins with all their color variants (Knight Skin and its 15 shiny versions together),
-  animated skins at Hypixel's real frame timing, every pet skin, every power orb skin and every head in SkyBlock.
+- **Skins and variants.** Browse catalog helmet, pet and power orb skins, related color variants and SkyBlock heads.
+  Animation timing comes from the catalog, bundled timings and estimates for known blink frames. Previously saved
+  skins and timing data remain readable. Automatic skin detection and recording are disabled in this release fork.
   Paste any texture too.
 - **Every dye, on any armor.** All static and animated Hypixel dyes, any hex color, or your own animated dye.
   Animated dyes ripple from boots to helmet like on Hypixel. Armor Hypixel makes from iron (Helianthus...) is shown as
-  dyed leather so the color always shows.
+  dyed leather so the color always shows. An explicit metal armor model keeps its metal appearance instead.
+- **Models and armor trims.** Select vanilla appearances and trim patterns inline in Studio. Trim icons show the
+  selected armor piece and its dye. Armor remodeling changes the worn appearance as well as its inventory icon.
 - **Names.** Rename items with color codes (`&6Golden &lBlade`), a color picker, or a one-click gradient (Rainbow,
   Fire, Ocean...). Display only: other mods still see Hypixel's real name.
 - **Glint.** Turn the enchant glint on or off per item, and give it any color, speed and strength.
+- **Optional zoom.** Hold/toggle activation, initial zoom animations, separate smooth camera, wheel adjustment,
+  gentle precision sensitivity and hide hand. Open **Mod Menu → SkyCosmetics → Configure → Zoom** (or `/skycosmetics`), enable it and bind your keys there.
+  The primary key starts on C, at 5x with a 0.08-second animation; all other zoom keys start unbound.
+  Choose one zoom mod to avoid stacking cameras.
 - **Pets and power orbs in the world.** Your summoned pet and your deployed power orb wear the skin you picked:
   Hypixel's own entity, reskinned. Nothing extra is spawned.
 - **My Items.** Everything you wear and hold, your summoned pet, and every skinnable item the game has shown you
   (wardrobe, pets, ender chest, backpacks, personal vault) in one searchable list.
 - **Favorites.** Right-click a skin or dye to star it; favorites are listed first.
+- **Custom Viewmodel.** One shared hand/item setup with position, rotation, size and cosmetic swing controls;
+  save and switch between six setups.
 - **No flicker.** A skin or animation frame is only swapped in once its texture has loaded.
 - **Stays current.** New cosmetics arrive without a mod update: the catalog reloads when Skyblocker or Firmament update
-  the community item repo, and skins the repo doesn't have yet are learned from items you see in game.
+  the community item repo. Skins absent from that catalog require verified data before they can be added.
 - **Light.** Items are identified once and cached, nothing heavy runs per frame, and saving happens in the
   background.
 
@@ -63,22 +72,22 @@ with any mod, you use it under Hypixel's rules on allowed modifications.
 their change shows over SkyCosmetics' one: the editor marks it with a chip ("Dyed by Skyblocker"), and the **Other
 Mods** tab lists all of them, to remove in that mod's own settings or to move into SkyCosmetics.
 
-**An animated skin blinks at the wrong speed?** SkyCosmetics times each frame from what Hypixel shows you, and
-estimates blinks until then. Seeing the skin animate in game (on your pet, in the pets menu or a skin preview) fixes
-it for good. Share your `config/skycosmetics/timings.json` on the issue tracker and the timings ship with the next
-release, for everyone.
+**A skin is missing variants or blinks at the wrong speed?** This build uses catalog data and estimates some known
+blinks from their existing frames. It does not scan players or record server previews. Report the skin and variant
+names on the issue tracker so verified textures and timings can be added to the catalog.
 
 ## Install
 
 - Download the jar from [Releases](https://github.com/Terabold/SkyCosmetics/releases) and put it in your `mods`
   folder.
-- Requires Minecraft 26.1.x with Fabric Loader 0.19.3+ and Fabric API.
+- Built and tested on Minecraft 26.1.2 with Fabric Loader 0.19.5, Fabric API and Java 25.
+  The declared compatibility also allows other 26.1 versions and Loader 0.19.3+, which have not been tested here.
 - Optional: Mod Menu (a Configure button), Skyblocker or Firmament (SkyCosmetics reuses their copy of the item repo;
   without them it downloads the repo itself and refreshes it daily).
 
 ## Made with AI
 
-SkyCosmetics' code is written by an AI assistant (Anthropic's Claude), directed and tested in game by the author. It
+SkyCosmetics' code is developed with Anthropic's Claude and OpenAI's Codex, directed and tested in game by the author. It
 is disclosed here because players deserve to know. Bug reports and pull requests are welcome on the
 [issue tracker](https://github.com/Terabold/SkyCosmetics/issues).
 

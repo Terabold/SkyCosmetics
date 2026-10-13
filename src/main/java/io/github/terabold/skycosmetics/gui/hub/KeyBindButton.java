@@ -29,15 +29,21 @@ public final class KeyBindButton extends ThemedButton {
     public static final int H = 16, W = 96;
     private final Supplier<KeyMapping> mapping;
     private final Runnable onChange;
+    private final boolean allowMiddleMouse;
     private boolean listening;
     private boolean clash;
     private String shown = "";
 
     /** @param onChange runs after every change of state or key: the screen refreshes the help line and saves */
     public KeyBindButton(int width, Supplier<KeyMapping> mapping, Runnable onChange) {
+        this(width, mapping, onChange, false);
+    }
+
+    public KeyBindButton(int width, Supplier<KeyMapping> mapping, Runnable onChange, boolean allowMiddleMouse) {
         super(width, H, Component.empty(), b -> ((KeyBindButton) b).listen());
         this.mapping = mapping;
         this.onChange = onChange;
+        this.allowMiddleMouse = allowMiddleMouse;
         update();
     }
 
@@ -54,9 +60,20 @@ public final class KeyBindButton extends ThemedButton {
         KeyMapping m = mapping.get();
         clash = !listening && !conflicts().isEmpty();
         Component label = listening ? Component.translatable("skycosmetics.option.openKey.listening")
-            : m == null ? Component.empty() : m.getTranslatedKeyMessage();
+            : m == null ? Component.empty() : keyLabel(m);
         setMessage(label);
         shown = Ui.clip(Minecraft.getInstance().font, label.getString(), getWidth() - 8);
+    }
+
+    /** Letters identify the physical binding, independent of GLFW's cached keyboard layout. */
+    public static Component keyLabel(KeyMapping mapping) {
+        String saved = mapping.saveString();
+        String prefix = "key.keyboard.";
+        if (saved.startsWith(prefix) && saved.length() == prefix.length() + 1) {
+            char letter = saved.charAt(prefix.length());
+            if (letter >= 'a' && letter <= 'z') return Component.literal(String.valueOf(Character.toUpperCase(letter)));
+        }
+        return mapping.getTranslatedKeyMessage();
     }
 
     @Override
@@ -85,7 +102,8 @@ public final class KeyBindButton extends ThemedButton {
             : usual.copy()).withColor(helpColor & 0xFFFFFF);
         List<String> clashes = conflicts();
         if (!clashes.isEmpty() && !listening) {
-            help.append(Component.literal("\n")).append(Component.translatable("skycosmetics.option.openKey.conflict",
+            if (!help.getString().isEmpty()) help.append(Component.literal("\n"));
+            help.append(Component.translatable("skycosmetics.option.openKey.conflict",
                 String.join(", ", clashes)).withColor(Theme.WARN & 0xFFFFFF));
         }
         return help;
@@ -120,7 +138,7 @@ public final class KeyBindButton extends ThemedButton {
     /** While listening, a side mouse button binds and any other click cancels. False when not listening. */
     public boolean handleClick(MouseButtonEvent e) {
         if (!listening) return false;
-        if (e.button() >= GLFW.GLFW_MOUSE_BUTTON_4) {
+        if (e.button() >= GLFW.GLFW_MOUSE_BUTTON_4 || allowMiddleMouse && e.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             bind(InputConstants.Type.MOUSE.getOrCreate(e.button()));
         } else {
             listening = false;

@@ -2,7 +2,6 @@ package io.github.terabold.skycosmetics.gui;
 
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.SkyCosmetics;
-import io.github.terabold.skycosmetics.data.TimingLearner;
 import io.github.terabold.skycosmetics.hub.Control;
 import io.github.terabold.skycosmetics.hub.Hub;
 import io.github.terabold.skycosmetics.hub.Option;
@@ -37,15 +36,11 @@ public final class StudioSection {
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
         rows.add(Option.header("groupStudio", Component.translatable("skycosmetics.menu.group.studio")));
-        boolean fromStudio = settings instanceof SettingsScreen s && s.parent() instanceof StudioScreen;
-        rows.add(Option.of("openStudio", Component.empty(), Component.translatable(fromStudio
-            ? "skycosmetics.option.openStudio.back.tooltip" : "skycosmetics.option.openStudio.tooltip"), openStudio(settings)));
+        rows.add(Option.of("openStudio", Component.empty(), Component.translatable("skycosmetics.option.openStudio.tooltip"), openStudio(settings)));
         rows.add(Option.of("openKey", Component.translatable("skycosmetics.option.openKey"),
             Component.translatable("skycosmetics.option.openKey.tooltip"), new Control.Key(SkyCosmetics::openKey))
             .search(Component.translatable("skycosmetics.option.openKey.search").getString()));
         rows.add(toggle("inventoryButton", () -> Settings.brush, v -> Settings.brush = v));
-        rows.add(toggle("learnSkins", () -> Settings.learnSkins, v -> Settings.learnSkins = v));
-        rows.add(toggle("learnTiming", () -> TimingLearner.enabled, v -> TimingLearner.enabled = v));
 
         rows.add(Option.header("groupMyItems", Component.translatable("skycosmetics.menu.group.myItems")));
         rows.add(toggle("storedItems", () -> Settings.storedItems, v -> {
@@ -55,7 +50,7 @@ public final class StudioSection {
 
         rows.add(Option.header("groupWhereLooksShow", Component.translatable("skycosmetics.menu.group.whereLooksShow")));
         rows.add(toggle("worldReskin", () -> Settings.worldReskin, v -> Settings.worldReskin = v));
-        return rows;
+        return rows.stream().map(o -> o.control() instanceof Control.Header || o.title().getString().isEmpty() ? o : o.beside()).toList();
     }
 
     /** A toggle named by its lang keys: {@code skycosmetics.option.<id>} and its {@code .tooltip}. */
@@ -65,16 +60,15 @@ public final class StudioSection {
     }
 
     /**
-     * Opens the studio on your held item (or helmet). From a studio's Settings button it reads Back to Studio
-     * and returns to that same studio, so studios never stack. The studio needs a player for its preview.
+     * Opens the studio on your held item (or helmet), or returns to an already open studio.
      */
     private static Control openStudio(Screen settings) {
         Screen parent = settings instanceof SettingsScreen s ? s.parent() : null;
         if (parent instanceof StudioScreen) {
-            return new Control.Action(Component.translatable("skycosmetics.option.openStudio.back"), settings::onClose,
+            return new Control.Action(Component.literal("Open Skin Studio"), settings::onClose,
                 () -> true, Component.empty());
         }
-        return new Control.Action(Component.translatable("skycosmetics.option.openStudio"), () -> {
+        return new Control.Action(Component.literal("Open Skin Studio"), () -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) mc.setScreen(new StudioScreen(settings, SkyCosmetics.heldOrHelmet(mc)));
         }, () -> Minecraft.getInstance().player != null, Component.translatable("skycosmetics.option.openStudio.noWorld"));

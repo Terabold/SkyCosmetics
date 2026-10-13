@@ -14,18 +14,18 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * A section in the settings' sidebar: its icon, name and a gray line under it. The open one sits on the accent's
+ * A section in the settings' sidebar: its icon and a single centered name. The open one sits on the accent's
  * dark background; while a search runs each tab shows how many settings it matched, and one with none dims. In a
  * narrow window only the icon shows, with the name as a tooltip; so does a tab too narrow for its text. The message
  * is the section's name.
  */
 public final class SectionTab extends ThemedButton {
-    public static final int H = 26, RAIL_H = 22;
+    public static final int H = 22, RAIL_H = 22;
     private final Section section;
     private final ItemStack icon;
     private final boolean rail;
     private final Anim open = new Anim(120, 0);
-    private String name = "", sub = "", count = "";
+    private String name = "", count = "";
     private boolean selected, dim, tip;
     private int found = -1;
 
@@ -79,16 +79,15 @@ public final class SectionTab extends ThemedButton {
         return found;
     }
 
-    /** Cuts the name and the gray line to the tab; a tab that cut either shows both whole as a tooltip. */
+    /** Clips only the name; sidebar subtitles remain searchable metadata and hover help. */
     private void clip() {
         boolean cut = rail;
         if (!rail) {
             Font font = Minecraft.getInstance().font;
             int room = getWidth() - 26 - (count.isEmpty() ? 4 : font.width(count) + 10);
-            String fullName = section.name().getString(), fullSub = section.sub().getString();
+            String fullName = section.name().getString();
             name = Ui.clip(font, fullName, room);
-            sub = Ui.clip(font, fullSub, getWidth() - 30);
-            cut = !name.equals(fullName) || !sub.equals(fullSub);
+            cut = !name.equals(fullName);
         }
         if (cut != tip) {
             tip = cut;
@@ -110,10 +109,9 @@ public final class SectionTab extends ThemedButton {
         } else {
             g.item(icon, x + 4, y + (h - 16) / 2);
             int nameColor = selected ? 0xFFFFFFFF : section.order() == Section.FIRST ? Theme.ACCENT : Theme.TEXT;
-            g.text(font, name, x + 24, y + 4, Theme.fade(nameColor, a), false);
-            g.text(font, sub, x + 24, y + 14, Theme.fade(selected ? Theme.mix(Theme.MUTED, Theme.TEXT, 0.4f) : Theme.MUTED, a), false);
+            g.text(font, name, x + 24, y + (h - 8) / 2, Theme.fade(nameColor, a), false);
             if (!count.isEmpty()) {
-                int cw = font.width(count) + 6, cx = x + w - cw - 4, cy = y + 4;
+                int cw = font.width(count) + 6, cx = x + w - cw - 4, cy = y + (h - 10) / 2;
                 Shapes.round(g, cx, cy, cw, 10, 5, dim ? Theme.SURFACE : Theme.GRADIENT_START);
                 g.text(font, count, cx + 3, cy + 1, dim ? Theme.DIM : Theme.ON_ACCENT, false);
             }

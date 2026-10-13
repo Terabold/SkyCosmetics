@@ -26,9 +26,16 @@ public final class ButtonRow extends AbstractWidget {
     private final List<Integer> widths = new ArrayList<>();
     private final List<BooleanSupplier> on = new ArrayList<>();
     private AbstractWidget pressed, typing;
+    private final int columns, cellHeight;
 
     ButtonRow(int width) {
+        this(width, 0, 20);
+    }
+
+    /** A compact grid reuses the same input routing as side-by-side controls. */
+    ButtonRow(int width, int columns, int cellHeight) {
         super(0, 0, width, 20, Component.empty());
+        this.columns = columns; this.cellHeight = cellHeight;
     }
 
     /** Adds a part; {@code fixed} 0 makes it share the free width. Grayed out while {@code enabled} is false. */
@@ -36,6 +43,7 @@ public final class ButtonRow extends AbstractWidget {
         parts.add(part);
         widths.add(Math.max(0, fixed));
         on.add(enabled);
+        if (columns > 0) setHeight(((parts.size() + columns - 1) / columns) * (cellHeight + GAP) - GAP);
         return this;
     }
 
@@ -49,6 +57,15 @@ public final class ButtonRow extends AbstractWidget {
     }
 
     private void layout() {
+        if (columns > 0) {
+            int w = (getWidth() - GAP * (columns - 1)) / columns;
+            for (int i = 0; i < parts.size(); i++) {
+                var p = parts.get(i);
+                p.setPosition(getX() + i % columns * (w + GAP), getY() + i / columns * (cellHeight + GAP));
+                p.setWidth(w); p.setHeight(cellHeight); p.active = active && on.get(i).getAsBoolean();
+            }
+            return;
+        }
         int fixed = 0, flex = 0;
         for (int w : widths) {
             if (w > 0) fixed += w;

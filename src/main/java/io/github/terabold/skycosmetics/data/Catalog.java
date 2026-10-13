@@ -5,9 +5,11 @@ import io.github.terabold.skycosmetics.Textures;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -40,6 +42,11 @@ public final class Catalog {
     public final List<SkinEntry> headTab;
     public final List<DyeEntry> dyeTab;
 
+    /** Variants per skin id (the skin's own look not counted), for "21 variants on Hypixel, 4 known". */
+    private final Map<String, Integer> variantCounts = new HashMap<>();
+    /** Texture hashes per skin family, made when the variant learner first asks. */
+    private final Map<String, Set<String>> familyHashes = new ConcurrentHashMap<>();
+
     /** Pasted textures, made on demand. Shared so repeated lookups return one entry. */
     private static final Map<String, SkinEntry> CUSTOM = new ConcurrentHashMap<>();
     /**
@@ -70,12 +77,14 @@ public final class Catalog {
 
         // Variants go straight after their parent so "Knight Skin" and its
         // 15 colours sit together instead of scattered through the alphabet.
+        // Grouped by their root: a variant of a variant (a learned one, or an
+        // older captured.json) is still listed with the family.
         Map<String, List<SkinEntry>> children = new HashMap<>();
         for (SkinEntry e : all) {
-            if (e.parent != null && skins.containsKey(e.parent)) {
-                children.computeIfAbsent(e.parent, k -> new ArrayList<>()).add(e);
-            }
+            SkinEntry root = root(e, skins);
+            if (root != e) children.computeIfAbsent(root.id, k -> new ArrayList<>()).add(e);
         }
+        children.forEach((id, kids) -> variantCounts.put(id, (int) kids.stream().filter(e -> e.listed).count()));
         List<SkinEntry> skinTab = new ArrayList<>();
         List<SkinEntry> petTab = new ArrayList<>();
         List<SkinEntry> animTab = new ArrayList<>();
@@ -84,7 +93,7 @@ public final class Catalog {
             if (!e.listed) continue;
             if (e.animated()) animTab.add(e);
             headTab.add(e);
-            if (e.parent != null && skins.containsKey(e.parent)) continue; // placed with parent
+            if (root(e, skins) != e) continue; // placed with its family
             List<SkinEntry> target = switch (e.kind) {
                 case SKIN -> skinTab;
                 case PET_SKIN -> petTab;
@@ -94,12 +103,12 @@ public final class Catalog {
             if (target == null) continue;
             target.add(e);
             List<SkinEntry> kids = children.get(e.id);
-            if (kids != null) target.addAll(kids);
+            if (kids != null) for (SkinEntry k : kids) if (k.listed) target.add(k);
         }
         List<SkinEntry> helmets = new ArrayList<>();
         List<SkinEntry> orbs = new ArrayList<>();
         for (SkinEntry e : skinTab) {
-            SkinEntry root = e.parent != null && skins.containsKey(e.parent) ? skins.get(e.parent) : e;
+            SkinEntry root = root(e, skins);
             if (root.use == SkinEntry.Use.ORB || root.id.contains("_FLUX")) orbs.add(e); // learned orb skins have no lore
             else if (root.use == SkinEntry.Use.HELMET) helmets.add(e);
         }
@@ -112,12 +121,56 @@ public final class Catalog {
         this.dyeTab = Collections.unmodifiableList(dyeOrder);
     }
 
+    /**
+     * The skin a variant belongs to: its parent's parent and so on (at most a few steps, so a broken chain cannot
+     * loop), or {@code e} itself when it is no variant.
+     */
+    static SkinEntry root(SkinEntry e, Map<String, SkinEntry> skins) {
+        SkinEntry r = e;
+        for (int i = 0; i < 8 && r.parent != null; i++) {
+            SkinEntry p = skins.get(r.parent);
+            if (p == null || p == r) break;
+            r = p;
+        }
+        return r;
+    }
+
+    /** The skin {@code e} is a variant of, or {@code e} itself. */
+    public SkinEntry root(SkinEntry e) {
+        return root(e, skins);
+    }
+
+    /** How many variants of {@code root} the catalog has (its own look not counted). */
+    public int variantCount(SkinEntry root) {
+        return variantCounts.getOrDefault(root.id, 0);
+    }
+
+    /** The texture hashes of every frame of {@code root} and its variants. Built once per family and catalog. */
+    public Set<String> familyHashes(SkinEntry root) {
+        return familyHashes.computeIfAbsent(root.id, id -> {
+            Set<String> out = new HashSet<>();
+            for (SkinEntry e : skins.values()) {
+                if (e != root && root(e, skins) != root) continue;
+                for (String t : e.textures) {
+                    String h = SkinData.textureHash(t);
+                    if (h != null) out.add(h);
+                }
+            }
+            return out;
+        });
+    }
+
     /** Repo id, or {@code tex:<base64>} for a pasted texture. Null if unknown. */
     public SkinEntry skin(String id) {
         if (id == null) return null;
         if (id.startsWith(Textures.CUSTOM_PREFIX)) {
+            SkinEntry cached = CUSTOM.get(id);
+            if (cached != null) return cached;
+            String texture = Textures.normalise(id);
+            if (texture == null) return null;
+            if (CUSTOM.size() >= 256) CUSTOM.clear();
             return CUSTOM.computeIfAbsent(id, k -> SkinEntry.still(k, "Custom texture", 0xFFFFFFFF,
-                SkinEntry.Kind.CUSTOM, k.substring(Textures.CUSTOM_PREFIX.length()), null));
+                SkinEntry.Kind.CUSTOM, texture, null));
         }
         return skins.get(id);
     }

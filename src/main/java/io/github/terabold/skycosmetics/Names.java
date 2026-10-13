@@ -5,7 +5,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
-import net.minecraft.util.Mth;
 import net.minecraft.util.StringDecomposer;
 import net.minecraft.util.Util;
 
@@ -38,9 +37,6 @@ public final class Names {
     private static final String CHROMA = "[chroma]";
     /** Letters of a fitted gradient may be this far (per channel) from the colours they replace. */
     private static final int TOLERANCE = 3;
-    /** Chroma: a full turn of the rainbow takes this long, and each letter is this far along it. */
-    private static final int CHROMA_MS = 2400;
-    private static final float CHROMA_STEP = 0.055f;
     private static final Style BASE = Style.EMPTY.withItalic(false);
 
     private Names() {}
@@ -48,10 +44,14 @@ public final class Names {
     // ------------------------------------------------------------ parse ---
 
     public static MutableComponent parse(String raw) {
+        return component(decode(raw));
+    }
+
+    private static MutableComponent component(List<Letter> letters) {
         MutableComponent out = Component.empty();
         StringBuilder run = new StringBuilder();
         Style style = null;
-        for (Letter l : decode(raw)) {
+        for (Letter l : letters) {
             Style s = l.style();
             if (!s.equals(style)) {
                 flush(out, run, style);
@@ -73,7 +73,10 @@ public final class Names {
     }
 
     private static final Map<String, MutableComponent> LIVE = new HashMap<>();
+    private static final Map<String, List<Letter>> COMPILED = new HashMap<>();
     private static long liveTick = -1;
+
+    public static synchronized void invalidateLive() { LIVE.clear(); liveTick = -1; }
 
     /**
      * {@link #parse} for a name that may move: built at most once per game tick for each name, however many
@@ -87,7 +90,14 @@ public final class Names {
         }
         MutableComponent c = LIVE.get(raw);
         if (c == null) {
-            c = parse(raw);
+            List<Letter> letters = COMPILED.get(raw);
+            if (letters == null) {
+                if (COMPILED.size() >= 128) COMPILED.clear();
+                letters = decode(raw);
+                COMPILED.put(raw, letters);
+            }
+            chroma(letters);
+            c = component(letters);
             LIVE.put(raw, c);
         }
         return c;
@@ -203,9 +213,7 @@ public final class Names {
 
     /** The colour of chroma's {@code index}th letter now (0xRRGGBB). */
     public static int chromaRgb(int index) {
-        float phase = (Util.getMillis() % CHROMA_MS) / (float) CHROMA_MS;
-        float hue = index * CHROMA_STEP - phase;
-        return Mth.hsvToRgb(hue - (float) Math.floor(hue), 0.7f, 1f) & 0xFFFFFF;
+        return io.github.terabold.skycosmetics.render.Chroma.nameColor(index);
     }
 
     // ------------------------------------------------- letters and codes ---

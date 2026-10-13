@@ -379,7 +379,7 @@ public class MenuClientTest implements FabricClientGameTest {
         ctx.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> screen(mc).sectionId().equals(Hub.STUDIO) && "openKey".equals(screen(mc).flashing())
-            && screen(mc).search().getValue().isEmpty() && screen(mc).results() == -1), "Enter jumps to Open Key, which glows");
+            && screen(mc).search().getValue().isEmpty() && screen(mc).results() == -1), "Enter jumps to the first matching key, which glows");
         ctx.takeScreenshot("skycosmetics-37-menu-search-jump");
 
         // The test input sends keys without modifier bits, so Ctrl+F goes straight to the screen.
@@ -500,7 +500,7 @@ public class MenuClientTest implements FabricClientGameTest {
     }
 
     /**
-     * The studio's Settings button opens the settings on the studio's section, whose card reads Back to Studio; Esc
+     * The studio's Settings button opens the last settings section; Esc
      * returns to that studio. Open Studio in the settings opens a studio whose Settings button comes back to them.
      */
     private static void fromStudio(ClientGameTestContext ctx, TestSingleplayerContext sp) {
@@ -511,13 +511,12 @@ public class MenuClientTest implements FabricClientGameTest {
         ctx.waitForScreen(StudioScreen.class);
         ctx.getInput().setCursorPos(0, 0);
         ctx.waitTicks(3);
+        String remembered = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.gui.MenuState.section());
         ctx.clickScreenButton("Settings");
         ctx.waitForScreen(SettingsScreen.class);
         ctx.waitTicks(3);
-        String back = ctx.computeOnClient(mc -> I18n.get("skycosmetics.option.openStudio.back"));
-        check(ctx.computeOnClient(mc -> screen(mc).sectionId().equals(Hub.STUDIO) && screen(mc).parent() instanceof StudioScreen
-            && screen(mc).widget("openStudio") instanceof CardButton c && c.getMessage().getString().equals(back)),
-            "the studio's Settings button opens the studio's section, with Back to Studio");
+        check(ctx.computeOnClient(mc -> screen(mc).sectionId().equals(remembered) && screen(mc).parent() instanceof StudioScreen),
+            "the studio's Settings button restores the last closed section and keeps its return screen");
         ctx.takeScreenshot("skycosmetics-41-menu-from-studio");
         ctx.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         ctx.waitForScreen(StudioScreen.class);

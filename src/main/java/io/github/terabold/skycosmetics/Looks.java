@@ -33,10 +33,20 @@ public final class Looks {
      * {@code glintSpeed} multiplies the glint's speed (null = Minecraft's own
      * Accessibility setting, 1 = normal, 0.1..4); {@code glintStrength}
      * multiplies how bright the glint is (null = as drawn, 0.25..3), for
-     * resource packs whose glint is hard to see.
+     * resource packs whose glint is hard to see. A glint color of "chroma" uses the shared animated palette;
+     * trim is "pattern|material", "off", or null to inherit the type's trim;
+     * model is a vanilla item id, "original" to block inheritance, or null to inherit.
      */
     public record Look(String skin, String dye, String name, String glint, String glintColor, Float glintSpeed,
-                       Float glintStrength, String label) {
+                       Float glintStrength, String label, String trim, String model) {
+        public Look(String skin, String dye, String name, String glint, String glintColor, Float glintSpeed,
+                    Float glintStrength, String label, String trim) {
+            this(skin, dye, name, glint, glintColor, glintSpeed, glintStrength, label, trim, null);
+        }
+        public Look(String skin, String dye, String name, String glint, String glintColor, Float glintSpeed,
+                    Float glintStrength, String label) {
+            this(skin, dye, name, glint, glintColor, glintSpeed, glintStrength, label, null);
+        }
         public static final Look NONE = new Look(null, null, null, null, null, null, null, null);
 
         public Look(String skin, String dye, String name, String glint, String label) {
@@ -45,17 +55,19 @@ public final class Looks {
 
         public boolean empty() {
             return skin == null && dye == null && name == null && glint == null && glintColor == null
-                && glintSpeed == null && glintStrength == null;
+                && glintSpeed == null && glintStrength == null && trim == null && model == null;
         }
 
-        public Look withSkin(String s) { return new Look(s, dye, name, glint, glintColor, glintSpeed, glintStrength, label); }
-        public Look withDye(String d) { return new Look(skin, d, name, glint, glintColor, glintSpeed, glintStrength, label); }
-        public Look withName(String n) { return new Look(skin, dye, n, glint, glintColor, glintSpeed, glintStrength, label); }
-        public Look withGlint(String g) { return new Look(skin, dye, name, g, glintColor, glintSpeed, glintStrength, label); }
-        public Look withGlintColor(String c) { return new Look(skin, dye, name, glint, c, glintSpeed, glintStrength, label); }
-        public Look withGlintSpeed(Float v) { return new Look(skin, dye, name, glint, glintColor, v, glintStrength, label); }
-        public Look withGlintStrength(Float v) { return new Look(skin, dye, name, glint, glintColor, glintSpeed, v, label); }
-        public Look withLabel(String l) { return new Look(skin, dye, name, glint, glintColor, glintSpeed, glintStrength, l); }
+        public Look withSkin(String s) { return new Look(s, dye, name, glint, glintColor, glintSpeed, glintStrength, label, trim, model); }
+        public Look withDye(String d) { return new Look(skin, d, name, glint, glintColor, glintSpeed, glintStrength, label, trim, model); }
+        public Look withName(String n) { return new Look(skin, dye, n, glint, glintColor, glintSpeed, glintStrength, label, trim, model); }
+        public Look withGlint(String g) { return new Look(skin, dye, name, g, glintColor, glintSpeed, glintStrength, label, trim, model); }
+        public Look withGlintColor(String c) { return new Look(skin, dye, name, glint, c, glintSpeed, glintStrength, label, trim, model); }
+        public Look withGlintSpeed(Float v) { return new Look(skin, dye, name, glint, glintColor, v, glintStrength, label, trim, model); }
+        public Look withGlintStrength(Float v) { return new Look(skin, dye, name, glint, glintColor, glintSpeed, v, label, trim, model); }
+        public Look withLabel(String l) { return new Look(skin, dye, name, glint, glintColor, glintSpeed, glintStrength, l, trim, model); }
+        public Look withTrim(String t) { return new Look(skin, dye, name, glint, glintColor, glintSpeed, glintStrength, label, t, model); }
+        public Look withModel(String m) { return new Look(skin, dye, name, glint, glintColor, glintSpeed, glintStrength, label, trim, m); }
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -63,6 +75,11 @@ public final class Looks {
     private static final Map<String, Look> BY_TYPE = new LinkedHashMap<>();
     /** SkyBlock type of the item each UUID look is for, when known. */
     private static final Map<String, String> ITEM_TYPES = new HashMap<>();
+    private static JsonObject original = new JsonObject();
+    private static boolean readOnly;
+    private static final Set<String> FIELDS = Set.of("skin", "dye", "name", "glint", "glintColor", "glintSpeed",
+        "glintStrength", "label", "trim", "model", "type");
+    public static boolean writable() { return !readOnly; }
 
     private static volatile int version;
     /** Skin ids some look uses; a snapshot any thread may read (learned skins in use are never dropped). */
@@ -105,10 +122,11 @@ public final class Looks {
     }
 
     public static void put(boolean type, String key, Look look) {
+        if (readOnly) return;
         Map<String, Look> m = type ? BY_TYPE : BY_UUID;
         if (look == null || look.empty()) {
-            m.remove(key);
-            if (!type) ITEM_TYPES.remove(key);
+            if (look != null && unknown(type ? "types" : "items", key)) m.put(key, Look.NONE);
+            else { m.remove(key); if (!type) ITEM_TYPES.remove(key); }
         } else {
             m.put(key, look);
         }
@@ -119,6 +137,7 @@ public final class Looks {
 
     /** {@link #put} for one item, noting its SkyBlock type ({@code itemType} may be null). */
     public static void putItem(String uuid, String itemType, Look look) {
+        if (readOnly) return;
         if (itemType != null && look != null && !look.empty()) ITEM_TYPES.put(uuid, itemType);
         put(false, uuid, look);
     }
@@ -142,15 +161,23 @@ public final class Looks {
      */
     public static void load() {
         Path f = file();
+        readOnly = false;
         if (!Files.isRegularFile(f)) return;
         Map<String, Look> uuids = new LinkedHashMap<>();
         Map<String, Look> types = new LinkedHashMap<>();
         Map<String, String> itemTypes = new HashMap<>();
         int skipped;
         try (Reader r = Files.newBufferedReader(f, StandardCharsets.UTF_8)) {
+            if (Files.size(f) > 8L * 1024 * 1024) throw new IllegalArgumentException("looks.json exceeds 8 MiB");
             JsonObject o = JsonParser.parseReader(r).getAsJsonObject();
+            if (o.has("version") && o.get("version").getAsInt() > 1) {
+                readOnly = true;
+                Io.notice("looks.json belongs to a newer SkyCosmetics version; it will not be changed.");
+                return;
+            }
             // "typeLooksOnOthers" (before 1.4) is ignored: "every item" looks now show only on your own items.
             skipped = read(o.get("items"), uuids, itemTypes) + read(o.get("types"), types, null);
+            original = o.deepCopy();
         } catch (Exception e) {
             Io.setAside(f, "Could not read looks.json", e);
             save();
@@ -187,12 +214,13 @@ public final class Looks {
                 Float strength = l.has("glintStrength") && l.get("glintStrength").isJsonPrimitive()
                     ? clampStrength(l.get("glintStrength").getAsFloat()) : null;
                 String color = s(l, "glintColor");
-                if (color != null && !color.matches("#[0-9A-Fa-f]{6}")) color = null;
+                if (color != null && !color.equals("chroma") && !color.matches("#[0-9A-Fa-f]{6}")) color = null;
                 Look look = new Look(s(l, "skin"), s(l, "dye"), s(l, "name"), s(l, "glint"), color, speed,
-                    strength, s(l, "label"));
-                if (!look.empty()) into.put(k, look);
+                    strength, s(l, "label"), io.github.terabold.skycosmetics.render.Trims.valid(s(l, "trim")),
+                    io.github.terabold.skycosmetics.render.ItemModels.valid(s(l, "model")));
+                if (!look.empty() || l.keySet().stream().anyMatch(field -> !FIELDS.contains(field))) into.put(k, look);
                 String type = s(l, "type");
-                if (itemTypes != null && type != null && !look.empty()) itemTypes.put(k, type);
+                if (itemTypes != null && type != null && into.containsKey(k)) itemTypes.put(k, type);
             } catch (RuntimeException e) {
                 SkyCosmetics.LOG.warn("Skipping unreadable look {}: {}", k, e.toString());
                 skipped++;
@@ -218,22 +246,33 @@ public final class Looks {
     }
 
     public static void save() {
-        JsonObject root = new JsonObject();
+        if (readOnly) return;
+        JsonObject root = original.deepCopy();
         root.addProperty("version", 1);
-        root.add("items", write(BY_UUID, ITEM_TYPES));
-        root.add("types", write(BY_TYPE, Map.of()));
+        root.add("items", write(BY_UUID, ITEM_TYPES, original.get("items")));
+        root.add("types", write(BY_TYPE, Map.of(), original.get("types")));
         Io.writeAsync(file(), root);
     }
 
-    private static JsonObject write(Map<String, Look> m, Map<String, String> itemTypes) {
+    private static boolean unknown(String section, String key) {
+        JsonElement values = original.get(section);
+        JsonElement entry = values instanceof JsonObject object ? object.get(key) : null;
+        return entry instanceof JsonObject object && object.keySet().stream().anyMatch(field -> !FIELDS.contains(field));
+    }
+
+    private static JsonObject write(Map<String, Look> m, Map<String, String> itemTypes, JsonElement old) {
         JsonObject o = new JsonObject();
         for (Map.Entry<String, Look> e : m.entrySet()) {
-            JsonObject l = new JsonObject();
+            JsonElement prior = old instanceof JsonObject object ? object.get(e.getKey()) : null;
+            JsonObject l = prior instanceof JsonObject object ? object.deepCopy() : new JsonObject();
+            FIELDS.forEach(l::remove);
             if (e.getValue().skin() != null) l.addProperty("skin", e.getValue().skin());
             if (e.getValue().dye() != null) l.addProperty("dye", e.getValue().dye());
             if (e.getValue().name() != null) l.addProperty("name", e.getValue().name());
             if (e.getValue().glint() != null) l.addProperty("glint", e.getValue().glint());
             if (e.getValue().glintColor() != null) l.addProperty("glintColor", e.getValue().glintColor());
+            if (e.getValue().trim() != null) l.addProperty("trim", e.getValue().trim());
+            if (e.getValue().model() != null) l.addProperty("model", e.getValue().model());
             if (e.getValue().glintSpeed() != null) l.addProperty("glintSpeed", e.getValue().glintSpeed());
             if (e.getValue().glintStrength() != null) l.addProperty("glintStrength", e.getValue().glintStrength());
             if (e.getValue().label() != null) l.addProperty("label", e.getValue().label());

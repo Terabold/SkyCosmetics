@@ -28,7 +28,8 @@ public final class Theme {
     /** A remove or reset button at rest, its frame, and its fill under the mouse. */
     public static final int DANGER = 0xFF2E1D22, DANGER_LINE = 0xFF6A3A44, DANGER_HOVER = 0xFF8A3344;
     /** Window corner radius, and the radius of fields, buttons and rows. */
-    public static final int RADIUS = 6, SMALL_RADIUS = 3;
+    public static int RADIUS = 3, SMALL_RADIUS = 2;
+    public static void rounding(int radius) { RADIUS = Math.clamp(radius, 0, 10); SMALL_RADIUS = Math.min(4, RADIUS); }
 
     /** A crisp cyan: the accent until the player picks another. */
     public static final int DEFAULT_ACCENT = 0xFF22D3EE;
@@ -83,17 +84,9 @@ public final class Theme {
         int base = readable(picked);
         float[] hsl = hsl(base);
         float h = hsl[0], s = hsl[1], l = hsl[2];
-        int start, end;
-        if (s < 0.08f) { // white and grays: light gray to near white
-            start = rgb(h, s, l * 0.82f);
-            end = rgb(h, s, Math.min(0.97f, l + (1 - l) * 0.5f));
-        } else {
-            // The far end leans to a neighbor hue: warm yellows toward orange, the rest one step around the wheel
-            // (cyan to azure, blue to indigo, red to orange).
-            float shift = h >= 25 && h < 75 ? -24 : 24;
-            start = rgb(h, s, l * 0.86f);
-            end = rgb(h + shift, s, Math.min(0.86f, l + (1 - l) * 0.18f));
-        }
+        // A small lightness change keeps the chosen accent recognizable without a second hue.
+        int start = rgb(h, s, l * 0.99f);
+        int end = rgb(h, s, Math.min(0.99f, l + (1 - l) * 0.01f));
 
         ACCENT = base;
         GRADIENT_START = start;
@@ -101,7 +94,7 @@ public final class Theme {
         GRADIENT_START_HOVER = mix(start, 0xFFFFFFFF, 0.18f);
         GRADIENT_END_HOVER = mix(end, 0xFFFFFFFF, 0.18f);
         ACCENT_BG = mix(BODY, start, 0.24f);
-        ACCENT_BG_END = mix(SURFACE, end, 0.14f);
+        ACCENT_BG_END = mix(ACCENT_BG, end, 0.015f);
         // White while it keeps 3:1 against the middle of the gradient (the pixel font is bold enough), else near black.
         double y = luminance(mix(start, end, 0.5f));
         ON_ACCENT = 1.05 / (y + 0.05) >= 3.0 ? 0xFFFFFFFF : 0xFF0E1116;

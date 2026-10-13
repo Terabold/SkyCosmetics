@@ -141,11 +141,6 @@ public final class Textures {
                 + hash.toLowerCase(Locale.ROOT) + "\"}}}";
             return Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
         }
-        try {
-            String decoded = new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8);
-            return decoded.contains("textures.minecraft.net") ? s : null;
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        return io.github.terabold.skycosmetics.data.SkinData.mojangTexture(s) ? s : null;
     }
 }

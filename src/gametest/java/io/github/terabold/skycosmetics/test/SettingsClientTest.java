@@ -86,7 +86,7 @@ public class SettingsClientTest implements FabricClientGameTest {
 
     /** Every GUI scale and a small window: the window fits, controls sit inside the pane, the list scrolls. */
     private static void layout(ClientGameTestContext ctx) {
-        ctx.setScreen(() -> new SettingsScreen(null));
+        ctx.setScreen(() -> new SettingsScreen(null, "studio"));
         ctx.waitTicks(3);
         int[] size = ctx.computeOnClient(mc -> new int[]{mc.getWindow().getWidth(), mc.getWindow().getHeight()});
         ctx.getInput().resizeWindow(1920, 1080); // GUI scale 4 needs at least 1280x960
@@ -170,7 +170,7 @@ public class SettingsClientTest implements FabricClientGameTest {
         }
         check(s.widget("openStudio") instanceof CardButton, "Open Studio is a card");
         check(s.widget("openKey") instanceof KeyBindButton, "the open key is a key box");
-        check(switches >= 5, "the studio's settings are switches: " + switches);
+        check(switches == 3, "the three remaining studio settings are switches: " + switches);
         for (GuiEventListener l : s.children()) {
             check(l.getClass().getName().startsWith("io.github.terabold.skycosmetics."), "only themed widgets: " + l.getClass().getName());
         }
@@ -180,7 +180,7 @@ public class SettingsClientTest implements FabricClientGameTest {
     private static void keyButton(ClientGameTestContext ctx) {
         String before = ctx.computeOnClient(mc -> KeyMapping.get(OPEN).saveString());
         ctx.runOnClient(mc -> bindDirect(InputConstants.UNKNOWN));
-        ctx.setScreen(() -> new SettingsScreen(null));
+        ctx.setScreen(() -> new SettingsScreen(null, "studio"));
         ctx.waitTicks(3);
 
         clickButton(ctx, notBound(ctx));
@@ -368,6 +368,9 @@ public class SettingsClientTest implements FabricClientGameTest {
     }
 
     private static Button button(Screen s, String label) {
+        // Several keybind rows may display "Not bound". This test exercises the Studio key specifically.
+        if (s instanceof SettingsScreen settings && settings.widget("openKey") instanceof Button key
+            && key.getMessage().getString().equals(label)) return key;
         for (AbstractWidget w : widgets(s)) {
             if (w instanceof Button b && b.getMessage().getString().equals(label)) return b;
         }

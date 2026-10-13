@@ -6,7 +6,6 @@ import com.mojang.brigadier.tree.CommandNode;
 import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.Textures;
 import io.github.terabold.skycosmetics.data.Catalog;
-import io.github.terabold.skycosmetics.data.PreviewRecorder;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
 import io.github.terabold.skycosmetics.gui.StudioScreen;
@@ -155,11 +154,20 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.waitTicks(5);
             ctx.takeScreenshot("skycosmetics-05-studio-from-K");
             StudioLayoutTest.checkOpenedOnHelmet(ctx);
+            ctx.runOnClient(mc -> {
+                var labels = mc.screen.children().stream().filter(net.minecraft.client.gui.components.AbstractWidget.class::isInstance)
+                    .map(net.minecraft.client.gui.components.AbstractWidget.class::cast).map(w -> w.getMessage().getString()).toList();
+                check(labels.contains("Name & Glint") && !labels.contains("Dyes"), "helmet navigation keeps full feature names and omits body dyes");
+            });
 
+            ctx.runOnClient(mc -> ((StudioScreen)mc.screen).pick("worn:CHEST"));
+            ctx.runOnClient(mc -> check(mc.screen.children().stream().noneMatch(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget w
+                && w.getMessage().getString().equals("Skins")), "body armor navigation omits the head catalog"));
             ctx.clickScreenButton("Dyes");
             ctx.waitTicks(3);
             ctx.takeScreenshot("skycosmetics-06-studio-dyes");
 
+            ctx.runOnClient(mc -> ((StudioScreen)mc.screen).pick("focus"));
             ctx.clickScreenButton("Skins");
             ctx.waitTicks(2);
             ctx.getInput().typeChars("knight");
@@ -198,6 +206,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.waitForScreen(StudioScreen.class);
             ctx.waitTicks(10);
             ctx.takeScreenshot("skycosmetics-08d-studio-from-brush");
+            ctx.runOnClient(mc -> ((StudioScreen)mc.screen).pick("worn:CHEST"));
             ctx.clickScreenButton("Dyes");
             ctx.waitTicks(20);
             ctx.takeScreenshot("skycosmetics-08e-studio-dye-icons");
@@ -254,12 +263,13 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
     }
 
     /**
-     * Only /skycosmetics (the settings), /skycosmetics edit (the studio) and /skycosmetics debug pet|orb. Every node
+     * Settings, Studio and debug commands, plus collector commands in the private build. Every node
      * runs something, so no partial "/skycosmetics ..." is handed to the server as an unknown command.
      */
     private static void checkCommands() {
         CommandNode<?> root = ClientCommands.getActiveDispatcher().getRoot().getChild("skycosmetics");
-        check(root != null && names(root).equals(List.of("debug", "edit")), "/skycosmetics has only debug and edit under it: "
+        boolean collector = io.github.terabold.skycosmetics.hub.Hub.find("skinCollector") != null;
+        check(root != null && names(root).equals(collector ? List.of("collector", "debug", "edit") : List.of("debug", "edit")), "/skycosmetics has the expected local commands: "
             + (root == null ? null : names(root)));
         check(names(root.getChild("debug")).equals(List.of("orb", "pet")), "debug has pet and orb");
         List<CommandNode<?>> todo = new ArrayList<>(List.of(root));
@@ -343,15 +353,6 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             "the repo wins over a learned animation");
         check(m.learned == 2 && Repo.get().skin("SKYCOSMETICS_TEST_SKIN") == null, "merge counts and leaves the live catalog alone");
 
-        // Spawn frame S, then A B C held 2, 2 and 6 ticks, seen twice.
-        PreviewRecorder.Fit f = PreviewRecorder.fit(new long[]{0, 3, 5, 7, 13, 15, 17, 23},
-            List.of("S", "A", "B", "C", "A", "B", "C", "A"), true);
-        check(f != null && f.frames() == 3 && f.start() == 1 && Arrays.equals(f.ticksPerTexture(), new int[]{2, 2, 6}),
-            "blinking preview timed per frame: " + f);
-        // A B every 5 ticks with one tick of jitter is still uniform.
-        f = PreviewRecorder.fit(new long[]{0, 1, 7, 11, 17, 21}, List.of("S", "A", "B", "A", "B", "A"), true);
-        check(f != null && f.frames() == 2 && f.ticks() == 5 && f.ticksPerTexture() == null, "uniform preview: " + f);
-        check(PreviewRecorder.fit(new long[]{0, 1, 2, 3}, List.of("S", "A", "B", "A"), true) == null, "one cycle is not enough");
         System.out.println("[SkyCosmeticsTest] repo checks passed");
     }
 

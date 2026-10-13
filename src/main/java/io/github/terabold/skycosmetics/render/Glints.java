@@ -127,7 +127,7 @@ public final class Glints {
 
         @Override
         public String toString() {
-            return (rgb < 0 ? "default" : String.format(Locale.ROOT, "#%06X", rgb)) + (speed > 0 ? " x" + speed : "")
+            return (rgb == -2 ? "chroma" : rgb < 0 ? "default" : String.format(Locale.ROOT, "#%06X", rgb)) + (speed > 0 ? " x" + speed : "")
                 + (strength != 1 ? " strength" + strength : "");
         }
     }
@@ -195,6 +195,7 @@ public final class Glints {
      */
     public static Style style(String color, Float speed, Float strength) {
         int rgb = -1;
+        if ("chroma".equals(color)) rgb = -2;
         if (color != null && color.length() == 7 && color.charAt(0) == '#') {
             try {
                 rgb = Integer.parseInt(color.substring(1), 16);
@@ -206,7 +207,7 @@ public final class Glints {
         // 0.05 steps: a slider can't make a new render type per pixel dragged.
         int sp = clamped == null ? 0 : Math.max(2, Math.round(clamped * 20));
         int st = bright == null ? 20 : Math.round(bright * 20);
-        if (rgb < 0 && sp == 0 && st == 20) return null;
+        if (rgb == -1 && sp == 0 && st == 20) return null;
         // Interning only saves duplicates; a colour picker dragged for an hour must not grow it forever.
         if (STYLES.size() > 1024) STYLES.clear();
         int r = rgb;
@@ -290,6 +291,10 @@ public final class Glints {
     // ----------------------------------------------------------- types ---
 
     private static RenderType type(Style s, Kind k) {
+        if (s.rgb == -2) {
+            try { ChromaGlint.ensurePalette(); }
+            catch (RuntimeException e) { Io.failed("Updating chroma glint colors", e); return null; }
+        }
         Variant v = s.variants[k.ordinal()];
         if (v == null) {
             if (failed || !RenderSystem.isOnRenderThread()) return null;
@@ -306,10 +311,11 @@ public final class Glints {
         if (LIVE.size() >= 2 * CAP) return null;
         Tint tint = null;
         try {
-            if (s.rgb >= 0 || s.strength != 1) tint = tint(k, s);
-            RenderSetup.RenderSetupBuilder b = RenderSetup.builder(RenderPipelines.GLINT)
+            if (s.rgb != -1 || s.strength != 1) tint = tint(k, s);
+            RenderSetup.RenderSetupBuilder b = RenderSetup.builder(s.rgb == -2 ? ChromaGlint.PIPELINE : RenderPipelines.GLINT)
                 .withTexture("Sampler0", tint != null ? tint.id : k.texture, SAMPLER)
                 .setTextureTransform(s.speed > 0 ? texturing(k.scale, s.speed) : k.texturing);
+            if (s.rgb == -2) b.withTexture("ChromaPalette", ChromaGlint.PALETTE, SAMPLER);
             if (k == Kind.ITEM_TRANSLUCENT) b.setOutputTarget(OutputTarget.ITEM_ENTITY_TARGET);
             if (k == Kind.ARMOR) b.setLayeringTransform(LayeringTransform.VIEW_OFFSET_Z_LAYERING);
             RenderType type = RenderTypeAccessor.skycosmetics$create("skycosmetics_glint_" + k.name().toLowerCase(Locale.ROOT)
@@ -330,7 +336,7 @@ public final class Glints {
 
     /** The kind's glint texture in the style's colour and strength, made (one upload) on first use. */
     private static Tint tint(Kind k, Style s) throws IOException {
-        int rgb = s.rgb;
+        int rgb = s.rgb == -2 ? 0xFFFFFF : s.rgb;
         float strength = s.strength;
         String key = "glint/" + k.textureName + (rgb >= 0 ? String.format(Locale.ROOT, "_%06x", rgb) : "")
             + (strength != 1 ? "_strength" + Math.round(strength * 100) : "");
@@ -492,6 +498,7 @@ public final class Glints {
 
     /** Resource reload: the glint textures may have changed; rebuild everything on next use. */
     private static void reset() {
+        ChromaGlint.reset();
         for (Variant v : new ArrayList<>(LIVE)) retire(v);
         releasePending();
         BASE.values().forEach(Base::close);
@@ -500,6 +507,7 @@ public final class Glints {
     }
 
     // ----------------------------------------------------------- tests ---
+    public static int chromaUploads() { return ChromaGlint.uploads(); }
 
     /**
      * Item glints drawn with a style's type and armour pieces given one (since

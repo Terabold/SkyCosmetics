@@ -2,13 +2,9 @@ package io.github.terabold.skycosmetics.data;
 
 import com.google.gson.JsonParser;
 import io.github.terabold.skycosmetics.Looks;
-import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
 import java.net.URI;
@@ -21,7 +17,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +28,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipFile;
 
 /**
- * Keeps {@link #get()} on the newest complete NEU repo, plus skins and frame
- * timings learned in game, timings shipped with the mod, and estimated blinks.
+ * Keeps {@link #get()} on the newest complete NEU repo, plus previously saved
+ * skins and timings, timings shipped with the mod, and estimated blinks.
  *
  * Sources, best first: -Dskycosmetics.repo, Skyblocker's clone, Firmament's
  * extracted zip, our own zip, then leftovers of an uninstalled mod (see
@@ -60,6 +55,8 @@ public final class Repo {
     private static final long DOWNLOAD_RETRY_MS = 30 * 60_000L;
     /** The repo has ~8.8k items; a copy with far fewer is broken, not small. */
     private static final int MIN_ITEMS = 1000;
+    private static final long MAX_ARCHIVE_BYTES = 128L * 1024 * 1024;
+    private static final int MAX_COMMIT_BYTES = 64 * 1024;
     private static final int MAX_QUICK_RETRIES = 40;
     /** Parse attempts per snapshot: a copy that fails this often is broken, not busy. */
     private static final int MAX_FAILURES = 3;
@@ -91,8 +88,6 @@ public final class Repo {
     private static Timings bundled;
     private static BlinkGuesser.Store guesses;
     /** What the next {@link #flush} has to save. */
-    private static boolean capturedDirty;
-    private static boolean timingsDirty;
     private static boolean guessesDirty;
     private static String loadedVersion;
     private static ScheduledFuture<?> retry;
@@ -101,17 +96,6 @@ public final class Repo {
     private static final Map<RepoSource.Snapshot, Integer> FAILURES = new HashMap<>();
     private static long lastDownloadTry;
     private static boolean flushQueued;
-    private static final List<Component> NEWS = new ArrayList<>();
-    /** Learned timings of skins a look wears, said in their own line. */
-    private static final List<Component> TIMING_NEWS = new ArrayList<>();
-    /** New skins learned per game session, so a server showing made-up skins cannot push out real ones. */
-    private static final int MAX_LEARNED_PER_SESSION = 200;
-    private static int learnedThisSession;
-    /** Chat lines about learned skins: a few a minute at most; the rest are counted into the next line. */
-    private static final int NEWS_PER_MINUTE = 3;
-    private static final long[] NEWS_AT = new long[NEWS_PER_MINUTE];
-    private static int newsSlot;
-    private static int unannounced;
 
     private Repo() {}
 
@@ -294,8 +278,8 @@ public final class Repo {
         FAILURES.clear();
         publish();
         Catalog c = catalog;
-        SkyCosmetics.LOG.info("{} in {} ms: {} items, {} skins ({} animated in lore without frames), {} dyes, {} learned, {} timed",
-            label, ms, parsed.items, c.skins.size(), parsed.missingFrames, c.dyes.size(), c.learned, TimingLearner.timedSkins());
+        SkyCosmetics.LOG.info("{} in {} ms: {} items, {} skins ({} animated in lore without frames), {} dyes, {} saved skins",
+            label, ms, parsed.items, c.skins.size(), parsed.missingFrames, c.dyes.size(), c.learned);
     }
 
     /** Counts a failed parse of {@code snap}; returns the failures so far for it. */
@@ -319,7 +303,6 @@ public final class Repo {
         if (b == null) return;
         Catalog c = Captured.compose(b, captured, guesses, bundled, timings);
         catalog = c;
-        TimingLearner.index(c);
         BlinkGuesser.index(c, guesses);
         Looks.bump();
     }
@@ -328,124 +311,32 @@ public final class Repo {
         return v.length() == 40 ? v.substring(0, 8) : v;
     }
 
-    // ------------------------------------------------------------ learned ---
-
-    /** A skin seen in game that the repo lacks. Saved and merged in a batch shortly after. */
-    static void learn(String id, Captured.Still still, Component news) {
-        EXEC.execute(() -> guarded(() -> {
-            if (captured == null) captured = Captured.load();
-            RepoParser.Parsed b = base;
-            if (captured.stills.containsKey(id) || b != null && (b.skins.containsKey(id) || b.names.containsKey(id))) return;
-            if (!mayLearn()) return;
-            captured.stills.put(id, still);
-            captured.trim(Looks.usedSkins());
-            capturedDirty = true;
-            queue(news);
-        }));
-    }
-
-    /** A recorded preview. A repo entry that already has frames wins, so this is dropped then. */
-    static void learn(String key, Captured.Anim anim, Component news) {
-        EXEC.execute(() -> guarded(() -> {
-            if (captured == null) captured = Captured.load();
-            RepoParser.Parsed b = base;
-            SkinEntry known = b == null ? null : b.skins.get(key);
-            if (known != null && (known.animated() || anim.textures().length < 2)) return;
-            if (anim.textures().length < 2 && captured.stills.containsKey(key)) return;
-            Captured.Anim had = captured.anims.get(key);
-            if (had != null && java.util.Arrays.equals(had.textures(), anim.textures())
-                && had.ticks() == anim.ticks() && java.util.Arrays.equals(had.ticksPerTexture(), anim.ticksPerTexture())) return;
-            if (anim.textures().length > Captured.MAX_FRAMES || !mayLearn()) return;
-            captured.anims.put(key, anim);
-            captured.trim(Looks.usedSkins());
-            capturedDirty = true;
-            queue(news);
-        }));
-    }
-
-    /**
-     * Frame timings measured in game for {@code id} (see {@link TimingLearner}), kept while the live skin still
-     * has exactly these {@code textures}. Saved and merged in a batch like learned skins; {@code news} (may be
-     * null) is said once they are live.
-     */
-    static void learnTiming(String id, String[] textures, int[] ticks, Component news) {
-        EXEC.execute(() -> guarded(() -> {
-            if (timings == null) timings = Timings.load(null);
-            SkinEntry live = catalog.skins.get(id);
-            if (live == null || !java.util.Arrays.equals(live.textures, textures)) return;
-            if (!timings.put(id, ticks, Looks.usedSkins())) return;
-            timingsDirty = true;
-            if (news != null) TIMING_NEWS.add(news);
-            queue(null);
-        }));
-    }
+    // ---------------------------------------------------------- estimates ---
 
     /**
      * What {@link BlinkGuesser} found for {@code id} with frames {@code sig}: blink ticks, or null for no blink;
-     * {@code family}: a blink only if its sibling variants are. Saved and merged in a batch like learned timings.
+     * {@code family}: a blink only if its sibling variants are. Only existing catalog frames are inspected.
      */
     static void guessTiming(String id, String sig, int[] ticks, boolean family) {
         EXEC.execute(() -> guarded(() -> {
             if (guesses == null) guesses = BlinkGuesser.Store.load();
             if (!guesses.put(id, sig, ticks, family, Looks.usedSkins())) return;
             guessesDirty = true;
-            queue(null);
+            queueEstimate();
         }));
     }
 
-    private static boolean mayLearn() {
-        if (learnedThisSession < MAX_LEARNED_PER_SESSION) {
-            learnedThisSession++;
-            return true;
-        }
-        if (learnedThisSession++ == MAX_LEARNED_PER_SESSION) {
-            SkyCosmetics.LOG.warn("Learned {} skins this session; learning more waits for a restart", MAX_LEARNED_PER_SESSION);
-        }
-        return false;
-    }
-
-    /** One save, one catalog rebuild and one Looks.bump() for a whole menu of new skins. */
-    private static void queue(Component news) {
-        if (news != null) NEWS.add(news);
+    private static void queueEstimate() {
         if (flushQueued) return;
         flushQueued = true;
         EXEC.schedule(() -> guarded(Repo::flush), 500, TimeUnit.MILLISECONDS);
     }
 
-    /** Saves, publishes, and says what was learned in one chat line: the skin itself, or how many. */
     private static void flush() {
         flushQueued = false;
-        if (capturedDirty) captured.save();
-        if (timingsDirty) timings.save();
         if (guessesDirty) guesses.save();
-        capturedDirty = timingsDirty = guessesDirty = false;
+        guessesDirty = false;
         publish();
-        if (!TIMING_NEWS.isEmpty()) {
-            say(TIMING_NEWS.size() == 1 ? TIMING_NEWS.getFirst() : Component.literal("Learned the animation timing of "
-                + Names.count(TIMING_NEWS.size(), "skin") + " you use").withStyle(ChatFormatting.GRAY));
-            TIMING_NEWS.clear();
-        }
-        int count = NEWS.size() + unannounced;
-        if (count == 0) return;
-        Component line = count == 1 && NEWS.size() == 1 ? NEWS.getFirst()
-            : Component.literal("Learned " + Names.count(count, "skin") + " the repo does not have yet").withStyle(ChatFormatting.GRAY);
-        NEWS.clear();
-        long now = System.currentTimeMillis();
-        if (now - NEWS_AT[newsSlot] < 60_000) {
-            unannounced = count; // said in the next line
-            return;
-        }
-        NEWS_AT[newsSlot] = now;
-        newsSlot = (newsSlot + 1) % NEWS_PER_MINUTE;
-        unannounced = 0;
-        say(line);
-    }
-
-    private static void say(Component line) {
-        Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> {
-            if (mc.player != null) mc.player.sendSystemMessage(SkyCosmetics.prefix().append(line));
-        });
     }
 
     // ----------------------------------------------------------- download ---
@@ -515,10 +406,7 @@ public final class Repo {
             .connectTimeout(Duration.ofSeconds(15)).build();
         String latest = null;
         try {
-            HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(LATEST_SHA))
-                .header("Accept", "application/vnd.github.sha").header("User-Agent", "SkyCosmetics")
-                .timeout(Duration.ofSeconds(20)).GET().build(), HttpResponse.BodyHandlers.ofString());
-            if (r.statusCode() == 200) latest = RepoSource.firstSha(r.body());
+            latest = fetchSha(http, URI.create(LATEST_SHA));
         } catch (IOException e) {
             SkyCosmetics.LOG.debug("Could not ask GitHub for the latest repo commit: {}", e.toString());
         }
@@ -529,20 +417,35 @@ public final class Repo {
         }
         Path part = zip.resolveSibling("neu-repo.zip.part");
         String url = ARCHIVE + (latest != null ? latest : "refs/heads/master") + ".zip";
-        HttpResponse<Path> res = http.send(HttpRequest.newBuilder(URI.create(url)).header("User-Agent", "SkyCosmetics")
-            .timeout(Duration.ofMinutes(5)).GET().build(), HttpResponse.BodyHandlers.ofFile(part));
-        if (res.statusCode() != 200) {
-            Files.deleteIfExists(part);
-            throw new IOException("HTTP " + res.statusCode() + " for " + url);
-        }
-        try (ZipFile z = new ZipFile(part.toFile())) {
-            if (z.size() < MIN_ITEMS) throw new IOException("downloaded zip has only " + z.size() + " entries");
-        } catch (IOException e) {
-            Files.deleteIfExists(part);
-            throw e;
-        }
+        fetchArchive(http, URI.create(url), part);
         touch(mark);
         return part;
+    }
+
+    /** Bounded even when a response is chunked or its Content-Length is incorrect. Download thread only. */
+    static String fetchSha(HttpClient http, URI uri) throws IOException, InterruptedException {
+        HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri)
+            .header("Accept", "application/vnd.github.sha").header("User-Agent", "SkyCosmetics")
+            .timeout(Duration.ofSeconds(20)).GET().build(),
+            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofString(), MAX_COMMIT_BYTES));
+        return r.statusCode() == 200 ? RepoSource.firstSha(r.body()) : null;
+    }
+
+    /** Never replace the installed repo here, and remove partial files on HTTP, size or ZIP failures. */
+    static void fetchArchive(HttpClient http, URI uri, Path part) throws IOException, InterruptedException {
+        try {
+            HttpResponse<Path> r = http.send(HttpRequest.newBuilder(uri).header("User-Agent", "SkyCosmetics")
+                .timeout(Duration.ofMinutes(5)).GET().build(),
+                HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofFile(part), MAX_ARCHIVE_BYTES));
+            if (r.statusCode() != 200) throw new IOException("HTTP " + r.statusCode() + " for " + uri);
+            try (ZipFile z = new ZipFile(part.toFile())) {
+                if (z.size() < MIN_ITEMS) throw new IOException("downloaded zip has only " + z.size() + " entries");
+            }
+        } catch (IOException | InterruptedException e) {
+            try { Files.deleteIfExists(part); }
+            catch (IOException cleanup) { e.addSuppressed(cleanup); }
+            throw e;
+        }
     }
 
     private static void install(Path part) {

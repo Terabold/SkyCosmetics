@@ -74,7 +74,7 @@ public final class Shapes {
 
     /**
      * A rounded rectangle whose color runs from {@code left} to {@code right}. The left corners take the left
-     * color and the right ones the right color; between them the gradient is a stretched alpha ramp.
+     * color and the right ones the right color; between them one quad interpolates color and alpha.
      */
     public static void roundGradient(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, int left, int right) {
         if (w <= 0 || h <= 0) return;
@@ -117,16 +117,22 @@ public final class Shapes {
         }
     }
 
-    /** A plain rectangle from {@code left} to {@code right}; best when {@code left} is opaque. */
+    /** A horizontal RGBA gradient, blended once so translucent fills match their rounded ends. */
     public static void gradient(GuiGraphicsExtractor g, int x0, int y0, int x1, int y1, int left, int right) {
         if (x1 <= x0 || y1 <= y0) return;
-        Identifier t = ramp();
-        if (t == null || left == right) {
+        if (left == right) {
             g.fill(x0, y0, x1, y1, left);
             return;
         }
-        g.fill(x0, y0, x1, y1, left);
-        g.blit(RenderPipelines.GUI_TEXTURED, t, x0, y0, 0, 0, x1 - x0, y1 - y0, RAMP_W, 1, RAMP_W, 1, right);
+        // Vanilla's gradient is vertical. Rotate one quad rather than overlaying two translucent fills.
+        g.pose().pushMatrix();
+        try {
+            g.pose().translate(x0, y0);
+            g.pose().rotate((float) (Math.PI / 2));
+            g.fillGradient(0, -(x1 - x0), y1 - y0, 0, right, left);
+        } finally {
+            g.pose().popMatrix();
+        }
     }
 
     /** A rectangle in {@code color} that fades out to the right (or to the left when {@code toLeft}). */

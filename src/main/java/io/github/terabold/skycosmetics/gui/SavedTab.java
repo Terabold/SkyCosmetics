@@ -59,7 +59,7 @@ final class SavedTab extends RowList {
     /** One change a look makes, as listed under it. */
     enum Part {
         SKIN("skin"), DYE("dye"), NAME("name"), GLINT("glint"), GLINT_COLOR("glintColor"), GLINT_SPEED("glintSpeed"),
-        GLINT_STRENGTH("glintStrength");
+        GLINT_STRENGTH("glintStrength"), TRIM("trim"), MODEL("model");
 
         private final String key;
 
@@ -80,6 +80,8 @@ final class SavedTab extends RowList {
                 case GLINT_COLOR -> l.withGlintColor(null);
                 case GLINT_SPEED -> l.withGlintSpeed(null);
                 case GLINT_STRENGTH -> l.withGlintStrength(null);
+                case TRIM -> l.withTrim(null);
+                case MODEL -> l.withModel(null);
             };
         }
 
@@ -92,6 +94,8 @@ final class SavedTab extends RowList {
                 case GLINT_COLOR -> l.glintColor() != null;
                 case GLINT_SPEED -> l.glintSpeed() != null;
                 case GLINT_STRENGTH -> l.glintStrength() != null;
+                case TRIM -> l.trim() != null;
+                case MODEL -> l.model() != null;
             };
         }
     }
@@ -189,17 +193,19 @@ final class SavedTab extends RowList {
             || e.look().name() != null && Names.parse(e.look().name()).getString().toLowerCase(Locale.ROOT).contains(q);
     }
 
-    /** "Knight Skin · Aurora Dye · Renamed · Glint off". */
+    /** "Knight Skin; Aurora Dye; Renamed; Glint off". */
     static String summary(Looks.Look l, Catalog c) {
         List<String> parts = new ArrayList<>();
         if (l.skin() != null) parts.add(skinName(l.skin(), c));
         if (l.dye() != null) parts.add(dyeName(l.dye(), c));
         if (l.name() != null) parts.add(tr("skycosmetics.saved.renamed"));
+        if (l.trim() != null) parts.add("Trim: " + l.trim());
+        if (l.model() != null) parts.add("Model: " + l.model());
         if (l.glint() != null) parts.add(tr("on".equals(l.glint()) ? "skycosmetics.saved.glintOn" : "skycosmetics.saved.glintOff"));
         if (l.glintColor() != null || l.glintSpeed() != null || l.glintStrength() != null) {
             parts.add(tr("skycosmetics.saved.glintStyle"));
         }
-        return String.join(" · ", parts);
+        return String.join(", ", parts);
     }
 
     static String skinName(String id, Catalog c) {
@@ -360,6 +366,8 @@ final class SavedTab extends RowList {
                 }
                 case GLINT_SPEED -> SpeedSlider.format(l.glintSpeed());
                 case GLINT_STRENGTH -> SpeedSlider.format(l.glintStrength());
+                case TRIM -> l.trim();
+                case MODEL -> l.model();
             };
             this.value = v;
             this.color = col | 0xFF000000;

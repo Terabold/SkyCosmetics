@@ -67,6 +67,17 @@ final class RepoSource {
     }
 
     private static final Pattern SHA = Pattern.compile("\\b([0-9a-f]{40})\\b");
+    private static final int MAX_ITEMS = 32_768, MAX_ZIP_ENTRIES = 65_536;
+    /** animatedskulls.json is currently about 6 MB; item files are much smaller. */
+    private static final int MAX_ITEM_BYTES = 4 * 1024 * 1024, MAX_CONSTANT_BYTES = 32 * 1024 * 1024;
+
+    private static int limit(String path) { return path.startsWith("constants/") ? MAX_CONSTANT_BYTES : MAX_ITEM_BYTES; }
+
+    private static byte[] bounded(InputStream in, int max) throws IOException {
+        byte[] bytes = in.readNBytes(max + 1);
+        if (bytes.length > max) throw new IOException("Repository entry exceeds its size limit");
+        return bytes;
+    }
 
     /** One place a repo may live. */
     static final class Candidate {
@@ -262,7 +273,7 @@ final class RepoSource {
     }
 
     private static String read(Path p) throws IOException {
-        return new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
+        try (InputStream in = Files.newInputStream(p)) { return new String(bounded(in, 64 * 1024), StandardCharsets.UTF_8); }
     }
 
     private static long mtime(Path p) throws IOException {
@@ -272,20 +283,28 @@ final class RepoSource {
     // ------------------------------------------------------------ readers ---
 
     private static Source dir(Path root, String sha) {
+        Path base = root.toAbsolutePath().normalize();
         return new Source() {
             public String version() { return sha; }
 
             public List<String> items() throws IOException {
                 List<String> out = new ArrayList<>(10_000);
                 try (DirectoryStream<Path> ds = Files.newDirectoryStream(root.resolve("items"), "*.json")) {
-                    for (Path p : ds) out.add("items/" + p.getFileName());
+                    for (Path p : ds) {
+                        if (out.size() >= MAX_ITEMS) throw new IOException("Too many repository items");
+                        out.add("items/" + p.getFileName());
+                    }
                 }
                 out.sort(null);
                 return out;
             }
 
             public byte[] read(String path) throws IOException {
-                return Files.readAllBytes(root.resolve(path));
+                Path file = base.resolve(path).normalize();
+                if (!file.startsWith(base)) throw new IOException("Repository path leaves its root");
+                int max = limit(path);
+                if (Files.size(file) > max) throw new IOException("Repository entry exceeds its size limit");
+                try (InputStream in = Files.newInputStream(file)) { return bounded(in, max); }
             }
         };
     }
@@ -293,6 +312,9 @@ final class RepoSource {
     /** GitHub zips nest everything under one top folder; paths here are relative to it. */
     private static Source zip(Path zipPath) throws IOException {
         ZipFile z = new ZipFile(zipPath.toFile());
+        if (z.size() > MAX_ZIP_ENTRIES) {
+            z.close(); throw new IOException("Too many repository archive entries");
+        }
         Map<String, ZipEntry> entries = new HashMap<>(16_384);
         Enumeration<? extends ZipEntry> en = z.entries();
         while (en.hasMoreElements()) {
@@ -305,10 +327,13 @@ final class RepoSource {
         return new Source() {
             public String version() { return sha; }
 
-            public List<String> items() {
+            public List<String> items() throws IOException {
                 List<String> out = new ArrayList<>(10_000);
                 for (String n : entries.keySet()) {
-                    if (n.startsWith("items/") && n.endsWith(".json") && n.indexOf('/', 6) < 0) out.add(n);
+                    if (n.startsWith("items/") && n.endsWith(".json") && n.indexOf('/', 6) < 0) {
+                        if (out.size() >= MAX_ITEMS) throw new IOException("Too many repository items");
+                        out.add(n);
+                    }
                 }
                 out.sort(null);
                 return out;
@@ -317,8 +342,10 @@ final class RepoSource {
             public byte[] read(String path) throws IOException {
                 ZipEntry e = entries.get(path);
                 if (e == null) throw new NoSuchFileException(path + " in " + zipPath);
+                int max = limit(path);
+                if (e.getSize() > max) throw new IOException("Repository entry exceeds its size limit");
                 try (InputStream in = z.getInputStream(e)) {
-                    return in.readAllBytes();
+                    return bounded(in, max);
                 }
             }
 
