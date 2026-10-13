@@ -29,6 +29,8 @@ public final class Settings {
     public static boolean brush = true;
     /** Reskin your summoned pet (and deployed power orbs) in the world. */
     public static boolean worldReskin = true;
+    /** Learn skins the repo does not have yet from items and Elizabeth previews. */
+    public static boolean learnSkins = true;
     /**
      * My Items also lists what menus you open showed (Wardrobe, Ender Chest, Backpacks...). Off: only what you
      * wear and carry; nothing more is learned and items.json stays as it is, so On brings them back.
@@ -47,6 +49,7 @@ public final class Settings {
     static {
         flag("brush", () -> brush, v -> brush = v);
         flag("worldReskin", () -> worldReskin, v -> worldReskin = v);
+        flag("learnSkins", () -> learnSkins, v -> learnSkins = v);
         flag("storedItems", () -> storedItems, v -> storedItems = v);
         flag("keyTipShown", () -> keyTipShown, v -> keyTipShown = v);
     }

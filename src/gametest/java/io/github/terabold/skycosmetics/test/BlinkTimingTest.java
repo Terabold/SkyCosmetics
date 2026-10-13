@@ -1,13 +1,20 @@
 package io.github.terabold.skycosmetics.test;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import io.github.terabold.skycosmetics.Textures;
 import io.github.terabold.skycosmetics.data.BlinkGuesser;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
+import io.github.terabold.skycosmetics.data.TimingLearner;
 import io.github.terabold.skycosmetics.gui.StudioScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -22,15 +29,16 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Estimates known blink frames, preserves saved timing precedence, and drops estimates when frames change.
- * Synthetic skins distinguish blinking eyes from color cycles and moving textures. No server observations.
+ * Blink timing without the repo's help, and learning in menus. Synthetic skins: eyes that close (a blink) get a
+ * long open frame and short closed ones; a color cycle, a moving dot, and five frames do not. Then real files:
+ * blink frames written where Minecraft caches skins are found and estimated for a learned skin the repo would
+ * time evenly, never for one timed per frame; eyes that close into a line without losing detail count only
+ * once two sibling variants blink; the sources layer learned over shipped over estimated over repo, and an
+ * estimate is dropped when the frames change. Last, menu slots: a skin is learned from a slot, an open
+ * frame that varies per round is learned by its median, another item in the slot starts over, and a new menu
+ * forgets every menu slot but the player's inventory.
  */
-public final class BlinkTimingTest implements net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest {
-    @Override
-    public void runTest(ClientGameTestContext ctx) {
-        ctx.waitFor(mc -> !Repo.get().skins.isEmpty(), 20 * 120);
-        run(ctx);
-    }
+final class BlinkTimingTest {
     private static final String PARENT = "SKYCOSMETICS_TEST";
     private static final String BLINK = "SKYCOSMETICS_TEST_BLINK";
     private static final String CYCLE = "SKYCOSMETICS_TEST_CYCLE";
@@ -41,12 +49,15 @@ public final class BlinkTimingTest implements net.fabricmc.fabric.api.client.gam
     private static final String TWO_B = "SKYCOSMETICS_TEST_TWO_B";
     private static final int SKIN = 0xFFE0B080;
     private static final int LID = 0xFFC89868;
+    private static final long MS = 1_000_000L;
+    private static final long[] NOW = {2_000_000_000_000L};
 
-    public BlinkTimingTest() {}
+    private BlinkTimingTest() {}
 
     static void run(ClientGameTestContext ctx) {
         pictures();
         files(ctx);
+        menus(ctx);
         System.out.println("[SkyCosmeticsTest] blink timing checks passed");
     }
 
@@ -321,6 +332,97 @@ public final class BlinkTimingTest implements net.fabricmc.fabric.api.client.gam
     }
 
     // -------------------------------------------------------------- menus ---
+
+    private static void menus(ClientGameTestContext ctx) {
+        String slotSkin = "PET_SKIN_JELLYFISH_CUTE_PINK", variedSkin = "PET_SKIN_SHEEP_MONSTER_TOXIC", swapSkin = "PET_SKIN_FROG_BIOME_SWAMP";
+        Path timings = dir().resolve("timings.json");
+        String hadTimings = readOrNull(timings);
+        try {
+            ctx.runOnClient(mc -> {
+                for (String id : List.of(slotSkin, variedSkin, swapSkin)) {
+                    SkinEntry e = Repo.get().skin(id);
+                    check(e != null && e.animated() && e.timing != SkinEntry.Timing.LEARNED, id + " is an animated skin not learned yet");
+                }
+                TimingLearner.useClock(() -> NOW[0]);
+
+                // A pet menu slot animates 50, 2, 4.
+                String[] frames = Repo.get().skin(slotSkin).textures;
+                play(slot(7, 13), frames, new int[][]{{50, 2, 4}, {50, 2, 4}, {50, 2, 4}, {50, 2, 4}}, "Pet A", null);
+            });
+            ctx.waitFor(mc -> Repo.get().skin(slotSkin).timing == SkinEntry.Timing.LEARNED, 20 * 10);
+            expect(ctx, slotSkin, SkinEntry.Timing.LEARNED, 50, 2, 4);
+
+            // The open frame lasts 40 to 61 ticks, a different time each round: learned by its median.
+            ctx.runOnClient(mc -> play(slot(8, 20), Repo.get().skin(variedSkin).textures,
+                new int[][]{{58, 2, 4}, {40, 2, 4}, {61, 2, 4}, {47, 2, 4}, {52, 2, 4}, {44, 2, 4}}, "Pet B", null));
+            ctx.waitFor(mc -> Repo.get().skin(variedSkin).timing == SkinEntry.Timing.LEARNED, 20 * 10);
+            ctx.runOnClient(mc -> {
+                int[] t = Repo.get().skin(variedSkin).frameTicks;
+                check(t[0] >= 44 && t[0] <= 58 && t[1] == 2 && t[2] == 4, "a varying open frame is learned by its median: " + Arrays.toString(t));
+            });
+
+            // Two pets with the same skin take turns in a slot, each showing the next frame: never learned.
+            ctx.runOnClient(mc -> {
+                play(slot(8, 30), Repo.get().skin(swapSkin).textures, new int[][]{{50, 4}, {50, 4}, {50, 4}, {50, 4}}, "Pet C", "Pet D");
+                check(TimingLearner.watching() == 1, "the slot is watched, started over each time");
+            });
+            ctx.waitTicks(20);
+            check(ctx.computeOnClient(mc -> Repo.get().skin(swapSkin).timing != SkinEntry.Timing.LEARNED),
+                "frames of different items in one slot are not timed together");
+
+            // A new menu forgets what menu slots showed, but not the player's inventory.
+            ctx.runOnClient(mc -> {
+                String[] frames = Repo.get().skin(swapSkin).textures;
+                slot(0, 36).accept(head(frames[0], "Helmet"));
+                check(TimingLearner.watching() == 2, "a menu slot and an inventory slot are watched");
+                TimingLearner.onOpenScreen(new ClientboundOpenScreenPacket(9, MenuType.GENERIC_9x6, Component.literal("Pets")));
+                check(TimingLearner.watching() == 1, "a new menu drops the menu slot only");
+                slot(0, 36).accept(ItemStack.EMPTY);
+                check(TimingLearner.watching() == 0, "an emptied slot is dropped");
+            });
+        } finally {
+            ctx.runOnClient(mc -> TimingLearner.useClock(null));
+            restore(timings, hadTimings);
+            reload(ctx);
+        }
+        System.out.println("[SkyCosmeticsTest] menu timing checks passed");
+    }
+
+    private interface Send {
+        void accept(ItemStack s);
+    }
+
+    private static Send slot(int container, int slot) {
+        return s -> TimingLearner.onSlot(new ClientboundContainerSetSlotPacket(container, 0, slot, s));
+    }
+
+    /**
+     * Plays one round per row of {@code rounds} (ticks per frame) through {@code send}, then the first frame once
+     * more; the items are named {@code name}, every other update {@code other} instead when it is not null.
+     */
+    private static void play(Send send, String[] frames, int[][] rounds, String name, String other) {
+        long t = NOW[0];
+        int i = 0;
+        for (int[] round : rounds) {
+            for (int f = 0; f < frames.length; f++, i++) {
+                NOW[0] = t;
+                send.accept(head(frames[f], other != null && i % 2 == 1 ? other : name));
+                t += round[f] * 50 * MS;
+            }
+        }
+        NOW[0] = t;
+        send.accept(head(frames[0], other != null && i % 2 == 1 ? other : name));
+        NOW[0] = t + 1000 * MS;
+    }
+
+    private static ItemStack head(String value, String name) {
+        ItemStack s = new ItemStack(Items.PLAYER_HEAD);
+        s.set(DataComponents.PROFILE, Textures.profile(value));
+        s.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return s;
+    }
+
+    // ------------------------------------------------------------ helpers ---
 
     private static void reload(ClientGameTestContext ctx) {
         AtomicBoolean done = new AtomicBoolean();

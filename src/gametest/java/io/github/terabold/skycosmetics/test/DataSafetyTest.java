@@ -11,7 +11,7 @@ import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
-import io.github.terabold.skycosmetics.data.SkinData;
+import io.github.terabold.skycosmetics.data.SkinLearner;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import io.github.terabold.skycosmetics.pet.PetTracker;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -81,9 +81,9 @@ public class DataSafetyTest implements FabricClientGameTest {
         String t2 = Repo.get().skin("NECRON_DIAMOND_KNIGHT").textures[0];
         String elsewhere = Base64.getEncoder().encodeToString(("{\"textures\":{\"SKIN\":{\"url\":"
             + "\"http://evil.example/texture/" + "ab".repeat(32) + "\"}}}").getBytes(StandardCharsets.UTF_8));
-        check(SkinData.mojangTexture(t1), "a repo texture is a Mojang skin");
-        check(!SkinData.mojangTexture(elsewhere) && !SkinData.mojangTexture("A".repeat(40_000))
-            && !SkinData.mojangTexture("not base64!"), "anything else is not");
+        check(SkinLearner.mojangTexture(t1), "a repo texture is a Mojang skin");
+        check(!SkinLearner.mojangTexture(elsewhere) && !SkinLearner.mojangTexture("A".repeat(40_000))
+            && !SkinLearner.mojangTexture("not base64!"), "anything else is not");
 
         JsonObject skins = new JsonObject();
         skins.add("SSTEST_GOOD", still(t1, 1));

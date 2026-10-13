@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Frame timings saved by earlier builds, kept in {@code config/skycosmetics/timings.json}:
+ * Frame timings {@link TimingLearner} measured in game, kept in {@code config/skycosmetics/timings.json}:
  * {@code "skins": {"<skin id>": {"frames": 4, "ticksPerTexture": [51, 2, 4, 2], "learnedAt": ...}}}, the
  * animatedskulls.json field, so an entry can go into a repo PR as is.
  *
@@ -115,7 +115,7 @@ final class Timings {
     }
 
     static boolean valid(String id, int[] ticks) {
-        if (!SkinData.validId(id) || ticks == null || ticks.length < 2 || ticks.length > Captured.MAX_FRAMES) return false;
+        if (!SkinLearner.validId(id) || ticks == null || ticks.length < 2 || ticks.length > Captured.MAX_FRAMES) return false;
         for (int t : ticks) if (t < 1 || t > MAX_TICKS) return false;
         return true;
     }

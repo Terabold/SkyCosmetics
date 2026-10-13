@@ -152,7 +152,7 @@ public final class Catalog {
             for (SkinEntry e : skins.values()) {
                 if (e != root && root(e, skins) != root) continue;
                 for (String t : e.textures) {
-                    String h = SkinData.textureHash(t);
+                    String h = SkinLearner.textureHash(t);
                     if (h != null) out.add(h);
                 }
             }

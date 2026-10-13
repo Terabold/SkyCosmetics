@@ -7,6 +7,7 @@ import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
+import io.github.terabold.skycosmetics.data.SkinLearner;
 import io.github.terabold.skycosmetics.deploy.DeployedOrbs;
 import io.github.terabold.skycosmetics.items.Mine;
 import io.github.terabold.skycosmetics.mixin.CustomDataAccessor;
@@ -236,6 +237,8 @@ public final class Cosmetics {
         try {
             Ident id = identify(data);
             if (id == null) return e;
+            SkinLearner.seen(s, id.type());
+            SkinLearner.variant(s, ((CustomDataAccessor) (Object) data).skycosmetics$tag(), id.type());
             e.uuid = id.uuid();
             e.typeLook = Looks.byType(id.type()) != null;
             e.mineVersion = Mine.version();

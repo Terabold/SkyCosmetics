@@ -12,7 +12,7 @@ import java.util.Locale;
  *
  * Every Hypixel skull in the repo becomes one of these. Animated skins keep all
  * their frames and a tick count per frame, so they cycle at the same speed as on
- * Hypixel: saved by earlier builds, else shipped with the mod,
+ * Hypixel: measured in game by {@link TimingLearner}, else shipped with the mod,
  * else the repo's per-frame timing, else (for a blink the repo times evenly)
  * estimated by {@link BlinkGuesser}, else the repo's even timing.
  */
@@ -30,7 +30,7 @@ public final class SkinEntry {
         GUESSED,
         /** {@code assets/skycosmetics/timings.json}: timings players measured, shipped with the mod. */
         BUNDLED,
-        /** Previously measured timing retained from {@code timings.json}. */
+        /** {@link TimingLearner} measured it in this game ({@code timings.json}). */
         LEARNED
     }
 
@@ -51,7 +51,8 @@ public final class SkinEntry {
     public boolean listed = true;
     /**
      * The item's lore says the skin is animated but animatedskulls.json has no
-     * frames for it yet, so only its still texture is known.
+     * frames for it yet, so only its still texture is known. The UI badges these;
+     * previewing the skin in game lets {@link PreviewRecorder} fill the gap.
      */
     public boolean missingFrames;
     /** Learned in game ({@code captured.json}) rather than read from the repo. */
@@ -67,7 +68,7 @@ public final class SkinEntry {
     public Use use = Use.HELMET;
     /**
      * How many variants Hypixel lets this skin swap between ("This skin is swappable between 21 ..."), 0 when its
-     * lore says none. The repo lacks most of them for some skins; {@link SkinData} adds those seen in game.
+     * lore says none. The repo lacks most of them for some skins; {@link SkinLearner} adds those seen in game.
      */
     public int swappable;
 

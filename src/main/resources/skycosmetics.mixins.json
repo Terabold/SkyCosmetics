@@ -6,6 +6,7 @@
   "client": [
     "AbstractContainerScreenAccessor",
     "BufferSourceAccessor",
+    "ClientPacketListenerMixin",
     "CustomDataAccessor",
     "EquipmentLayerRendererMixin",
     "GuiMixin",

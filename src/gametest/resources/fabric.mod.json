@@ -21,10 +21,10 @@
       "io.github.terabold.skycosmetics.test.DataSafetyTest",
       "io.github.terabold.skycosmetics.test.StudioTabsClientTest",
       "io.github.terabold.skycosmetics.test.ThemeTest",
-      "io.github.terabold.skycosmetics.test.BlinkTimingTest",
+      "io.github.terabold.skycosmetics.test.TimingLearnerTest",
       "io.github.terabold.skycosmetics.test.SlotsTest",
       "io.github.terabold.skycosmetics.test.VariantsTest",
-      "io.github.terabold.skycosmetics.test.NoSkinDetectionTest",
+      "io.github.terabold.skycosmetics.data.PreviewRecorderTest",
       "io.github.terabold.skycosmetics.test.UpdateTest",
       "io.github.terabold.skycosmetics.test.TooltipTest"
     ]

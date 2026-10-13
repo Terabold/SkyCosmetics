@@ -141,6 +141,6 @@ public final class Textures {
                 + hash.toLowerCase(Locale.ROOT) + "\"}}}";
             return Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
         }
-        return io.github.terabold.skycosmetics.data.SkinData.mojangTexture(s) ? s : null;
+        return io.github.terabold.skycosmetics.data.SkinLearner.mojangTexture(s) ? s : null;
     }
 }

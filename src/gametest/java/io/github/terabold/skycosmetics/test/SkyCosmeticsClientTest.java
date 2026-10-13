@@ -6,6 +6,7 @@ import com.mojang.brigadier.tree.CommandNode;
 import io.github.terabold.skycosmetics.Looks;
 import io.github.terabold.skycosmetics.Textures;
 import io.github.terabold.skycosmetics.data.Catalog;
+import io.github.terabold.skycosmetics.data.PreviewRecorder;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
 import io.github.terabold.skycosmetics.gui.StudioScreen;
@@ -353,6 +354,15 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             "the repo wins over a learned animation");
         check(m.learned == 2 && Repo.get().skin("SKYCOSMETICS_TEST_SKIN") == null, "merge counts and leaves the live catalog alone");
 
+        // Spawn frame S, then A B C held 2, 2 and 6 ticks, seen twice.
+        PreviewRecorder.Fit f = PreviewRecorder.fit(new long[]{0, 3, 5, 7, 13, 15, 17, 23},
+            List.of("S", "A", "B", "C", "A", "B", "C", "A"), true);
+        check(f != null && f.frames() == 3 && f.start() == 1 && Arrays.equals(f.ticksPerTexture(), new int[]{2, 2, 6}),
+            "blinking preview timed per frame: " + f);
+        // A B every 5 ticks with one tick of jitter is still uniform.
+        f = PreviewRecorder.fit(new long[]{0, 1, 7, 11, 17, 21}, List.of("S", "A", "B", "A", "B", "A"), true);
+        check(f != null && f.frames() == 2 && f.ticks() == 5 && f.ticksPerTexture() == null, "uniform preview: " + f);
+        check(PreviewRecorder.fit(new long[]{0, 1, 2, 3}, List.of("S", "A", "B", "A"), true) == null, "one cycle is not enough");
         System.out.println("[SkyCosmeticsTest] repo checks passed");
     }
 

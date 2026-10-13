@@ -273,7 +273,7 @@ public final class BlinkGuesser {
     static String sig(String[] values) {
         long h = 0xcbf29ce484222325L;
         for (String v : values) {
-            String t = SkinData.textureHash(v);
+            String t = TimingLearner.hash(v);
             if (t == null) return null;
             for (int i = 0; i < t.length(); i++) h = (h ^ t.charAt(i)) * 0x100000001b3L;
             h = (h ^ ',') * 0x100000001b3L;
@@ -433,7 +433,7 @@ public final class BlinkGuesser {
 
         /** Records an answer for {@code id}; false if it is the one saved already. */
         boolean put(String id, String sig, int[] ticks, boolean family, Set<String> inUse) {
-            if (!SkinData.validId(id) || sig == null || ticks != null && !Timings.valid(id, ticks)) return false;
+            if (!SkinLearner.validId(id) || sig == null || ticks != null && !Timings.valid(id, ticks)) return false;
             family &= ticks != null;
             Guess had = skins.get(id);
             if (had != null && had.sig.equals(sig) && Arrays.equals(had.ticks, ticks) && had.family == family) return false;
@@ -488,7 +488,7 @@ public final class BlinkGuesser {
                         for (int i = 0; i < ticks.length; i++) ticks[i] = a.get(i).getAsInt();
                         if (!Timings.valid(e.getKey(), ticks)) continue;
                     }
-                    if (!SkinData.validId(e.getKey())) continue;
+                    if (!SkinLearner.validId(e.getKey())) continue;
                     long at = o.get("at") instanceof JsonPrimitive p && p.isNumber() ? p.getAsLong() : 0L;
                     boolean family = ticks != null && o.get("ifVariantsBlink") instanceof JsonPrimitive f && f.isBoolean() && f.getAsBoolean();
                     s.skins.put(e.getKey(), new Guess(sig.getAsString(), ticks, family, at));

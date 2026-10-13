@@ -3,6 +3,8 @@ package io.github.terabold.skycosmetics;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.terabold.skycosmetics.compat.OtherLooks;
 import io.github.terabold.skycosmetics.data.Repo;
+import io.github.terabold.skycosmetics.data.SkinLearner;
+import io.github.terabold.skycosmetics.data.TimingLearner;
 import io.github.terabold.skycosmetics.deploy.DeployedOrbs;
 import io.github.terabold.skycosmetics.gui.GeneralSection;
 import io.github.terabold.skycosmetics.gui.InventoryButton;
@@ -73,6 +75,7 @@ public class SkyCosmetics implements ClientModInitializer {
         Looks.load();
         Favorites.load();
         Repo.reload(Looks::bump);
+        SkinLearner.init();
         PetTracker.init();
         DeployedOrbs.init();
         OwnedItems.init();
@@ -128,6 +131,7 @@ public class SkyCosmetics implements ClientModInitializer {
                 .then(ClientCommands.literal("debug").executes(ctx -> {
                     ctx.getSource().sendFeedback(prefix().append(Component.literal("Usage: /skycosmetics debug pet|orb|item"
                         + " - what the pet or orb reskin sees near you, or the last item you hovered in a menu").withStyle(ChatFormatting.GRAY)));
+                    ctx.getSource().sendFeedback(prefix().append(Component.literal(TimingLearner.status()).withStyle(ChatFormatting.GRAY)));
                     ctx.getSource().sendFeedback(prefix().append(Component.literal(io.github.terabold.skycosmetics.data.BlinkGuesser.status()).withStyle(ChatFormatting.GRAY)));
                     return 1;
                 }))));

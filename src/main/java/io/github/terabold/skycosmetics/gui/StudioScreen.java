@@ -2509,11 +2509,11 @@ public class StudioScreen extends Screen {
             if (hovered.animated()) {
                 tip.add(Component.literal("Animated with " + hovered.textures.length + " frames").withStyle(ChatFormatting.LIGHT_PURPLE));
                 if (hovered.timing == SkinEntry.Timing.GUESSED) tip.add(Component.literal("Timing estimated").withStyle(ChatFormatting.GRAY));
-                else if (hovered.timing == SkinEntry.Timing.LEARNED) tip.add(Component.literal("Previously saved timing").withStyle(ChatFormatting.GRAY));
+                else if (hovered.timing == SkinEntry.Timing.LEARNED) tip.add(Component.literal("Timing learned in game").withStyle(ChatFormatting.GRAY));
             } else if (hovered.missingFrames) {
-                tip.add(Component.literal("Animation frames are missing from the catalog").withStyle(ChatFormatting.GRAY));
+                tip.add(Component.literal("Preview this animated Hypixel skin once to learn its frames.").withStyle(ChatFormatting.GRAY));
             }
-            if (hovered.learned) tip.add(Component.literal("Previously saved skin").withStyle(ChatFormatting.GREEN));
+            if (hovered.learned) tip.add(Component.literal("Learned in game").withStyle(ChatFormatting.GREEN));
             if (hovered.name.endsWith("(Captured style)")) {
                 tip.add(Component.literal("Variant name not yet known").withStyle(ChatFormatting.GRAY));
                 if (!hovered.animated()) tip.add(Component.literal("Only a still texture has been captured").withStyle(ChatFormatting.GRAY));
@@ -2642,7 +2642,7 @@ public class StudioScreen extends Screen {
 
     /**
      * For a skin Hypixel lets you swap between more variants than the catalog has (the repo lacks them): how many
-     * are available in the catalog.
+     * are known, and that the rest are learned from items seen in game.
      */
     private static void variantHint(List<Component> tip, SkinEntry e) {
         Catalog c = Repo.get();
@@ -2650,6 +2650,7 @@ public class StudioScreen extends Screen {
         int known = 1 + c.variantCount(root);
         if (root.swappable <= known) return;
         tip.add(Component.literal(root.swappable + " variants on Hypixel, " + known + " known").withStyle(ChatFormatting.GRAY));
+        if (Settings.learnSkins) tip.add(Component.literal("Open Hypixel's skin previews to capture missing styles").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     /** A gold star in a card's top-left corner: a favorite, listed first. */

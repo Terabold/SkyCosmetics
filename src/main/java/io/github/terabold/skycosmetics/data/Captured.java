@@ -107,9 +107,9 @@ final class Captured {
         if (skins != null) {
             for (Map.Entry<String, JsonElement> e : skins.entrySet()) {
                 try {
-                    if (!(e.getValue() instanceof JsonObject o) || !SkinData.validId(e.getKey())) continue;
+                    if (!(e.getValue() instanceof JsonObject o) || !SkinLearner.validId(e.getKey())) continue;
                     String tex = str(o, "texture");
-                    if (!SkinData.mojangTexture(tex)) continue;
+                    if (!SkinLearner.mojangTexture(tex)) continue;
                     String k = str(o, "kind");
                     SkinEntry.Kind kind = "PET_SKIN".equals(k) ? SkinEntry.Kind.PET_SKIN
                         : "VARIANT".equals(k) ? SkinEntry.Kind.VARIANT : SkinEntry.Kind.SKIN;
@@ -130,19 +130,19 @@ final class Captured {
         if (anims != null) {
             for (Map.Entry<String, JsonElement> e : anims.entrySet()) {
                 try {
-                    if (!(e.getValue() instanceof JsonObject o) || !SkinData.validId(e.getKey())) continue;
+                    if (!(e.getValue() instanceof JsonObject o) || !SkinLearner.validId(e.getKey())) continue;
                     if (!(o.get("textures") instanceof JsonArray tex) || tex.isEmpty() || tex.size() > MAX_FRAMES) continue;
                     String[] textures = new String[tex.size()];
                     for (int i = 0; i < textures.length; i++) {
                         textures[i] = tex.get(i).getAsString();
-                        if (!SkinData.mojangTexture(frame(textures[i]))) throw new IllegalArgumentException("not a skin texture");
+                        if (!SkinLearner.mojangTexture(frame(textures[i]))) throw new IllegalArgumentException("not a skin texture");
                     }
                     int[] per = RepoParser.ticks(o, textures.length);
                     String name = str(o, "name");
                     Evidence evidence = Evidence.UNKNOWN;
                     try { if (str(o, "evidence") != null) evidence = Evidence.valueOf(str(o, "evidence")); }
                     catch (IllegalArgumentException ignored) { /* older or future evidence needs review */ }
-                    c.anims.put(e.getKey(), new Anim(name == null ? null : SkinData.clip(name), color(o),
+                    c.anims.put(e.getKey(), new Anim(name == null ? null : SkinLearner.clip(name), color(o),
                         RepoParser.tick(o.get("ticks"), 1), o.has("ticksPerTexture") ? per : null, textures, at(o), evidence));
                 } catch (RuntimeException ex) {
                     SkyCosmetics.LOG.warn("Skipping learned animation {}: {}", e.getKey(), ex.toString());
@@ -217,7 +217,7 @@ final class Captured {
             String parent = s.kind == SkinEntry.Kind.VARIANT ? RepoParser.parentOf(id, skins) : null;
             if (parent != null) {
                 // A variant seen on an item: dropped once the repo has its look under a name of its own.
-                if (familyHashes.computeIfAbsent(parent, p -> hashes(p, base.skins)).contains(SkinData.textureHash(s.texture))) continue;
+                if (familyHashes.computeIfAbsent(parent, p -> hashes(p, base.skins)).contains(SkinLearner.textureHash(s.texture))) continue;
                 SkinEntry p = skins.get(parent);
                 String name = id.matches(".*_VARIANT_[0-9]+") && s.name.matches(".*\\(Variant [0-9]+\\)")
                     ? p.name + " (Captured style)" : s.name;
@@ -272,14 +272,14 @@ final class Captured {
         Set<String> ambiguous = new HashSet<>();
         for (SkinEntry e : skins.values()) if (e.parent != null && !e.id.matches(".*_VARIANT_[0-9]+")) {
             for (String texture : e.textures) {
-                String signature = e.parent + ":" + SkinData.textureHash(texture);
+                String signature = e.parent + ":" + SkinLearner.textureHash(texture);
                 SkinEntry previous = named.putIfAbsent(signature, e);
                 if (previous != null && previous != e) ambiguous.add(signature);
             }
         }
         for (SkinEntry e : List.copyOf(skins.values())) if (e.parent != null && e.id.matches(".*_VARIANT_[0-9]+")) {
             Still anchor = cap.stills.get(e.id);
-            String signature = e.parent + ":" + SkinData.textureHash(anchor == null ? e.textures[0] : anchor.texture());
+            String signature = e.parent + ":" + SkinLearner.textureHash(anchor == null ? e.textures[0] : anchor.texture());
             SkinEntry replacement = ambiguous.contains(signature) ? null : named.get(signature);
             if (replacement == null) continue;
             if (e.animated() && !replacement.animated()) {
@@ -309,7 +309,7 @@ final class Captured {
         for (SkinEntry e : repo.values()) {
             if (!e.id.equals(root) && !(e.id.startsWith(prefix) && root.equals(e.parent))) continue;
             for (String t : e.textures) {
-                String h = SkinData.textureHash(t);
+                String h = SkinLearner.textureHash(t);
                 if (h != null) out.add(h);
             }
         }
@@ -334,7 +334,7 @@ final class Captured {
 
     private static String nameOr(JsonObject o, String id) {
         String n = str(o, "name");
-        return n != null && !n.isBlank() ? SkinData.clip(n) : Catalog.title(id);
+        return n != null && !n.isBlank() ? SkinLearner.clip(n) : Catalog.title(id);
     }
 
     private static int color(JsonObject o) {

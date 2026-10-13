@@ -5,11 +5,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.terabold.skycosmetics.Cosmetics;
 import io.github.terabold.skycosmetics.Looks;
+import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.Textures;
 import io.github.terabold.skycosmetics.data.Catalog;
 import io.github.terabold.skycosmetics.data.Repo;
 import io.github.terabold.skycosmetics.data.SkinEntry;
-import io.github.terabold.skycosmetics.data.SkinData;
+import io.github.terabold.skycosmetics.data.SkinLearner;
 import io.github.terabold.skycosmetics.gui.StudioScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -22,6 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ResolvableProfile;
+import net.minecraft.world.item.component.ItemLore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -41,7 +43,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * the skin's tab), named apart, with a look of its own that an item wearing it shows. Families of every shape: colors,
  * day and night, seasons, a variant name that extends another (BLACK_ICE after BLACK), the Harvester Helmet's
  * crop-and-color sheet, and pet skins. With the repo checkout at hand ({@code skycosmetics.repo}), the counts are
- * compared with animatedskulls.json itself.
+ * compared with animatedskulls.json itself. Then a swappable skin the repo has no variants for learns one from an
+ * item wearing it, the way Hypixel marks the picked variant ({@code favorite_...}).
  */
 public class VariantsTest implements FabricClientGameTest {
     private static final List<String> FAMILIES = List.of("NECRON_DIAMOND_KNIGHT", "FERMENTO_ULTIMATE", "SENTINEL_WARDEN",
@@ -61,6 +64,8 @@ public class VariantsTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> families(Repo.get()));
         ctx.runOnClient(mc -> againstRepo(Repo.get()));
         wearing(ctx);
+        learned(ctx);
+        newSkin(ctx);
         screenshot(ctx);
         System.out.println("[SkyCosmeticsTest] variant checks passed");
     }
@@ -203,8 +208,166 @@ public class VariantsTest implements FabricClientGameTest {
         ResolvableProfile p = shown.get(DataComponents.PROFILE);
         if (p == null) return false;
         Set<String> mine = new HashSet<>(hashes(e));
-        for (var prop : p.partialProfile().properties().get("textures")) if (mine.contains(SkinData.textureHash(prop.value()))) return true;
+        for (var prop : p.partialProfile().properties().get("textures")) if (mine.contains(SkinLearner.textureHash(prop.value()))) return true;
         return false;
+    }
+
+    // ================================================================ learning a missing one
+
+    /**
+     * A swappable skin the repo has no variants for: an item wearing variant 4 (favorite_... = 3, a texture the
+     * family doesn't have) adds "(Variant 4)" under the skin; its default look and an item without the number don't.
+     */
+    private static void learned(ClientGameTestContext ctx) {
+        SkinEntry root = ctx.computeOnClient(mc -> {
+            Catalog c = Repo.get();
+            for (SkinEntry e : c.skinTab) {
+                if (e.parent == null && e.kind == SkinEntry.Kind.SKIN && e.swappable > 1 + c.variantCount(e)) return e;
+            }
+            return null;
+        });
+        if (root == null) {
+            System.out.println("[SkyCosmeticsTest] variants: the repo has every swappable skin's variants, nothing to learn");
+            return;
+        }
+        Path captured = FabricLoader.getInstance().getConfigDir().resolve("skycosmetics/captured.json");
+        String had = readOrNull(captured);
+        boolean learn = Settings.learnSkins;
+        String key = root.id + "_VARIANT_4";
+        String texture = value(0x4a11);
+        try {
+            Settings.learnSkins = true;
+            int before = ctx.computeOnClient(mc -> Repo.get().variantCount(root));
+            ctx.runOnClient(mc -> {
+                Cosmetics.forRender(wearing(root.id, "favorite_test", 0, root.textures[0], "t-swap-0"), null); // its default look
+                Cosmetics.forRender(wearing(root.id, null, 0, value(0x4a12), "t-swap-none"), null); // no variant number
+                Cosmetics.forRender(wearing(root.id, "favorite_test", 3, root.textures[0], "t-swap-pending"), null);
+                Cosmetics.forRender(wearing(root.id, "favorite_test", 3, texture, "t-swap-3"), null);
+            });
+            ctx.waitFor(mc -> Repo.get().skin(key) != null, 20 * 30);
+            ctx.waitTicks(5);
+            ctx.runOnClient(mc -> {
+                Catalog c = Repo.get();
+                SkinEntry v = c.skin(key);
+                check(v.kind == SkinEntry.Kind.VARIANT && root.id.equals(v.parent) && v.learned, "learned as a variant: " + v.parent);
+                check(v.name.equals(root.name + " (Captured style)"), "unknown style names are clearly marked: " + v.name);
+                check(SkinLearner.textureHash(v.textures[0]).equals(SkinLearner.textureHash(texture)), "with the item's texture");
+                check(c.variantCount(c.skin(root.id)) == before + 1, "the only one learned: " + c.variantCount(c.skin(root.id)));
+                List<SkinEntry> tab = c.skinTab;
+                int at = tab.indexOf(c.skin(root.id));
+                check(at >= 0 && tab.subList(at + 1, at + 2 + before).contains(v), "listed with the skin");
+            });
+            ctx.waitFor(mc -> String.valueOf(readOrNull(captured)).contains(key), 20 * 10); // kept in captured.json
+            // Read back from captured.json alone, it is still a variant of the skin.
+            reload(ctx);
+            check(ctx.computeOnClient(mc -> root.id.equals(Repo.get().skin(key).parent)), "a variant again after a reload");
+            missingAnimation(ctx, root, key, texture);
+            System.out.println("[SkyCosmeticsTest] variants: learned " + key + " from an item wearing it");
+        } finally {
+            Settings.learnSkins = learn;
+            restore(captured, had);
+            reload(ctx);
+        }
+        check(ctx.computeOnClient(mc -> Repo.get().skin(key) == null), "the learned variant is gone again");
+    }
+
+    /** Missing frames are learned from passive updates, then merged with a real server preview name. */
+    private static void missingAnimation(ClientGameTestContext ctx, SkinEntry root, String key, String first) {
+        boolean enabled = io.github.terabold.skycosmetics.data.TimingLearner.enabled;
+        long[] now = {System.nanoTime()};
+        try {
+            ctx.runOnClient(mc -> {
+                io.github.terabold.skycosmetics.data.TimingLearner.enabled = true;
+                io.github.terabold.skycosmetics.data.TimingLearner.useClock(() -> now[0]);
+                String[] textures = {first, value(0x4a13), value(0x4a14)};
+                int[] ticks = {2, 4, 8};
+                for (int i = 0; i < 8; i++) {
+                    var stack = wearing(root.id, "favorite_test", 3, textures[i % 3], "t-cycle");
+                    io.github.terabold.skycosmetics.data.TimingLearner.onSlot(
+                        new net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket(0, 0, 5, stack));
+                    now[0] += ticks[i % 3] * 50_000_000L;
+                }
+            });
+            ctx.waitFor(mc -> Repo.get().skin(key).animated(), 20 * 20);
+            ctx.runOnClient(mc -> {
+                var animation = Repo.get().skin(key);
+                check(animation.textures.length == 3 && java.util.Arrays.equals(animation.frameTicks, new int[]{4, 8, 2}),
+                    "two complete passive cycles preserve each frame's actual duration");
+                var swatch = new ItemStack(Items.PLAYER_HEAD);
+                var tag = new CompoundTag(); tag.putString("id", root.id);
+                swatch.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                swatch.set(DataComponents.CUSTOM_NAME, Component.literal("Test Aqua Skin"));
+                swatch.set(DataComponents.PROFILE, Textures.profile(first));
+                swatch.set(DataComponents.LORE, new ItemLore(List.of(Component.literal("Click to select!"))));
+                io.github.terabold.skycosmetics.data.SkinLearner.observe(swatch);
+            });
+            String named = root.id + "_TEST_AQUA_SKIN";
+            ctx.waitFor(mc -> Repo.get().skin(named) != null, 20 * 20);
+            ctx.runOnClient(mc -> {
+                check(Repo.get().skin(named).name.equals(root.name + " (Test Aqua Skin)"), "a new family's named skin choice does not overwrite its parent");
+                check(Repo.get().skin(named).animated(), "the named style inherits its recorded frames and timing");
+                check(!Repo.get().skin(key).listed && Repo.get().skin(key).animated(), "old saved ids remain usable without a duplicate unnamed card");
+            });
+        } finally {
+            ctx.runOnClient(mc -> { io.github.terabold.skycosmetics.data.TimingLearner.enabled = enabled;
+                io.github.terabold.skycosmetics.data.TimingLearner.useClock(null); });
+        }
+    }
+
+    /** Newly discovered skins must retain the lore that permits learning their alternate looks, even after reload. */
+    private static void newSkin(ClientGameTestContext ctx) {
+        Path captured = FabricLoader.getInstance().getConfigDir().resolve("skycosmetics/captured.json");
+        String had = readOrNull(captured);
+        boolean learn = Settings.learnSkins;
+        String id = "SSTEST_NEW_SWAPPABLE", variant = id + "_VARIANT_4";
+        try {
+            Settings.learnSkins = true;
+            ctx.runOnClient(mc -> {
+                ItemStack skin = new ItemStack(Items.PLAYER_HEAD);
+                CompoundTag tag = new CompoundTag(); tag.putString("id", id);
+                skin.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                skin.set(DataComponents.PROFILE, Textures.profile(value(0x4b11)));
+                skin.set(DataComponents.CUSTOM_NAME, Component.literal("Red"));
+                skin.set(DataComponents.LORE, new ItemLore(List.of(Component.literal("Click to preview!"))));
+                Cosmetics.forRender(skin, null); // a swatch must not negative-cache the shared skin id
+                skin = skin.copy(); // a distinct server stack is resolved again
+                skin.set(DataComponents.CUSTOM_NAME, Component.literal("Test New Skin"));
+                skin.set(DataComponents.LORE, new ItemLore(List.of(Component.literal("This skin can be applied to Spirit Mask."),
+                    Component.literal("This skin is swappable between"), Component.literal("21 different variants!"),
+                    Component.literal("LEGENDARY COSMETIC"))));
+                Cosmetics.forRender(skin, null);
+            });
+            ctx.waitFor(mc -> Repo.get().skin(id) != null, 600);
+            String named = id + "_BLUE_TEST_NEW_SKIN";
+            ctx.runOnClient(mc -> {
+                var choice = new ItemStack(Items.PLAYER_HEAD);
+                var tag = new CompoundTag(); tag.putString("id", id);
+                choice.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                choice.set(DataComponents.PROFILE, Textures.profile(value(0x4b13)));
+                choice.set(DataComponents.CUSTOM_NAME, Component.literal("Blue Test New Skin"));
+                choice.set(DataComponents.LORE, new ItemLore(List.of(Component.literal("Click to select!"))));
+                io.github.terabold.skycosmetics.data.SkinLearner.observe(choice);
+            });
+            ctx.waitFor(mc -> Repo.get().skin(named) != null, 600);
+            check(ctx.computeOnClient(mc -> Repo.get().skin(id).name.equals("Test New Skin")
+                && Repo.get().skin(named).parent.equals(id)), "new-family names ending in Skin remain separate selectable styles");
+            ctx.runOnClient(mc -> check(Repo.get().skin(id).swappable == 21, "new skin retains wrapped variant-count lore"));
+            reload(ctx);
+            ctx.runOnClient(mc -> {
+                SkinEntry root = Repo.get().skin(id);
+                check(root.swappable == 21 && root.use == SkinEntry.Use.HELMET, "new skin metadata survives disk reload");
+                Cosmetics.forRender(wearing(id, "favorite_test", 3, root.textures[0], "t-new-pending"), null);
+                Cosmetics.forRender(wearing(id, "favorite_test", 3, value(0x4b12), "t-new-variant"), null);
+            });
+            ctx.waitFor(mc -> Repo.get().skin(variant) != null, 600);
+            reload(ctx);
+            ctx.runOnClient(mc -> check(id.equals(Repo.get().skin(variant).parent)
+                && Repo.get().helmetSkinTab.contains(Repo.get().skin(variant)), "new variant persists in its helmet family"));
+        } finally {
+            Settings.learnSkins = learn;
+            restore(captured, had);
+            reload(ctx);
+        }
     }
 
     /** An item wearing {@code skin}, with Hypixel's variant number under {@code field} (none when null). */
@@ -274,8 +437,39 @@ public class VariantsTest implements FabricClientGameTest {
 
     private static List<String> hashes(SkinEntry e) {
         List<String> out = new ArrayList<>();
-        for (String t : e.textures) out.add(SkinData.textureHash(t));
+        for (String t : e.textures) out.add(SkinLearner.textureHash(t));
         return out;
+    }
+
+    /** A texture value with a made-up skin hash. */
+    private static String value(int n) {
+        String hash = String.format("5ca1ab1e%056x", n);
+        String json = "{\"textures\":{\"SKIN\":{\"url\":\"http://textures.minecraft.net/texture/" + hash + "\"}}}";
+        return Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void reload(ClientGameTestContext ctx) {
+        AtomicBoolean done = new AtomicBoolean();
+        Repo.reload(() -> done.set(true));
+        ctx.waitFor(mc -> done.get(), 20 * 120);
+        ctx.waitTicks(2);
+    }
+
+    private static String readOrNull(Path p) {
+        try {
+            return Files.isRegularFile(p) ? Files.readString(p) : null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static void restore(Path p, String content) {
+        try {
+            if (content == null) Files.deleteIfExists(p);
+            else Files.writeString(p, content);
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private static void check(boolean ok, String what) {

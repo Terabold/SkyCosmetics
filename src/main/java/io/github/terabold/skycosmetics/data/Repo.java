@@ -2,9 +2,13 @@ package io.github.terabold.skycosmetics.data;
 
 import com.google.gson.JsonParser;
 import io.github.terabold.skycosmetics.Looks;
+import io.github.terabold.skycosmetics.Names;
 import io.github.terabold.skycosmetics.SkyCosmetics;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
 import java.net.URI;
@@ -17,6 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipFile;
 
 /**
- * Keeps {@link #get()} on the newest complete NEU repo, plus previously saved
- * skins and timings, timings shipped with the mod, and estimated blinks.
+ * Keeps {@link #get()} on the newest complete NEU repo, plus skins and frame
+ * timings learned in game, timings shipped with the mod, and estimated blinks.
  *
  * Sources, best first: -Dskycosmetics.repo, Skyblocker's clone, Firmament's
  * extracted zip, our own zip, then leftovers of an uninstalled mod (see
@@ -70,6 +75,8 @@ public final class Repo {
     private static final AtomicBoolean DOWNLOADING = new AtomicBoolean();
 
     private static volatile Catalog catalog = Catalog.EMPTY;
+    /** Raw primary data, before captures or timing overrides; supplemental comparisons must use this snapshot. */
+    private static volatile Catalog primary = Catalog.EMPTY;
     /** The repo half of {@link #catalog}, kept so learned skins can be merged again without a re-parse. */
     private static volatile RepoParser.Parsed base;
     private static volatile boolean parsing;
@@ -88,6 +95,8 @@ public final class Repo {
     private static Timings bundled;
     private static BlinkGuesser.Store guesses;
     /** What the next {@link #flush} has to save. */
+    private static boolean capturedDirty;
+    private static boolean timingsDirty;
     private static boolean guessesDirty;
     private static String loadedVersion;
     private static ScheduledFuture<?> retry;
@@ -96,11 +105,31 @@ public final class Repo {
     private static final Map<RepoSource.Snapshot, Integer> FAILURES = new HashMap<>();
     private static long lastDownloadTry;
     private static boolean flushQueued;
+    private static final List<Component> NEWS = new ArrayList<>();
+    /** Learned timings of skins a look wears, said in their own line. */
+    private static final List<Component> TIMING_NEWS = new ArrayList<>();
+    /** New skins learned per game session, so a server showing made-up skins cannot push out real ones. */
+    private static final int MAX_LEARNED_PER_SESSION = 200;
+    private static int learnedThisSession;
+    /** Chat lines about learned skins: a few a minute at most; the rest are counted into the next line. */
+    private static final int NEWS_PER_MINUTE = 3;
+    private static final long[] NEWS_AT = new long[NEWS_PER_MINUTE];
+    private static int newsSlot;
+    private static int unannounced;
 
     private Repo() {}
 
     public static Catalog get() {
         return catalog;
+    }
+
+    static Catalog primary() { return primary; }
+    static String primaryVersion() { return loadedVersion; }
+
+    /** Runs a bounded inspection where learned stores are owned; callers must not modify them. */
+    static <T> java.util.concurrent.CompletableFuture<T> inspectLearned(java.util.function.BiFunction<Captured, Timings, T> read) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> read.apply(
+            captured == null ? new Captured() : captured, timings == null ? new Timings() : timings), EXEC);
     }
 
     /** True while there is nothing to show yet but something is on its way. */
@@ -272,14 +301,15 @@ public final class Repo {
         }
         long ms = (System.nanoTime() - t0) / 1_000_000;
         base = parsed;
+        primary = new Catalog(parsed.label, parsed.items, 0, parsed.skins, parsed.dyes, parsed.names, parsed.dyeOrder);
         loadedVersion = snap.version();
         loadMillis = ms;
         retries = 0;
         FAILURES.clear();
         publish();
         Catalog c = catalog;
-        SkyCosmetics.LOG.info("{} in {} ms: {} items, {} skins ({} animated in lore without frames), {} dyes, {} saved skins",
-            label, ms, parsed.items, c.skins.size(), parsed.missingFrames, c.dyes.size(), c.learned);
+        SkyCosmetics.LOG.info("{} in {} ms: {} items, {} skins ({} animated in lore without frames), {} dyes, {} learned, {} timed",
+            label, ms, parsed.items, c.skins.size(), parsed.missingFrames, c.dyes.size(), c.learned, TimingLearner.timedSkins());
     }
 
     /** Counts a failed parse of {@code snap}; returns the failures so far for it. */
@@ -303,6 +333,7 @@ public final class Repo {
         if (b == null) return;
         Catalog c = Captured.compose(b, captured, guesses, bundled, timings);
         catalog = c;
+        TimingLearner.index(c);
         BlinkGuesser.index(c, guesses);
         Looks.bump();
     }
@@ -311,32 +342,134 @@ public final class Repo {
         return v.length() == 40 ? v.substring(0, 8) : v;
     }
 
-    // ---------------------------------------------------------- estimates ---
+    // ------------------------------------------------------------ learned ---
+
+    /** A skin seen in game that the repo lacks. Saved and merged in a batch shortly after. */
+    static void learn(String id, Captured.Still still, Component news) {
+        EXEC.execute(() -> guarded(() -> {
+            if (captured == null) captured = Captured.load();
+            RepoParser.Parsed b = base;
+            if (b != null && (b.skins.containsKey(id) || b.names.containsKey(id))) return;
+            Captured.Still old = captured.stills.get(id);
+            Captured.Still next = still;
+            if (old != null) {
+                // Upgrade old captures only from the same skin, when its lore now supplies variant metadata.
+                if (old.swappable() > 0 || still.swappable() <= 0
+                    || !java.util.Objects.equals(SkinLearner.textureHash(old.texture()), SkinLearner.textureHash(still.texture()))) return;
+                next = new Captured.Still(old.name(), old.color(), old.kind(), old.texture(), old.at(),
+                    still.use(), still.swappable());
+            }
+            if (!mayLearn()) return;
+            captured.stills.put(id, next);
+            captured.trim(Looks.usedSkins());
+            capturedDirty = true;
+            queue(news);
+        }));
+    }
+
+    /** A recorded preview. A repo entry that already has frames wins, so this is dropped then. */
+    static void learn(String key, Captured.Anim anim, Component news) {
+        EXEC.execute(() -> guarded(() -> {
+            if (captured == null) captured = Captured.load();
+            RepoParser.Parsed b = base;
+            SkinEntry known = b == null ? null : b.skins.get(key);
+            if (known != null && (known.animated() || anim.textures().length < 2)) return;
+            if (anim.textures().length < 2 && captured.stills.containsKey(key)) return;
+            Captured.Anim had = captured.anims.get(key);
+            if (had != null && java.util.Arrays.equals(had.textures(), anim.textures())
+                && had.ticks() == anim.ticks() && java.util.Arrays.equals(had.ticksPerTexture(), anim.ticksPerTexture())
+                && had.evidence().ordinal() >= anim.evidence().ordinal()) return;
+            if (anim.textures().length > Captured.MAX_FRAMES || !mayLearn()) return;
+            captured.anims.put(key, anim);
+            captured.trim(Looks.usedSkins());
+            capturedDirty = true;
+            queue(news);
+        }));
+    }
+
+    /**
+     * Frame timings measured in game for {@code id} (see {@link TimingLearner}), kept while the live skin still
+     * has exactly these {@code textures}. Saved and merged in a batch like learned skins; {@code news} (may be
+     * null) is said once they are live.
+     */
+    static void learnTiming(String id, String[] textures, int[] ticks, Component news) {
+        EXEC.execute(() -> guarded(() -> {
+            if (timings == null) timings = Timings.load(null);
+            SkinEntry live = catalog.skins.get(id);
+            if (live == null || !java.util.Arrays.equals(live.textures, textures)) return;
+            if (!timings.put(id, ticks, Looks.usedSkins())) return;
+            timingsDirty = true;
+            if (news != null) TIMING_NEWS.add(news);
+            queue(null);
+        }));
+    }
 
     /**
      * What {@link BlinkGuesser} found for {@code id} with frames {@code sig}: blink ticks, or null for no blink;
-     * {@code family}: a blink only if its sibling variants are. Only existing catalog frames are inspected.
+     * {@code family}: a blink only if its sibling variants are. Saved and merged in a batch like learned timings.
      */
     static void guessTiming(String id, String sig, int[] ticks, boolean family) {
         EXEC.execute(() -> guarded(() -> {
             if (guesses == null) guesses = BlinkGuesser.Store.load();
             if (!guesses.put(id, sig, ticks, family, Looks.usedSkins())) return;
             guessesDirty = true;
-            queueEstimate();
+            queue(null);
         }));
     }
 
-    private static void queueEstimate() {
+    private static boolean mayLearn() {
+        if (learnedThisSession < MAX_LEARNED_PER_SESSION) {
+            learnedThisSession++;
+            return true;
+        }
+        if (learnedThisSession++ == MAX_LEARNED_PER_SESSION) {
+            SkyCosmetics.LOG.warn("Learned {} skins this session; learning more waits for a restart", MAX_LEARNED_PER_SESSION);
+        }
+        return false;
+    }
+
+    /** One save, one catalog rebuild and one Looks.bump() for a whole menu of new skins. */
+    private static void queue(Component news) {
+        if (news != null) NEWS.add(news);
         if (flushQueued) return;
         flushQueued = true;
         EXEC.schedule(() -> guarded(Repo::flush), 500, TimeUnit.MILLISECONDS);
     }
 
+    /** Saves, publishes, and says what was learned in one chat line: the skin itself, or how many. */
     private static void flush() {
         flushQueued = false;
+        if (capturedDirty) captured.save();
+        if (timingsDirty) timings.save();
         if (guessesDirty) guesses.save();
-        guessesDirty = false;
+        capturedDirty = timingsDirty = guessesDirty = false;
         publish();
+        if (!TIMING_NEWS.isEmpty()) {
+            say(TIMING_NEWS.size() == 1 ? TIMING_NEWS.getFirst() : Component.literal("Learned the animation timing of "
+                + Names.count(TIMING_NEWS.size(), "skin") + " you use").withStyle(ChatFormatting.GRAY));
+            TIMING_NEWS.clear();
+        }
+        int count = NEWS.size() + unannounced;
+        if (count == 0) return;
+        Component line = count == 1 && NEWS.size() == 1 ? NEWS.getFirst()
+            : Component.literal("Learned " + Names.count(count, "skin") + " the repo does not have yet").withStyle(ChatFormatting.GRAY);
+        NEWS.clear();
+        long now = System.currentTimeMillis();
+        if (now - NEWS_AT[newsSlot] < 60_000) {
+            unannounced = count; // said in the next line
+            return;
+        }
+        NEWS_AT[newsSlot] = now;
+        newsSlot = (newsSlot + 1) % NEWS_PER_MINUTE;
+        unannounced = 0;
+        say(line);
+    }
+
+    private static void say(Component line) {
+        Minecraft mc = Minecraft.getInstance();
+        mc.execute(() -> {
+            if (mc.player != null) mc.player.sendSystemMessage(SkyCosmetics.prefix().append(line));
+        });
     }
 
     // ----------------------------------------------------------- download ---
