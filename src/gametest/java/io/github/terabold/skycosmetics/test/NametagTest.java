@@ -218,9 +218,9 @@ public class NametagTest implements FabricClientGameTest {
         // Half-transparent bold italic text: overlapping glyph copies must blend once, so the label reads evenly.
         world.getServer().runCommand("fill -3 " + floor + " 0 3 " + (floor+4) + " 0 white_concrete");
         world.getServer().runCommand("kill @e[type=armor_stand]");
-        world.getServer().runCommand("summon armor_stand 0 " + floor + " -2 {Invisible:true,Marker:true,NoGravity:true,"
+        world.getServer().runCommand("summon armor_stand 0 " + (floor + 1) + " -1 {Invisible:true,Marker:true,NoGravity:true,"
             + "CustomName:{text:\"Terbold\",bold:true,italic:true,color:\"#22CCFF\"},CustomNameVisible:true}");
-        ctx.runOnClient(mc -> { p.opacity = .5; p.background = false; p.shadow = true; p.scale = 3; changed(); });
+        ctx.runOnClient(mc -> { p.opacity = .5; p.background = false; p.shadow = false; p.scale = 3; changed(); });
         ctx.waitTicks(12);
         ctx.takeScreenshot("skycosmetics-nametag-translucent-bold-italic");
         ctx.runOnClient(mc -> { p.opacity = 1; p.background = true; p.scale = 1; changed(); });
