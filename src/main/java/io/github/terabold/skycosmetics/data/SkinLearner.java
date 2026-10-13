@@ -63,6 +63,7 @@ public final class SkinLearner {
             catch (RuntimeException e) { Io.failed("Updating a skin preview recording", e); }
         });
         TimingLearner.init();
+        Remote.init();
         ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
             if (!(screen instanceof AbstractContainerScreen<?> acs)) return;
             ScreenMouseEvents.beforeMouseClick(screen).register((s, click) -> {

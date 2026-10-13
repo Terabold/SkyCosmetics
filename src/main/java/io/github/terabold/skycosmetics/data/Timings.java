@@ -114,6 +114,26 @@ final class Timings {
         }
     }
 
+    /**
+     * Measuring adds a tick of jitter here and there (frames arrive on the client's tick, a packet is late), so a
+     * steady animation can come out as [3, 2, 3, 3, ...]. When every frame is within a tick of the average and no
+     * frame is a blink's long open frame, the steady value is the timing; anything else is kept as measured.
+     */
+    static int[] smooth(int[] ticks) {
+        if (ticks == null || ticks.length < 2) return ticks;
+        int sum = 0, top = 0, second = 0;
+        for (int t : ticks) {
+            sum += t;
+            if (t > top) { second = top; top = t; } else if (t > second) second = t;
+        }
+        int steady = Math.round(sum / (float) ticks.length);
+        if (steady < 1 || top >= 20 && top >= second * 4) return ticks;
+        for (int t : ticks) if (Math.abs(t - steady) > 1) return ticks;
+        int[] out = new int[ticks.length];
+        java.util.Arrays.fill(out, steady);
+        return out;
+    }
+
     static boolean valid(String id, int[] ticks) {
         if (!SkinLearner.validId(id) || ticks == null || ticks.length < 2 || ticks.length > Captured.MAX_FRAMES) return false;
         for (int t : ticks) if (t < 1 || t > MAX_TICKS) return false;

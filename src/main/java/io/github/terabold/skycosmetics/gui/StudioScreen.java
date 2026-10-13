@@ -2513,7 +2513,7 @@ public class StudioScreen extends Screen {
             } else if (hovered.missingFrames) {
                 tip.add(Component.literal("Preview this animated Hypixel skin once to learn its frames.").withStyle(ChatFormatting.GRAY));
             }
-            if (hovered.learned) tip.add(Component.literal("Learned in game").withStyle(ChatFormatting.GREEN));
+            if (hovered.learned) tip.add(Component.literal("New: not in the NEU repo yet").withStyle(ChatFormatting.GREEN));
             if (hovered.name.endsWith("(Captured style)")) {
                 tip.add(Component.literal("Variant name not yet known").withStyle(ChatFormatting.GRAY));
                 if (!hovered.animated()) tip.add(Component.literal("Only a still texture has been captured").withStyle(ChatFormatting.GRAY));

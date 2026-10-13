@@ -93,6 +93,8 @@ public final class Repo {
     private static Timings timings;
     /** {@code assets/skycosmetics/timings.json}, read once. */
     private static Timings bundled;
+    /** Skins and timings published since this version: {@link Remote}. */
+    private static Remote.Supplement published;
     private static BlinkGuesser.Store guesses;
     /** What the next {@link #flush} has to save. */
     private static boolean capturedDirty;
@@ -216,6 +218,10 @@ public final class Repo {
         if (now - startedAt > FAST_POLL_FOR_MS && now - lastPoll < SLOW_POLL_MS - 1000) return;
         lastPoll = now;
         refresh(false);
+        Remote.maybeFetch(() -> EXEC.execute(() -> guarded(() -> {
+            published = Remote.load();
+            publish();
+        })));
     }
 
     /** Quick re-check while a copy is mid-update; bounded so a stuck copy falls back to the plain poll. */
@@ -238,26 +244,22 @@ public final class Repo {
         if (captured == null || force) captured = Captured.load();
         if (timings == null || force) timings = Timings.load(timings);
         if (bundled == null) bundled = Timings.bundled();
+        if (published == null || force) published = Remote.load();
         if (guesses == null || force) guesses = BlinkGuesser.Store.load();
         List<RepoSource.Candidate> all = RepoSource.candidates();
         RepoSource.Candidate pick = null;
         RepoSource.Snapshot snap = null;
         boolean awaited = false;
+        // The newest settled copy wins: an installed mod whose own update failed (a stale lock file, no network)
+        // must not hold the catalog back while another copy is current. A forced path always wins.
         for (RepoSource.Candidate c : all) {
             RepoSource.Snapshot s = c.probe();
             if (s != null && (force || FAILURES.getOrDefault(s, 0) < MAX_FAILURES)) {
-                pick = c;
-                snap = s;
-                break;
-            }
-            if (s != null) {
-                // Broken, not busy: fall back while there is nothing yet, else keep what we have.
-                if (base != null) break;
-            } else if (c.modLoaded) {
-                // Its mod is rewriting (or creating) it: wait rather than fall back
-                // to an older copy, unless there is nothing at all to show yet.
+                if (c.kind == RepoSource.Kind.OVERRIDE) { pick = c; snap = s; break; }
+                if (pick == null || s.stamp() > snap.stamp()) { pick = c; snap = s; }
+            } else if (s == null && c.modLoaded) {
+                // Its mod is rewriting (or creating) it: when it settles it is the newest and is read then.
                 awaited = true;
-                if (base != null) break;
             }
         }
         maybeDownload(all);
@@ -331,7 +333,8 @@ public final class Repo {
     private static void publish() {
         RepoParser.Parsed b = base;
         if (b == null) return;
-        Catalog c = Captured.compose(b, captured, guesses, bundled, timings);
+        Remote.Supplement p = published == null ? Remote.Supplement.EMPTY : published;
+        Catalog c = Captured.compose(b, Remote.merge(p, captured), guesses, Remote.merge(p, bundled), timings);
         catalog = c;
         TimingLearner.index(c);
         BlinkGuesser.index(c, guesses);
@@ -397,7 +400,7 @@ public final class Repo {
             if (timings == null) timings = Timings.load(null);
             SkinEntry live = catalog.skins.get(id);
             if (live == null || !java.util.Arrays.equals(live.textures, textures)) return;
-            if (!timings.put(id, ticks, Looks.usedSkins())) return;
+            if (!timings.put(id, Timings.smooth(ticks), Looks.usedSkins())) return;
             timingsDirty = true;
             if (news != null) TIMING_NEWS.add(news);
             queue(null);

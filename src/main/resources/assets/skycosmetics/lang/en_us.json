@@ -49,6 +49,8 @@
   "skycosmetics.option.learnSkins.tooltip": "Remembers skins the item repo doesn't have yet, like new shop previews.",
   "skycosmetics.option.learnTiming": "Learn Animation Timing",
   "skycosmetics.option.learnTiming.tooltip": "Copies how fast animated skins really play in game, so blinks and flashes look right.",
+  "skycosmetics.option.skinUpdates": "Download New Skins",
+  "skycosmetics.option.skinUpdates.tooltip": "Gets skins, variants and animation timings published after this version: one small file from GitHub every few hours. Nothing about you is sent.",
   "skycosmetics.option.storedItems": "Include Stored Items",
   "skycosmetics.option.storedItems.tooltip": "Lists items from menus you open, like your Wardrobe, Ender Chest and Backpacks. Off: only what you wear and carry.",
   "skycosmetics.option.storedItems.search": "wardrobe ender chest backpack vault auto fill fetch",
