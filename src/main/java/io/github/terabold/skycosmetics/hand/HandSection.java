@@ -36,6 +36,7 @@ public final class HandSection {
 
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
+        var overlaps = io.github.terabold.skycosmetics.compat.Overlaps.note(ID); if (overlaps != null) rows.add(overlaps);
         rows.add(Option.header("handGroup", tr("skycosmetics.hand.group.hand")));
         rows.add(toggle("handEnabled", Hand::enabled, Hand::setEnabled).search(tr("skycosmetics.hand.search").getString()));
         rows.add(Option.of("handEdit", Component.empty(), tr("skycosmetics.hand.option.edit.tooltip"),

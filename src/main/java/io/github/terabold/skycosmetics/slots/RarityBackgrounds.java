@@ -441,6 +441,7 @@ public final class RarityBackgrounds {
 
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
+        var overlaps = io.github.terabold.skycosmetics.compat.Overlaps.note(SECTION); if (overlaps != null) rows.add(overlaps);
         BooleanSupplier isOn = () -> on;
         rows.add(toggle("on", () -> on, v -> on = v));
         rows.add(Option.of("rarityBackgrounds.preview", Component.empty(), Component.empty(),

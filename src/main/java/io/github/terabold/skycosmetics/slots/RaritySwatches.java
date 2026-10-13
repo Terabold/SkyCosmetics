@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.slots;
 
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.data.DyeEntry;
 import io.github.terabold.skycosmetics.gui.ColorPicker;
@@ -25,7 +26,7 @@ import java.util.List;
  */
 public final class RaritySwatches extends AbstractWidget {
     private static final int ROW = 14, BOX = 10, MIN_COL = 84;
-    private static final int TEXT = 0xFFE8E8EE, MUTED = 0xFF8C8C9A, EDGE = 0xFF000000;
+    private static final int EDGE = 0xFF000000;
     private static final Rarity[] ALL = Rarity.values();
 
     private final Host host;
@@ -64,7 +65,7 @@ public final class RaritySwatches extends AbstractWidget {
             g.fill(x + 2, y + 2, x + 2 + BOX, y + 2 + BOX, active ? 0xFF000000 | rgb : 0xFF000000 | dim(rgb));
             boolean changed = rgb != RarityBackgrounds.presetColor(r);
             String name = clip(font, r.label().getString() + (changed ? "*" : ""), cw - BOX - 8);
-            g.text(font, name, x + BOX + 6, y + 3, active ? TEXT : MUTED);
+            g.text(font, name, x + BOX + 6, y + 3, active ? Theme.TEXT : Theme.MUTED);
         }
         if (hovered != null) {
             g.requestCursor(CursorTypes.POINTING_HAND);

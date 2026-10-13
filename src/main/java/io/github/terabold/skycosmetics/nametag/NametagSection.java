@@ -14,6 +14,7 @@ final class NametagSection {
         t("Local label styling. Server names, teams and visibility rules stay intact."),()->new ItemStack(Items.NAME_TAG),NametagSection::rows));}
     static List<Option> rows(Screen parent){
         List<Option> r=new ArrayList<>();
+        var overlaps=io.github.terabold.skycosmetics.compat.Overlaps.note("nametags"); if(overlaps!=null)r.add(overlaps);
         toggle(r,"enabled","Enable nametags","Style labels locally while preserving their server text and fonts.",()->p.enabled,v->p.enabled=v);
         r.add(Option.of("preview", Component.empty(), Component.empty(), new Control.Custom((host, width) -> new NametagPreview(width), true)));
         r.add(Option.header("visibility",t("Visibility")));

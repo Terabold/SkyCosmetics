@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.hand;
 
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.Cosmetics;
 import io.github.terabold.skycosmetics.Io;
 import net.minecraft.ChatFormatting;
@@ -32,8 +33,8 @@ import java.util.List;
  */
 public final class HandScreen extends Screen {
     private static final int PAD = 6, IN = 6, HEAD = 40, FOOT = 48;
-    private static final int PANEL = 0xE81B1B22, LINE = 0xFF34343F, TEXT = 0xFFE8E8EE, MUTED = 0xFF8C8C9A,
-        ACCENT = 0xFFD58CFF;
+    /** The panel stays a little see-through so the hand behind it shows. */
+    private static final int PANEL = 0xE8000000 | Theme.BODY & 0xFFFFFF;
     /** Ticks between swings while Repeat is on: a swing, then a short rest to see the pose still. */
     private static final int REPEAT_REST = 12;
 
@@ -74,14 +75,14 @@ public final class HandScreen extends Screen {
         LinearLayout rows = LinearLayout.vertical().spacing(2);
         if (!Hand.enabled()) {
             rows.addChild(new MultiLineTextWidget(
-                Component.translatable("skycosmetics.hand.editor.off").withColor(0xFFC94A), font).setMaxWidth(rw));
+                Component.translatable("skycosmetics.hand.editor.off").withColor(Theme.GOLD & 0xFFFFFF), font).setMaxWidth(rw));
         }
-        rows.addChild(label(Component.translatable("skycosmetics.hand.editor.hint"), rw, MUTED));
+        rows.addChild(label(Component.translatable("skycosmetics.hand.editor.hint"), rw, Theme.MUTED));
         group(rows, "position", rw, HandPose.Field.X, HandPose.Field.Y, HandPose.Field.Z);
         group(rows, "rotation", rw, HandPose.Field.ROT_X, HandPose.Field.ROT_Y, HandPose.Field.ROT_Z);
         pivot = rows.addChild(Button.builder(Component.empty(), b -> cyclePivot()).width(rw).build());
         group(rows, "size", rw, HandPose.Field.SIZE, HandPose.Field.SIZE_X, HandPose.Field.SIZE_Y, HandPose.Field.SIZE_Z);
-        rows.addChild(label(Component.translatable("skycosmetics.hand.editor.group.swing"), rw, ACCENT));
+        rows.addChild(label(Component.translatable("skycosmetics.hand.editor.group.swing"), rw, Theme.ACCENT));
         swing = rows.addChild(Button.builder(Component.empty(), b -> cycleSwing()).width(rw).build());
         for (HandPose.Field f : new HandPose.Field[]{HandPose.Field.SPEED, HandPose.Field.SWING_TURN,
             HandPose.Field.SWING_X, HandPose.Field.SWING_Y, HandPose.Field.SWING_Z}) {
@@ -114,7 +115,7 @@ public final class HandScreen extends Screen {
     }
 
     private void group(LinearLayout rows, String name, int w, HandPose.Field... fields) {
-        rows.addChild(label(Component.translatable("skycosmetics.hand.editor.group." + name), w, ACCENT));
+        rows.addChild(label(Component.translatable("skycosmetics.hand.editor.group." + name), w, Theme.ACCENT));
         for (HandPose.Field f : fields) sliders.add(rows.addChild(new PoseSlider(w, f, this::key, Hand::save)));
     }
 
@@ -255,17 +256,17 @@ public final class HandScreen extends Screen {
     public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         // Only the panel: the rest of the screen is the game, with your hand in it.
         g.fill(px, PAD, px + pw, height - PAD, PANEL);
-        g.outline(px, PAD, pw, height - 2 * PAD, LINE);
-        g.fill(px + 1, PAD + HEAD, px + pw - 1, PAD + HEAD + 1, LINE);
-        g.fill(px + 1, height - PAD - FOOT, px + pw - 1, height - PAD - FOOT + 1, LINE);
+        g.outline(px, PAD, pw, height - 2 * PAD, Theme.LINE);
+        g.fill(px + 1, PAD + HEAD, px + pw - 1, PAD + HEAD + 1, Theme.LINE);
+        g.fill(px + 1, height - PAD - FOOT, px + pw - 1, height - PAD - FOOT + 1, Theme.LINE);
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         super.extractRenderState(g, mouseX, mouseY, delta);
-        g.text(font, Component.translatable("skycosmetics.hand.editor").withStyle(ChatFormatting.BOLD), px + IN, PAD + 4, TEXT);
+        g.text(font, Component.translatable("skycosmetics.hand.editor").withStyle(ChatFormatting.BOLD), px + IN, PAD + 4, Theme.TEXT);
         String name = clip(Hand.label(key).getString(), pw - 2 * IN - 48);
-        g.centeredText(font, name, px + pw / 2, PAD + 22, ACCENT);
+        g.centeredText(font, name, px + pw / 2, PAD + 22, Theme.ACCENT);
     }
 
     private String clip(String s, int px) {

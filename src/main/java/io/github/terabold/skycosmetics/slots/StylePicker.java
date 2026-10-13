@@ -1,5 +1,6 @@
 package io.github.terabold.skycosmetics.slots;
 
+import io.github.terabold.skycosmetics.gui.ui.Theme;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.Io;
 import io.github.terabold.skycosmetics.hub.Host;
@@ -49,7 +50,6 @@ public final class StylePicker<T> extends AbstractWidget {
     }
 
     private static final int BOX = Mask.CELL + 4, GAP = 2;
-    private static final int TEXT = 0xFFE8E8EE, ACCENT = 0xFFD58CFF, FRAME = 0xFF34343F, BG = 0xFF26262F;
     /** The color previews are tinted with: Legendary's, as it reads on any shape. */
     private static final Rarity SAMPLE = Rarity.LEGENDARY;
 
@@ -104,12 +104,12 @@ public final class StylePicker<T> extends AbstractWidget {
         int tw = sheet.sheet.texWidth(), th = sheet.sheet.texHeight();
         for (int i = 0; i < values.length; i++) {
             int x = getX() + i % cols * (BOX + GAP), y = getY() + i / cols * (BOX + GAP);
-            g.fill(x, y, x + BOX, y + BOX, BG);
+            g.fill(x, y, x + BOX, y + BOX, Theme.SURFACE);
             SlotPreview.slot(g, x + 2, y + 2);
             if (tex != null) {
                 g.blit(RenderPipelines.GUI_TEXTURED, tex, x + 2, y + 2, i * Mask.CELL, 0, Mask.CELL, Mask.CELL, tw, th, tint);
             }
-            int frame = i == selected ? (active ? ACCENT : 0xFF8C8C9A) : i == hovered ? 0xFFFFFFFF : FRAME;
+            int frame = i == selected ? (active ? Theme.ACCENT : Theme.MUTED) : i == hovered ? 0xFFFFFFFF : Theme.LINE;
             g.outline(x, y, BOX, BOX, frame);
             if (i == selected) g.outline(x + 1, y + 1, BOX - 2, BOX - 2, frame);
         }
@@ -117,7 +117,7 @@ public final class StylePicker<T> extends AbstractWidget {
         int right = getX() + cols * (BOX + GAP) + 4;
         Component name = label.apply(values[selected]);
         if (values.length <= cols && right + font.width(name) <= getRight()) {
-            g.text(font, name, right, getY() + (BOX - 8) / 2, active ? TEXT : 0xFF8C8C9A);
+            g.text(font, name, right, getY() + (BOX - 8) / 2, active ? Theme.TEXT : Theme.MUTED);
         }
         if (hovered >= 0) {
             g.requestCursor(CursorTypes.POINTING_HAND);

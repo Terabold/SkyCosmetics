@@ -68,7 +68,15 @@ public final class HeadSize {
         Settings.register("headSize", HeadSize::read, HeadSize::write);
         Hub.add(new Section("headSize", Section.FEATURE, Component.translatable("skycosmetics.headSize"),
             Component.translatable("skycosmetics.headSize.sub"), Component.translatable("skycosmetics.headSize.tooltip"),
-            () -> new ItemStack(Items.PLAYER_HEAD), HeadSize::rows));
+            HeadSize::icon, HeadSize::rows));
+    }
+
+    /** A small head beside a big one, drawn by our own item model, as the feature does. */
+    private static ItemStack icon() {
+        ItemStack s = new ItemStack(Items.ZOMBIE_HEAD);
+        s.set(net.minecraft.core.component.DataComponents.ITEM_MODEL,
+            net.minecraft.resources.Identifier.fromNamespaceAndPath("skycosmetics", "head_size_icon"));
+        return s;
     }
 
     public static double percent() {

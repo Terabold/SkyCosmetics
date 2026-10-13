@@ -32,6 +32,7 @@ public final class TooltipSection {
 
     private static List<Option> rows(Screen parent) {
         List<Option> r = new ArrayList<>();
+        var overlaps = io.github.terabold.skycosmetics.compat.Overlaps.note(ID); if (overlaps != null) r.add(overlaps);
         r.add(row("enabled", new Control.Toggle(() -> TooltipSettings.enabled, v -> {
             TooltipSettings.enabled = v;
             if (v && TooltipSettings.scroll == TooltipSettings.Scroll.OFF) TooltipSettings.scroll = TooltipSettings.Scroll.SMOOTH;
