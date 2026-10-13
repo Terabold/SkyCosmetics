@@ -25,6 +25,7 @@
       "io.github.terabold.skycosmetics.test.SlotsTest",
       "io.github.terabold.skycosmetics.test.VariantsTest",
       "io.github.terabold.skycosmetics.data.PreviewRecorderTest",
+      "io.github.terabold.skycosmetics.data.RemoteTest",
       "io.github.terabold.skycosmetics.test.UpdateTest",
       "io.github.terabold.skycosmetics.test.TooltipTest"
     ]

@@ -7,18 +7,23 @@ on:
   push:
     tags: ['v*']
 
-# Only this job writes, and only the release it creates.
-permissions:
-  contents: write
+# Building and testing run with a read-only token; only the last job, which runs no build code, may write.
+permissions: {}
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      mc: ${{ steps.v.outputs.mc }}
+      pre: ${{ steps.v.outputs.pre }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -68,8 +73,8 @@ jobs:
         run: |
           mkdir dist
           cp "build/libs/skycosmetics-$VERSION.jar" "dist/skycosmetics-$VERSION+$MC.jar"
-          if unzip -Z1 "dist/skycosmetics-$VERSION+$MC.jar" | grep -E '/(Collector|SkinContribution|SkinSupplement|CollectorStatus|SkinLearner|TimingLearner|PreviewRecorder|MissingAnimations|ClientPacketListenerMixin|[^/$]+Test)(\$[^/]*)?\.class$' > /dev/null; then
-            echo "::error::skin detection, private collector or test classes were packaged in the release"; exit 1
+          if unzip -Z1 "dist/skycosmetics-$VERSION+$MC.jar" | grep -E '/[^/$]+Test(\$[^/]*)?\.class$' > /dev/null; then
+            echo "::error::test classes were packaged in the release"; exit 1
           fi
           # The jar must say the version the tag does, or the update checker refuses it.
           declared="$(unzip -p "dist/skycosmetics-$VERSION+$MC.jar" fabric.mod.json | grep -o '"version": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
@@ -95,11 +100,31 @@ jobs:
           } >> notes.md
           cat notes.md
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: |
+            dist
+            notes.md
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.v.outputs.version }}
-          PRE: ${{ steps.v.outputs.pre }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+          PRE: ${{ needs.build.outputs.pre }}
         run: |
           flags=()
           if [ "$PRE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi

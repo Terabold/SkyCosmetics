@@ -81,10 +81,12 @@ of the main buffer source, so they draw after the surface under them, like vanil
   `config/skycosmetics/neu-repo.zip`); Mojang texture servers via Minecraft's skin loader; skin files Minecraft
   cached (`assets/skins`, for `BlinkGuesser`); bundled `assets/skycosmetics/timings.json`.
 - Frame timing sources, each over the one before: repo, estimated blink (only over even repo timing), bundled,
-  legacy saved timing. `SkinEntry.timing` says which one a skin plays.
+  published (`Remote`), learned in game (`TimingLearner`). `SkinEntry.timing` says which one a skin plays.
+- Downloads: the NEU repo zip (only without Skyblocker/Firmament), `v1/supplement.json` from
+  Terabold/SkyCosmetics-data (`Remote`, ETag, every 3 h, "Download New Skins"), GitHub releases (update checker).
 - Writes (all in `config/skycosmetics/`): `settings.json`, `looks.json`, `items.json`, `pets.json`, `favorites.json`,
-  `estimated-timings.json`. Existing `captured.json` and `timings.json` are read for compatibility; there are no new
-  observations or collector exports.
+  `estimated-timings.json`, `captured.json` (`SkinLearner`), `timings.json` (`TimingLearner`), `published-skins.json`.
+  The learners only read packets the client already applied (`ClientPacketListenerMixin`, TAIL, never cancels).
 
 ## Conventions
 
