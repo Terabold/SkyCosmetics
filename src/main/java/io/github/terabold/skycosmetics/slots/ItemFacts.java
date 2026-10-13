@@ -41,7 +41,8 @@ public record ItemFacts(Object lore, Object data, Object name, Object tooltipSty
     }
 
     private static final String TIER_BOOST = "PET_ITEM_TIER_BOOST";
-    private static final Pattern PET_NAME = Pattern.compile("^(?:⭐ )?\\[Lvl [0-9,]{1,5}] (?:\\[[0-9]+[✦⚔]] )?([\\w '-]+?)(?: ✦)?$");
+    /** "[Lvl 100] Name", and the level range shops show: "[Lvl 1➡100] Name". */
+    private static final Pattern PET_NAME = Pattern.compile("^(?:⭐ )?\\[Lvl [0-9,]{1,5}(?: ?[➡→~-] ?[0-9,]{1,5})?] (?:\\[[0-9]+[✦⚔]] )?([\\w '-]+?)(?: ✦)?$");
     /** Stacks read since start, for tests: drawing the same menu again must read none. */
     private static long reads;
 

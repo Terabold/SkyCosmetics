@@ -126,8 +126,8 @@ public class SkyCosmetics implements ClientModInitializer {
                 .then(ClientCommands.literal("edit")
                     .executes(ctx -> open(ctx.getSource(), heldOrHelmet(Minecraft.getInstance()))))
                 .then(ClientCommands.literal("debug").executes(ctx -> {
-                    ctx.getSource().sendFeedback(prefix().append(Component.literal("Usage: /skycosmetics debug pet|orb"
-                        + " - what the pet or orb reskin sees near you").withStyle(ChatFormatting.GRAY)));
+                    ctx.getSource().sendFeedback(prefix().append(Component.literal("Usage: /skycosmetics debug pet|orb|item"
+                        + " - what the pet or orb reskin sees near you, or the last item you hovered in a menu").withStyle(ChatFormatting.GRAY)));
                     ctx.getSource().sendFeedback(prefix().append(Component.literal(io.github.terabold.skycosmetics.data.BlinkGuesser.status()).withStyle(ChatFormatting.GRAY)));
                     return 1;
                 }))));

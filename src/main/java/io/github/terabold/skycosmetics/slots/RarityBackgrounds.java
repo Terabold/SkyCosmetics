@@ -87,11 +87,8 @@ public final class RarityBackgrounds {
     static OwnMenus ownMenus = OwnMenus.ALL;
     static OwnMenus wardrobeMenus = OwnMenus.ALL, loadoutMenus = OwnMenus.ALL, equipmentMenus = OwnMenus.ALL;
     static boolean equipment = true;
-    private static final ClassValue<Boolean> EQUIPMENT_SLOT = new ClassValue<>() {
-        @Override protected Boolean computeValue(Class<?> type) {
-            return type.getName().equals("de.hysky.skyblocker.skyblock.item.SkyblockInventoryScreen$EquipmentSlot");
-        }
-    };
+    /** The outline opacity follows the fill (x1.2) until it is set on its own. */
+    static boolean outlineLinked = true;
 
     /** The ARGB tint of each rarity in the colors in use; rebuilt when they change. */
     private static final int[] TINT = new int[Rarity.values().length];
@@ -113,6 +110,7 @@ public final class RarityBackgrounds {
 
     public static void init() {
         Settings.register(SECTION, RarityBackgrounds::read, RarityBackgrounds::write);
+        ItemDebug.register();
         Hub.add(new Section(SECTION, Section.FEATURE, Component.translatable("skycosmetics.rarityBackgrounds"),
             Component.translatable("skycosmetics.rarityBackgrounds.sub"),
             Component.translatable("skycosmetics.rarityBackgrounds.tooltip"),
@@ -123,6 +121,7 @@ public final class RarityBackgrounds {
 
     /** Every slot of an open menu, once per frame, under the hover highlight. Never throws. */
     public static void drawSlots(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen) {
+        ItemDebug.seen(screen);
         if (!on || !(inventory || menus || armor)) return;
         try {
             if (ruleScreen.get() != screen) {
@@ -144,7 +143,7 @@ public final class RarityBackgrounds {
                 if (SlotArea.own(slot)) {
                     if (!(SlotArea.armor(slot) ? armor : inventory)) continue;
                 } else if (!menus || rule == OwnMenus.NONE || rule == OwnMenus.NO_HEADS && s.is(Items.PLAYER_HEAD)
-                    && (!loadouts || slot.getContainerSlot() % 9 >= 5)) {
+                    && !ItemFacts.of(s).pet() && (!loadouts || slot.getContainerSlot() % 9 >= 5)) {
                     continue;
                 }
                 int index = slot.getContainerSlot();
@@ -169,11 +168,15 @@ public final class RarityBackgrounds {
         }
     }
 
-    /** Skyblocker's equipment slots are extracted outside the normal menu-slot list. */
-    public static void drawEquipmentSlot(GuiGraphicsExtractor g, Slot slot) {
+    /**
+     * A slot another mod draws through the menu's own slot path without it being one of the menu's slots: the
+     * equipment and pet panels of Skyblocker, SkyblockAddons and any mod built the same way.
+     */
+    public static void drawEquipmentSlot(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, Slot slot) {
         if (!on || !equipment) return;
         try {
-            if (!EQUIPMENT_SLOT.get(slot.getClass()) || !slot.isActive()) return;
+            var slots = screen.getMenu().slots;
+            if (slot.index >= 0 && slot.index < slots.size() && slots.get(slot.index) == slot || !slot.isActive()) return;
             var stack = slot.getItem(); if (stack.isEmpty()) return;
             draw(g, texture(), slot.x, slot.y, stack);
             g.nextStratum();
@@ -238,6 +241,11 @@ public final class RarityBackgrounds {
             if (i == 0) Mask.paint(img, x0, y0, n, s, style(), 4);
             else Mask.paintMark(img, x0, y0, n, s, markerSize);
         });
+    }
+
+    /** The outline opacity that goes with the fill: a little stronger, so the edge reads. */
+    static int linkedOutline() {
+        return Math.min(100, Math.round(opacity * 1.2f));
     }
 
     public static Mask.Style style() {
@@ -314,7 +322,7 @@ public final class RarityBackgrounds {
     /** Every setting back to its default, custom colors included. */
     public static void reset() {
         set(false, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, true);
-        outlineOpacity = 66;
+        outlineOpacity = 66; outlineLinked = true;
         gradientMinimum = 20; markerSize = 6; markerColor = 0xFFFFFFFF; markerCorner = MarkerCorner.TOP_RIGHT;
         where(true, true, true, true, OwnMenus.ALL, false);
         which(true, true, false);
@@ -351,7 +359,9 @@ public final class RarityBackgrounds {
         fill = choice(o, "fill", Mask.Fill.values(), fill);
         opacity = (int) Math.round(Settings.num(o.get("opacity"), opacity, MIN_OPACITY, MAX_OPACITY));
         outline = Settings.bool(o.get("outline"), outline);
-        outlineOpacity = (int) Settings.num(o.get("outlineOpacity"), Math.min(100, Math.round(opacity * 1.2f)), 0, 100);
+        outlineOpacity = (int) Settings.num(o.get("outlineOpacity"), linkedOutline(), 0, 100);
+        outlineLinked = Settings.bool(o.get("outlineLinked"), outlineOpacity == linkedOutline());
+        if (outlineLinked) outlineOpacity = linkedOutline();
         gradientMinimum = (int) Settings.num(o.get("gradientMinimum"), gradientMinimum, 0, 100);
         markerSize = (int) Settings.num(o.get("markerSize"), markerSize, 2, 8);
         markerColor = (int) Settings.num(o.get("markerColor"), markerColor, Integer.MIN_VALUE, Integer.MAX_VALUE);
@@ -389,6 +399,7 @@ public final class RarityBackgrounds {
         o.addProperty("opacity", opacity);
         o.addProperty("outline", outline);
         o.addProperty("outlineOpacity", outlineOpacity);
+        o.addProperty("outlineLinked", outlineLinked);
         o.addProperty("gradientMinimum", gradientMinimum); o.addProperty("markerSize", markerSize);
         o.addProperty("markerColor", markerColor); o.addProperty("markerCorner", markerCorner.name());
         o.addProperty("colors", colors.name());
@@ -442,11 +453,11 @@ public final class RarityBackgrounds {
         rows.add(option("fill", new Control.Custom((host, w) -> new StylePicker<>(w, host, Mask.Fill.values(),
             Mask.Fill::label, () -> fill, v -> fill = v, StylePicker.Sheet.FILLS)))
             .search(Component.translatable("skycosmetics.rarityBackgrounds.fill.search").getString()).enabledWhen(isOn));
-        rows.add(option("opacity", new Control.Slider(() -> opacity, v -> opacity = (int) Math.round(v),
+        rows.add(option("opacity", new Control.Slider(() -> opacity, v -> { opacity = (int) Math.round(v); if (outlineLinked) outlineOpacity = linkedOutline(); },
             MIN_OPACITY, MAX_OPACITY, 5, v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn));
         rows.add(toggle("outline", () -> outline, v -> outline = v).enabledWhen(() -> on && shape.outlined()));
         rows.add(Option.of("rarityBackgrounds.outlineOpacity", Component.literal("Outline opacity"), Component.empty(),
-            new Control.Slider(() -> outlineOpacity, v -> outlineOpacity = (int) Math.round(v), 0, 100, 1,
+            new Control.Slider(() -> outlineOpacity, v -> { outlineOpacity = (int) Math.round(v); outlineLinked = outlineOpacity == linkedOutline(); }, 0, 100, 1,
                 v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn).visibleWhen(() -> outline && shape.outlined()));
         rows.add(Option.of("rarityBackgrounds.gradientMinimum", Component.literal("Gradient minimum opacity"),
             Component.literal("Opacity at the faint end, relative to the main opacity."),

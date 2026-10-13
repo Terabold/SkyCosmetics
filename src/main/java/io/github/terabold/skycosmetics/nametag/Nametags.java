@@ -141,18 +141,20 @@ public final class Nametags {
         // Prepare before touching the pose stack so a malformed external label can fall back cleanly.
         if(s.nameTag!=null&&s.nameTag.getString().length()>512)return true;
         Component name=s.nameTag==null?null:styled(d.cache,s.nameTag);
+        // Real sneaking, read before "visible surfaces only" borrows vanilla's sneaking path below.
+        boolean sneaking = s.isDiscrete;
         if (DRAW.size() >= 1024) DRAW.clear();
-        if (name != null) mark(s, name, alpha, d.cache);
+        if (name != null) mark(s, name, alpha, d.cache, sneaking);
         if (s.scoreText != null && p.scores) {
             if (d.cache.score == null) d.cache.score = new NametagState.Cache();
-            mark(s, s.scoreText, alpha, d.cache.score);
+            mark(s, s.scoreText, alpha, d.cache.score, sneaking);
         }
         s.nameTag = name;
         if (!p.scores) s.scoreText = null;
         if (p.visibleOnly) s.isDiscrete = true;
         if (p.fullBright || d.preview) s.lightCoords = LightCoordsUtil.FULL_BRIGHT;
         var a = s.nameTagAttachment;
-        float scale = (float)((d.inventory ? Math.min(1,p.scale) : p.scale) * (s.isDiscrete ? p.crouchScale : 1)) * d.previewFit;
+        float scale = (float)((d.inventory ? Math.min(1,p.scale) : p.scale) * (sneaking ? p.crouchScale : 1)) * d.previewFit;
         pose.translate(a.x, a.y + .5 + (d.inventory ? -.3 : p.height), a.z);
         pose.mulPose(camera.orientation);
         pose.scale(scale, scale, scale);
@@ -160,9 +162,9 @@ public final class Nametags {
         pose.translate(-a.x, -a.y - .5, -a.z);
         return true;
     }
-    private static void mark(EntityRenderState s, Component text, float alpha, NametagState.Cache cache) {
+    private static void mark(EntityRenderState s, Component text, float alpha, NametagState.Cache cache, boolean sneaking) {
         boolean preview = ((NametagState)s).skycosmetics$tag().preview;
-        boolean crouched = s.isDiscrete && !preview;
+        boolean crouched = sneaking && !preview;
         if (crouched) alpha *= 128f / 255f;
         int background = p.background ? (int)((p.backgroundColor >>> 24) * alpha) << 24 | p.backgroundColor & 0xFFFFFF : 0;
         boolean custom = p.background;
@@ -171,9 +173,10 @@ public final class Nametags {
             if (cache.plate == null || cache.plateRevision != revision || cache.plateWidth != width) cache.plate = new Plate(width);
             cache.plateWidth = width; cache.plateRevision = revision; cache.plateText = text;
         }
-        // Native crouching has no shadow. Faded overlapping shadows muddy bold/italic glyphs.
-        // The GUI sample has no occluders: neither native pass should dim its configured text opacity.
+        // Native crouching has no shadow. The GUI sample has no occluders: neither native pass should dim its
+        // configured text opacity. Sneaking hides a label behind walls in vanilla and must here too: showing it
+        // through walls would reveal a hiding player.
         DRAW.put(text, new DrawStyle(p.shadow && !crouched, (int)(alpha*255), (int)(alpha*(preview || crouched ? 255 : 128)), background,
-            custom ? cache.plate : null, alpha, !p.visibleOnly));
+            custom ? cache.plate : null, alpha, !p.visibleOnly && !sneaking));
     }
 }

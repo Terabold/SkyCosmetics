@@ -497,10 +497,11 @@ public final class Updater {
         changes++;
     }
 
-    /** Test builds do not opt ordinary users into beta updates. */
+    /** Until chosen: Betas while running a beta, so a tester is offered the next test build; else Stable. */
     public static Channel channel() {
         if (channel != null) return channel;
-        return Channel.STABLE;
+        Semver running = Semver.parse(env.current());
+        return running != null && running.prerelease() ? Channel.BETAS : Channel.STABLE;
     }
 
     public static void setChannel(Channel c) {

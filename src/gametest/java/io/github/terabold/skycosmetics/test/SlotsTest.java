@@ -800,10 +800,16 @@ public class SlotsTest implements FabricClientGameTest {
             try { g.fakeItem(stack(Items.DIAMOND, "T_CARRIED", null, "EPIC NECKLACE"), 12, 12); }
             finally { io.github.terabold.skycosmetics.slots.SlotArea.leave(); }
             check(RarityBackgrounds.drawn() == before, "equipment compatibility does not add a background to the carried item");
-            var decoration = new Slot(new net.minecraft.world.SimpleContainer(1), 0, 0, 0) {
-                @Override public boolean isActive() { throw new IllegalStateException("unrelated slot must not be queried"); }
-            };
-            RarityBackgrounds.drawEquipmentSlot(g, decoration);
+            var screen = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) mc.screen;
+            var foreign = new Slot(new net.minecraft.world.SimpleContainer(1), 0, 0, 0);
+            RarityBackgrounds.drawEquipmentSlot(g, screen, foreign);
+            check(RarityBackgrounds.drawn() == before, "an empty foreign slot gets no background");
+            foreign.container.setItem(0, stack(Items.DIAMOND, "T_NECKLACE", null, "EPIC NECKLACE"));
+            RarityBackgrounds.drawEquipmentSlot(g, screen, foreign);
+            check(RarityBackgrounds.drawn() == before + 1, "any mod's equipment slot drawn through the menu's slot path gets one background");
+            RarityBackgrounds.drawEquipmentSlot(g, screen, screen.getMenu().slots.get(5));
+            check(RarityBackgrounds.drawn() == before + 1, "the menu's own slots are left to the normal pass");
+            before++;
             var malformed = new Slot(mc.player.getInventory(), 36, 12, 12) {
                 @Override public int getContainerSlot() { throw new IllegalStateException("fixture equipment slot getter"); }
             };

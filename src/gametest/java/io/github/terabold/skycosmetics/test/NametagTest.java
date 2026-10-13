@@ -164,6 +164,13 @@ public class NametagTest implements FabricClientGameTest {
                 check(worldStyle.normalAlpha() == 128 && worldStyle.faintAlpha() == 128, "crouched world labels retain their native faint opacity");
                 check(!worldStyle.shadow() && Math.abs(worldStyle.opacity() - 128f / 255f) < .001,
                     "crouching uses one uniform fade without overlapping translucent shadows");
+                check(!worldStyle.seeThrough(), "a sneaking player's label is never drawn through walls");
+                state.isDiscrete = false; p.visibleOnly = true;
+                check(Nametags.prepare(state, new PoseStack(), camera), "visible-only world label remains drawable");
+                var visibleStyle = Nametags.drawStyle(state.nameTag);
+                check(!visibleStyle.seeThrough() && visibleStyle.normalAlpha() == 255,
+                    "visible surfaces only hides labels behind walls without dimming them like sneaking");
+                p.visibleOnly = false;
             });
             depthScenes(ctx, world);
         }finally{
@@ -208,6 +215,15 @@ public class NametagTest implements FabricClientGameTest {
             check(unchanged >= clear * .95, "glass cannot tint or erase an opaque through-wall nametag plate: " + unchanged + "/" + clear);
         } catch(java.io.IOException e) {throw new AssertionError("glass overlay screenshot",e);}
         }
+        // Half-transparent bold italic text: overlapping glyph copies must blend once, so the label reads evenly.
+        world.getServer().runCommand("fill -3 " + floor + " 0 3 " + (floor+4) + " 0 white_concrete");
+        world.getServer().runCommand("kill @e[type=armor_stand]");
+        world.getServer().runCommand("summon armor_stand 0 " + floor + " -2 {Invisible:true,Marker:true,NoGravity:true,"
+            + "CustomName:{text:\"Terbold\",bold:true,italic:true,color:\"#22CCFF\"},CustomNameVisible:true}");
+        ctx.runOnClient(mc -> { p.opacity = .5; p.background = false; p.shadow = true; p.scale = 3; changed(); });
+        ctx.waitTicks(12);
+        ctx.takeScreenshot("skycosmetics-nametag-translucent-bold-italic");
+        ctx.runOnClient(mc -> { p.opacity = 1; p.background = true; p.scale = 1; changed(); });
     }
     private static int magenta(java.nio.file.Path shot) {
         try (var in=java.nio.file.Files.newInputStream(shot); var image=com.mojang.blaze3d.platform.NativeImage.read(in)) {
