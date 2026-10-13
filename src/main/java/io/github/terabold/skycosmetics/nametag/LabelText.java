@@ -20,10 +20,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Translucent label text that blends each pixel once. Bold draws every glyph twice, italic glyphs overlap their
- * neighbours and shadows sit under the text, so a half-transparent name normally comes out patchy: wherever two
- * quads overlap it is blended twice. Here a depth-only pass first marks the glyphs, then a color pass drawn a hair
- * nearer passes the depth test once per pixel, so a gradient keeps one even opacity.
+ * Translucent label text that blends each pixel once. Bold draws every glyph twice and italic glyphs overlap their
+ * neighbours, so a half-transparent name normally comes out patchy: wherever two quads overlap it is blended twice.
+ * Here a depth-only pass first marks the glyphs, then a color pass drawn a hair nearer passes the depth test once per
+ * pixel, so a gradient keeps one even opacity. A shadow stays its own layer under the text.
  */
 final class LabelText {
     enum Pass { PRIME_SEE_THROUGH, PRIME_NORMAL, PAINT }
@@ -46,9 +46,29 @@ final class LabelText {
     static MultiBufferSource buffers(MultiBufferSource buffers, Pass pass) {
         return type -> {
             RenderType[] v = variants(type);
-            if (v != null) return buffers.getBuffer(v[pass.ordinal()]);
+            if (v != null) return new Flat(buffers.getBuffer(v[pass.ordinal()]));
             return pass == Pass.PAINT ? buffers.getBuffer(type) : DISCARD;
         };
+    }
+
+    /**
+     * Vanilla lifts a bold glyph's second copy 0.001 off the text so opaque text never z-fights; here that would make
+     * the copy pass the depth test again. Offsets that small go back onto their layer (0.01 steps: shadow, text,
+     * effects keep theirs), so a glyph and its bold copy are one surface.
+     */
+    private record Flat(VertexConsumer to) implements VertexConsumer {
+        @Override public VertexConsumer addVertex(org.joml.Matrix4fc pose, float x, float y, float z) {
+            to.addVertex(pose, x, y, Math.round(z * 100) / 100f);
+            return this;
+        }
+        @Override public VertexConsumer addVertex(float x, float y, float z) { to.addVertex(x, y, z); return this; }
+        @Override public VertexConsumer setColor(int r, int g, int b, int a) { to.setColor(r, g, b, a); return this; }
+        @Override public VertexConsumer setColor(int argb) { to.setColor(argb); return this; }
+        @Override public VertexConsumer setUv(float u, float v) { to.setUv(u, v); return this; }
+        @Override public VertexConsumer setUv1(int u, int v) { to.setUv1(u, v); return this; }
+        @Override public VertexConsumer setUv2(int u, int v) { to.setUv2(u, v); return this; }
+        @Override public VertexConsumer setNormal(float x, float y, float z) { to.setNormal(x, y, z); return this; }
+        @Override public VertexConsumer setLineWidth(float width) { to.setLineWidth(width); return this; }
     }
 
     private static RenderType[] variants(RenderType type) {

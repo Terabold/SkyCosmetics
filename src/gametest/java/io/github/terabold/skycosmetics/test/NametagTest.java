@@ -222,8 +222,25 @@ public class NametagTest implements FabricClientGameTest {
             + "CustomName:{text:\"Terbold\",bold:true,italic:true,color:\"#22CCFF\"},CustomNameVisible:true}");
         ctx.runOnClient(mc -> { p.opacity = .5; p.background = false; p.shadow = false; p.scale = 3; changed(); });
         ctx.waitTicks(12);
-        ctx.takeScreenshot("skycosmetics-nametag-translucent-bold-italic");
+        var translucent = ctx.takeScreenshot("skycosmetics-nametag-translucent-bold-italic");
+        check(doubleBlended(translucent) < .02, "overlapping bold and italic glyphs blend once at half opacity");
         ctx.runOnClient(mc -> { p.opacity = 1; p.background = true; p.scale = 1; changed(); });
+    }
+    /** Of the label's cyan pixels, the share blended twice (clearly more opaque than the most common shade). */
+    private static double doubleBlended(java.nio.file.Path shot) {
+        try (var in=java.nio.file.Files.newInputStream(shot); var image=com.mojang.blaze3d.platform.NativeImage.read(in)) {
+            int[] greens=new int[256]; int total=0;
+            int w=image.getWidth(), h=image.getHeight();
+            // The label sits in front of the wall, below the crosshair; sky and grass stay out of the count.
+            for(int y=h*45/100;y<h*70/100;y++)for(int x=w/5;x<w*4/5;x++) {
+                int c=image.getPixel(x,y), r=c>>>16&255, g=c>>>8&255, b=c&255;
+                if(b>r+60&&g>r+40){greens[g]++;total++;}
+            }
+            if(total<500) throw new AssertionError("translucent label not found: "+total+" pixels");
+            int mode=0; for(int g=1;g<256;g++) if(greens[g]>greens[mode]) mode=g;
+            int brighter=0; for(int g=mode+12;g<256;g++) brighter+=greens[g];
+            return brighter/(double)total;
+        } catch(java.io.IOException e) {throw new AssertionError("translucent screenshot", e);}
     }
     private static int magenta(java.nio.file.Path shot) {
         try (var in=java.nio.file.Files.newInputStream(shot); var image=com.mojang.blaze3d.platform.NativeImage.read(in)) {

@@ -429,7 +429,7 @@ public class SlotsTest implements FabricClientGameTest {
         check(drawnInFrame(ctx) == 4, "Loadouts All includes style-backed and name-backed right-hand buttons, never unrelated controls");
         ctx.takeScreenshot("skycosmetics-loadout-button-formats");
         ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NO_HEADS, false));
-        check(drawnInFrame(ctx) == 1, "Loadouts No Heads still keeps only the left armor preview");
+        check(drawnInFrame(ctx) == 2, "Loadouts No Heads keeps the left armor preview and pets, not saved-setup heads");
         ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false));
         check(drawnInFrame(ctx) == 0, "Loadouts None excludes all its backgrounds");
         ctx.setScreen(() -> {
