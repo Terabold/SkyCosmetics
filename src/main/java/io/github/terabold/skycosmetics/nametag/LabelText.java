@@ -109,16 +109,19 @@ final class LabelText {
     private static Pipelines pipelines(RenderPipeline base, String name) {
         ColorTargetState none = new ColorTargetState(Optional.empty(), ColorTargetState.WRITE_NONE);
         return new Pipelines(
-            copy(base, name + "_prime_see_through", none, new DepthStencilState(CompareOp.ALWAYS_PASS, true)),
-            copy(base, name + "_prime", none, new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true)),
-            // Vanilla's polygon-offset text uses the same bias; strictly-less lets only the first quad over a pixel draw.
-            copy(base, name + "_paint", base.getColorTargetState(), new DepthStencilState(CompareOp.LESS_THAN, true, -1f, -10f)));
+            copy(base, name + "_prime_see_through", none, new DepthStencilState(CompareOp.ALWAYS_PASS, true), base.getVertexShader()),
+            copy(base, name + "_prime", none, new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true), base.getVertexShader()),
+            // Strictly-less lets only the first quad over a pixel draw. The paint shader moves each glyph just in front
+            // of the depth its prime wrote; polygon offset can't be trusted to, since some drivers make it nothing.
+            copy(base, name + "_paint", base.getColorTargetState(), new DepthStencilState(CompareOp.LESS_THAN, true), PAINT_VERTEX));
     }
 
-    private static RenderPipeline copy(RenderPipeline base, String name, ColorTargetState color, DepthStencilState depth) {
+    private static final Identifier PAINT_VERTEX = Identifier.fromNamespaceAndPath("skycosmetics", "core/label_text_paint");
+
+    private static RenderPipeline copy(RenderPipeline base, String name, ColorTargetState color, DepthStencilState depth, Identifier vertex) {
         var b = RenderPipeline.builder()
             .withLocation(Identifier.fromNamespaceAndPath("skycosmetics", "pipeline/label_" + name))
-            .withVertexShader(base.getVertexShader()).withFragmentShader(base.getFragmentShader())
+            .withVertexShader(vertex).withFragmentShader(base.getFragmentShader())
             .withVertexFormat(base.getVertexFormat(), base.getVertexFormatMode())
             .withColorTargetState(color).withCull(base.isCull()).withPolygonMode(base.getPolygonMode())
             .withDepthStencilState(depth);
