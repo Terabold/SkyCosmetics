@@ -270,7 +270,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
     private static void checkCommands() {
         CommandNode<?> root = ClientCommands.getActiveDispatcher().getRoot().getChild("skycosmetics");
         boolean collector = io.github.terabold.skycosmetics.hub.Hub.find("skinCollector") != null;
-        check(root != null && names(root).equals(collector ? List.of("collector", "debug", "edit") : List.of("debug", "edit")), "/skycosmetics has the expected local commands: "
+        check(root != null && names(root).equals(collector ? List.of("collector", "debug", "edit", "report") : List.of("debug", "edit", "report")), "/skycosmetics has the expected local commands: "
             + (root == null ? null : names(root)));
         check(names(root.getChild("debug")).equals(List.of("item", "orb", "pet")), "debug has item, orb and pet");
         List<CommandNode<?>> todo = new ArrayList<>(List.of(root));

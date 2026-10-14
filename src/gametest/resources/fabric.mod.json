@@ -6,6 +6,7 @@
   "mixins": ["skycosmetics-test.mixins.json"],
   "entrypoints": {
     "fabric-client-gametest": [
+      "io.github.terabold.skycosmetics.test.ReportTest",
       "io.github.terabold.skycosmetics.test.MenuMemoryTest",
       "io.github.terabold.skycosmetics.data.RepoBoundsTest",
       "io.github.terabold.skycosmetics.test.NametagTest",

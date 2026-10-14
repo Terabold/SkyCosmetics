@@ -76,6 +76,8 @@ public class SkyCosmetics implements ClientModInitializer {
         Favorites.load();
         Repo.reload(Looks::bump);
         SkinLearner.init();
+        io.github.terabold.skycosmetics.support.Problems.init();
+        io.github.terabold.skycosmetics.support.Report.register();
         PetTracker.init();
         DeployedOrbs.init();
         OwnedItems.init();

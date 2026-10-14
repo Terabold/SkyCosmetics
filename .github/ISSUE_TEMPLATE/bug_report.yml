@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in SkyCosmetics looks wrong or doesn't work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! In game, **Settings → General → Report a bug** (or `/skycosmetics report`) copies a short
+        report of your game: paste it below. It lists versions, the mods SkyCosmetics works with and what went wrong.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw. A screenshot helps a lot.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Filled in by the mod.
+  - type: textarea
+    id: report
+    attributes:
+      label: Report from the mod
+      description: Paste with Ctrl+V.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (optional)
+      description: For crashes, attach logs/latest.log or the crash report.

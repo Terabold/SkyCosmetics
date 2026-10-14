@@ -66,7 +66,23 @@ public final class GeneralSection {
                 if (settings instanceof Host host) host.changed(); // saves, and the swatch and pills show it
                 else Settings.save();
             }, () -> Theme.accent() != Theme.DEFAULT_ACCENT, Component.empty())));
-        return rows.stream().map(o -> o.id().equals("accent") || o.id().equals("accentPresets") ? o.compact() : o).toList();
+        rows.add(Option.header("groupHelp", Component.literal("Help")));
+        rows.add(Option.of("reportBug", Component.literal("Report a bug"),
+            Component.literal("Copies a short report (versions, related mods, what went wrong this session) and opens SkyCosmetics' "
+                + "GitHub issue form to paste it into. Nothing is sent by the mod; you post it yourself."),
+            new Control.Action(Component.literal("Report…"), () -> io.github.terabold.skycosmetics.support.Report.open(settings),
+                () -> true, Component.empty())).search("bug issue problem error crash log support help"));
+        rows.add(Option.of("problemStatus", Component.empty(), Component.empty(), new Control.Custom((host, width) -> {
+            int n = io.github.terabold.skycosmetics.support.Problems.count();
+            Component line = Component.literal(n == 0 ? "No problems this session." : n == 1 ? "1 problem this session: please report it."
+                : n + " problems this session: please report them.").withColor((n == 0 ? Theme.MUTED : Theme.GOLD) & 0xFFFFFF);
+            return new net.minecraft.client.gui.components.MultiLineTextWidget(line, net.minecraft.client.Minecraft.getInstance().font).setMaxWidth(width);
+        })));
+        rows.add(Option.of("problemAlerts", Component.literal("Tell me when something goes wrong"),
+            Component.literal("One chat line the first time something fails in a session, with a button to copy the report."),
+            new Control.Toggle(() -> io.github.terabold.skycosmetics.support.Problems.alerts,
+                v -> io.github.terabold.skycosmetics.support.Problems.alerts = v)));
+        return rows.stream().map(o -> o.id().equals("accent") || o.id().equals("accentPresets") || o.id().equals("problemAlerts") ? o.compact() : o).toList();
     }
 
     private static List<ColorPresets.Preset> presets() {

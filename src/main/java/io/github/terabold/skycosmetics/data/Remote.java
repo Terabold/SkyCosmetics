@@ -44,6 +44,8 @@ public final class Remote {
     }
 
     private static final AtomicBoolean FETCHING = new AtomicBoolean();
+    /** What the last load found, for reports. */
+    private static volatile String status = "published skins not loaded";
     private static long lastTry, waitMs = RETRY_MS;
 
     private Remote() {}
@@ -63,15 +65,23 @@ public final class Remote {
     /** The saved supplement; empty when there is none or it cannot be read (it is downloaded again then). */
     static Supplement load() {
         Path f = file();
-        if (!Files.isRegularFile(f)) return Supplement.EMPTY;
+        if (!Files.isRegularFile(f)) { status = "no published skins yet"; return Supplement.EMPTY; }
         try {
             if (Files.size(f) > MAX_BYTES) throw new IOException("too large");
-            return parse(Files.readString(f, StandardCharsets.UTF_8));
+            Supplement s = parse(Files.readString(f, StandardCharsets.UTF_8));
+            status = s.skins().stills.size() + " published skins, " + s.timings().skins.size() + " timings (built "
+                + java.time.Instant.ofEpochMilli(s.generatedAt()).toString().substring(0, 10) + ")";
+            return s;
         } catch (IOException | RuntimeException e) {
             SkyCosmetics.LOG.warn("Could not read the published skins ({}); downloading them again", e.toString());
             try { Files.deleteIfExists(etagFile()); } catch (IOException ignored) { /* a full download follows anyway */ }
             return Supplement.EMPTY;
         }
+    }
+
+    /** "12 published skins, 29 timings (built 2026-10-14)", for "Report a bug". */
+    public static String status() {
+        return enabled ? status : "published skins off";
     }
 
     static Supplement parse(String json) {

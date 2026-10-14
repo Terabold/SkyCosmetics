@@ -251,6 +251,7 @@ public final class Io {
      * once a minute, so a bad item drawn every frame cannot flood the log. Any thread.
      */
     public static void failed(String what, Throwable e) {
+        io.github.terabold.skycosmetics.support.Problems.record(what, e);
         long now = System.currentTimeMillis();
         Long last = FAILED.get(what);
         if (last != null && now - last < FAILED_EVERY_MS) return;
