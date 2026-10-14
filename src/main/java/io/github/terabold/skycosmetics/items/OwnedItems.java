@@ -110,6 +110,7 @@ public final class OwnedItems {
         new Menu("(?:\\(\\d+/\\d+\\) )?Armor Sets|Wardrobe(?: \\(\\d+/\\d+\\))?", "Wardrobe"),
         new Menu("(?:\\(\\d+/\\d+\\) )?Equipment Sets", "Equipment wardrobe"),
         new Menu("(?:\\(\\d+/\\d+\\) )?Loadouts", "Loadouts"),
+        new Menu("Loadout \\d+", "Loadout"),
         new Menu("Stats & Equipment|Your Equipment and Stats", "Equipment"),
         new Menu("(?:\\(\\d+/\\d+\\) )?Pets(?:: \".*\")?(?: \\(\\d+/\\d+\\))?", "Pets"),
         new Menu("Ender Chest(?: ✦)?(?: \\(\\d+/\\d+\\))?", "Ender Chest"),

@@ -82,6 +82,17 @@ final class PetChoiceTest {
 
         // A real mouse click on B in the Pets menu; the summon line that follows agrees.
         openPets(ctx, head, null);
+        ctx.runOnClient(mc -> {
+            // A loadout shows its pet with only petInfo.uniqueId: it is the same pet and wears the same look.
+            CompoundTag t = new CompoundTag();
+            t.putString("id", "PET");
+            t.putString("petInfo", "{\"type\":\"RABBIT\",\"tier\":\"MYTHIC\",\"uniqueId\":\"u-" + B + "\"}");
+            var id = io.github.terabold.skycosmetics.Cosmetics.identify(CustomData.of(t));
+            if (id == null || !B.equals(id.uuid())) throw new AssertionError("a pet known only by its uniqueId is keyed like the known pet: " + id);
+            t.putString("uuid", "item-uuid");
+            var withItemUuid = io.github.terabold.skycosmetics.Cosmetics.identify(CustomData.of(t));
+            if (!"item-uuid".equals(withItemUuid.uuid())) throw new AssertionError("the item's own uuid comes before a uniqueId");
+        });
         double[] slotB = ctx.computeOnClient(mc -> slotCentre(mc, SLOT_B));
         ctx.getInput().setCursorPos(slotB[0], slotB[1]);
         ctx.waitTicks(2);

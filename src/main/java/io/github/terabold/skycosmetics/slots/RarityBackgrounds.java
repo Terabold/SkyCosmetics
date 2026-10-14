@@ -129,7 +129,7 @@ public final class RarityBackgrounds {
                 loadouts = "Loadouts".equals(source);
                 rule = source == null ? OwnMenus.ALL : switch (source) {
                     case "Wardrobe" -> wardrobeMenus;
-                    case "Loadouts" -> loadoutMenus;
+                    case "Loadouts", "Loadout" -> loadoutMenus;
                     case "Equipment wardrobe", "Equipment" -> equipmentMenus;
                     default -> OwnMenus.ALL;
                 };

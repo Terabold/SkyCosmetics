@@ -381,8 +381,9 @@ public final class Cosmetics {
     }
 
     /**
-     * SkyBlock id and UUID. Pets are typed "PET:<TYPE>" and keyed by the pet's own UUID.
-     * Null for anything else, including data not shaped like Hypixel's.
+     * SkyBlock id and UUID. Pets are typed "PET:<TYPE>" and keyed by petInfo.uuid, else the item's uuid. A pet shown
+     * with only its petInfo.uniqueId (a loadout's pet, for one) is keyed like the known pet with that uniqueId, so
+     * it wears the same look. Null for anything else, including data not shaped like Hypixel's.
      */
     public static Ident identify(CustomData data) {
         try {
@@ -396,7 +397,11 @@ public final class Cosmetics {
                 String petType = str(info, "type");
                 if (petType != null && petType.length() <= MAX_ID) type = "PET:" + petType;
                 String petUuid = str(info, "uuid");
-                if (petUuid == null) petUuid = str(info, "uniqueId");
+                String unique = petUuid == null && uuid.isEmpty() ? str(info, "uniqueId") : null;
+                if (unique != null) {
+                    String known = io.github.terabold.skycosmetics.pet.PetTracker.uuidForUniqueId(unique);
+                    petUuid = known != null ? known : unique;
+                }
                 if (petUuid != null) uuid = petUuid;
             }
             return new Ident(uuid.isEmpty() || uuid.length() > MAX_ID ? null : uuid, type);

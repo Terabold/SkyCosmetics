@@ -192,6 +192,12 @@ public final class PetTracker {
         return current != null && current.resolved() && candidates.isEmpty();
     }
 
+    /** The look key of the known pet with this petInfo.uniqueId, or null. Client thread. */
+    public static String uuidForUniqueId(String uniqueId) {
+        for (Pet p : KNOWN.values()) if (uniqueId.equals(p.uniqueId)) return p.uuid;
+        return null;
+    }
+
     /** Record a pet seen on a real item; returns the one shared instance kept for it. */
     static Pet seen(Pet p) {
         Pet known = KNOWN.get(p.uuid);
