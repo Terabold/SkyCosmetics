@@ -20,6 +20,11 @@ SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions
   verified and installed on the next start.
 - **Rarity Backgrounds** reach the equipment and pet panels other mods add, read shop pets ("[Lvl 1➡100] Elephant"),
   and can mark recombobulated items.
+- **Slot Locking:** L over a slot locks it (no moving, selling or dropping it by accident); hold L from an inventory
+  slot to a hotbar slot to bind them, and a shift-click swaps the two. Padlock, dot, corner or outline marks (the outline
+  takes the rarity background's outline), placed and colored as you like, also on the HUD hotbar. Per profile.
+- **Report a bug** in General copies a short report and opens the GitHub issue form.
+- **Nametags:** names from the tab list (level, rank color, icons); size, text opacity and background opacity sliders.
 - `/skycosmetics debug item` reports the last item you hovered in a menu, for menus where a background is missing.
 - Sections say when another installed mod has the same kind of feature, so doubled effects are easy to explain.
 

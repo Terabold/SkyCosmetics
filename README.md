@@ -4,8 +4,8 @@
 on your helmets, items and pets, dye any armor with any dye (animated ones included), rename items and restyle their
 glint, and see it everywhere: in every menu, in your hand, on your player model and on your summoned pet.
 
-Purely visual. SkyCosmetics only changes how things are drawn on your screen: it never sends anything to the server
-on its own, clicks nothing, and other players see Hypixel's items as usual.
+Made to change how the game looks, not how it plays: SkyCosmetics never sends anything to the server on its own and
+automates nothing, and other players see Hypixel's items as usual.
 
 ![A summoned pet and a deployed power orb wearing skins picked in SkyCosmetics](branding/gallery/01-pet-orb-hub.webp)
 
@@ -36,6 +36,9 @@ on its own, clicks nothing, and other players see Hypixel's items as usual.
 - **Viewmodel.** Move, turn and resize your hand and held item, with cosmetic swing controls and six saved setups.
 - **Zoom.** Optional: hold or toggle, smooth animation, wheel adjustment and gentle sensitivity. Off until you enable
   it.
+- **Slot Locking.** Press L over a slot to lock it: its item can't be moved, sold or dropped by accident. Hold L from an
+  inventory slot to a hotbar slot to bind them; a shift-click then swaps the two. Padlock, dot, corner or outline marks,
+  in any corner, size and color.
 - **My Items and Favorites.** Everything you wear, hold and have seen in one searchable list; star the skins and dyes
   you use most.
 
@@ -56,10 +59,11 @@ on its own, clicks nothing, and other players see Hypixel's items as usual.
 
 ## FAQ
 
-**Is it safe to use on Hypixel?** It is purely visual: it only changes how things are drawn on your client. It sends
-no packets of its own, automates nothing and gives no gameplay advantage, the same kind of feature Skyblocker and
-SkyOcean offer. Sneaking players' names stay hidden behind walls exactly as in vanilla. As with any mod, you use it
-under Hypixel's rules on allowed modifications.
+**Is it safe to use on Hypixel?** It changes how things look and sends nothing of its own: no automation and no
+gameplay advantage, the same kind of features Skyblocker, SkyHanni and NEU offer. Slot locking only stops your own
+clicks and drops on a locked slot; slot binding turns one shift-click into the one hotbar swap vanilla already does with
+number keys. Sneaking players' names stay hidden behind walls exactly as in vanilla. As with any mod, you use it under
+Hypixel's rules on allowed modifications.
 
 **What does it download?** Only public files, and nothing about you is sent: the community item repo (only when
 neither Skyblocker nor Firmament is installed), the published skins file from
