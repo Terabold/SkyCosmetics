@@ -44,7 +44,7 @@ public final class Remote {
     }
 
     private static final AtomicBoolean FETCHING = new AtomicBoolean();
-    private static long lastTry;
+    private static long lastTry, waitMs = RETRY_MS;
 
     private Remote() {}
 
@@ -92,13 +92,16 @@ public final class Remote {
      */
     static void maybeFetch(Runnable changed) {
         long now = System.currentTimeMillis();
-        if (!enabled || System.getProperty("skycosmetics.repo") != null || now - lastTry < RETRY_MS) return;
+        if (!enabled || System.getProperty("skycosmetics.repo") != null || now - lastTry < waitMs) return;
         if (now - lastChecked() < EVERY_MS || !FETCHING.compareAndSet(false, true)) return;
         lastTry = now;
         Thread t = new Thread(() -> {
             try {
                 if (fetch()) changed.run();
+                waitMs = RETRY_MS;
             } catch (IOException | RuntimeException e) {
+                // A missing file (404) will not appear in minutes: ask again with the normal interval.
+                waitMs = String.valueOf(e.getMessage()).contains("HTTP 404") ? EVERY_MS : RETRY_MS;
                 SkyCosmetics.LOG.info("Could not check for newly published skins: {}", e.toString());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
