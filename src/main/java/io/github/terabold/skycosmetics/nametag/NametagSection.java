@@ -28,13 +28,13 @@ final class NametagSection {
         toggle(r,"hideEntitiesF1","Hide entities with F1","Hide other entity labels while the HUD is hidden.",()->p.hideEntitiesF1,v->p.hideEntitiesF1=v);
         toggle(r,"hideArmorStandsF1","Hide armor stands with F1","Hide armor stand labels while the HUD is hidden.",()->p.hideArmorStandsF1,v->p.hideArmorStandsF1=v);
         r.add(Option.header("layout",t("Size and position")));
-        slider(r,"scale","Size",()->p.scale,v->p.scale=v,.25,3,.05);
+        percent(r,"scale","Nametag size","How big labels are drawn; 100% is Minecraft's size.",()->p.scale,v->p.scale=v,.25,3,.05);
         slider(r,"height","Height offset",()->p.height,v->p.height=v,-10,10,.05);
         slider(r,"crouchScale","Crouching size",()->p.crouchScale,v->p.crouchScale=v,.25,1,.05);
         slider(r,"distance","Maximum distance",()->p.distance,v->p.distance=v,1,64,1);
         toggle(r,"fade","Fade with distance","Fade between Fade start and Maximum distance; never extends vanilla visibility.",()->p.fade,v->p.fade=v);
         slider(r,"fadeStart","Fade start",()->p.fadeStart,v->p.fadeStart=v,0,64,1);
-        slider(r,"opacity","Label opacity",()->p.opacity,v->p.opacity=v,0,1,.05);
+        percent(r,"opacity","Text opacity","How solid the text is; lower lets the world show through it.",()->p.opacity,v->p.opacity=v,.05,1,.05);
         r.add(Option.header("text",t("Text")));
         choice(r,"font","Font","Font for player names in Apply to. Server badges keep their own fonts.",NameFont.values(),()->p.font,v->p.font=v);
         choice(r,"textMode","My name color","Only your username changes. Server levels, emblems, other players and score lines keep their formatting.",Text.values(),()->p.text,v->p.text=v);
@@ -47,17 +47,19 @@ final class NametagSection {
             new Control.Action(t("Edit…"),()->Minecraft.getInstance().setScreen(new NametagNameScreen(parent)),()->p.enabled,Component.empty())));
         r.add(Option.header("backgroundGroup",t("Background")));
         toggle(r,"background","Show background","Background behind each line, with the same through-wall visibility as its label.",()->p.background,v->p.background=v);
+        color(r,"backgroundColor","Background color",()->p.backgroundColor|0xFF000000,v->p.backgroundColor=p.backgroundColor&0xFF000000|v&0xFFFFFF,false);
+        percent(r,"backgroundOpacity","Background opacity","0% hides the plate; 100% is solid.",()->(p.backgroundColor>>>24)/255.0,v->{
+            int a=(int)Math.round(v*255)<<24; p.backgroundColor=a|p.backgroundColor&0xFFFFFF; p.backgroundEnd=a|p.backgroundEnd&0xFFFFFF;},0,1,.05);
         toggle(r,"gradientBackground","Gradient","Blend vertically between two colors, including their opacity.",()->p.gradientBackground,v->p.gradientBackground=v);
-        color(r,"backgroundColor","Background color",()->p.backgroundColor,v->p.backgroundColor=v,true);
-        color(r,"backgroundEnd","End color",()->p.backgroundEnd,v->p.backgroundEnd=v,true);
+        color(r,"backgroundEnd","Gradient end",()->p.backgroundEnd|0xFF000000,v->p.backgroundEnd=p.backgroundEnd&0xFF000000|v&0xFFFFFF,false);
         toggle(r,"rounded","Rounded corners","Adjust corner rounding independently of padding.",()->p.rounded,v->p.rounded=v);
         slider(r,"radius","Corner radius",()->p.radius,v->{p.radius=v;p.rounded=v>0;},0,5,.5);
         slider(r,"paddingX","Horizontal padding",()->p.paddingX,v->p.paddingX=v,0,10,.5);
         slider(r,"paddingY","Vertical padding",()->p.paddingY,v->p.paddingY=v,0,10,.5);
         r.add(Option.of("reset",t("Reset nametags"),t("Restore defaults, including turning this feature off."),new Control.Action(t("Reset"),NametagSettings::reset,()->true,Component.empty())));
-        var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "shadow", "ownName", "backgroundGroup", "background", "backgroundColor", "radius", "paddingX", "paddingY", "reset");
+        var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "opacity", "shadow", "ownName", "backgroundGroup", "background", "backgroundColor", "backgroundOpacity", "gradientBackground", "backgroundEnd", "radius", "paddingX", "paddingY", "reset");
         return r.stream().filter(o -> release.contains(o.id())).map(o -> {
-            Option compact = Set.of("scale", "height", "own", "inventory", "paddingX", "paddingY", "color", "colorEnd").contains(o.id()) ? o.beside() : o.compact();
+            Option compact = Set.of("scale", "height", "own", "inventory", "paddingX", "paddingY", "color", "colorEnd", "backgroundColor", "backgroundOpacity").contains(o.id()) ? o.beside() : o.compact();
             return compact.visibleWhen(() -> relevant(o.id()));
         }).toList();
     }
@@ -68,12 +70,13 @@ final class NametagSection {
         case "color" -> p.text==Text.SOLID||p.text==Text.GRADIENT;
         case "colorEnd" -> p.text==Text.GRADIENT;
         case "styleScores" -> p.scores;
-        case "backgroundColor", "gradientBackground", "rounded", "paddingX", "paddingY" -> p.background;
+        case "backgroundColor", "backgroundOpacity", "gradientBackground", "rounded", "paddingX", "paddingY" -> p.background;
         case "backgroundEnd" -> p.background&&p.gradientBackground;
         case "radius" -> p.background;
         default -> true;
     };}
     private static void toggle(List<Option>r,String id,String title,String help,BooleanSupplier get,Consumer<Boolean>set){add(r,id,title,help,new Control.Toggle(get,v->{set.accept(v);changed();}));}
+    private static void percent(List<Option>r,String id,String title,String help,DoubleSupplier get,DoubleConsumer set,double min,double max,double step){add(r,id,title,help,new Control.Slider(get,v->{set.accept(v);changed();},min,max,step,v->t(Math.round(v*100)+"%")));}
     private static void slider(List<Option>r,String id,String title,DoubleSupplier get,DoubleConsumer set,double min,double max,double step){add(r,id,title,"",new Control.Slider(get,v->{set.accept(v);changed();},min,max,step,v->t(String.format(Locale.ROOT,"%.2f",v))));}
     private static <T> void choice(List<Option>r,String id,String title,String help,T[]values,Supplier<T>get,Consumer<T>set){add(r,id,title,help,new Control.Choice<>(Arrays.asList(values),v->t(label(v)),get,v->{set.accept(v);changed();}));}
     private static String label(Object value){
