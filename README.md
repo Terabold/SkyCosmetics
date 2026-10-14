@@ -1,104 +1,43 @@
 # SkyCosmetics
 
-**Hypixel SkyBlock skins, dyes, names and glint, on your own gear and pets.** Choose catalog skins
-on your helmets, items and pets, dye any armor with any dye (animated ones included), rename items and restyle their
-glint, and see it everywhere: in every menu, in your hand, on your player model and on your summoned pet.
+**Make your Hypixel SkyBlock gear look the way you want.**
 
-Made to change how the game looks, not how it plays: SkyCosmetics never sends anything to the server on its own and
-automates nothing, and other players see Hypixel's items as usual.
+SkyCosmetics is a client-side Fabric mod for changing how your gear, pets, and power orbs look. Try different skins, dyes, item names, and enchantment glint without changing the actual items. Your customizations show up in menus, in your hand, and on your character, summoned pet, or deployed power orb.
 
-![A summoned pet and a deployed power orb wearing skins picked in SkyCosmetics](branding/gallery/01-pet-orb-hub.webp)
+Only you see the changes. SkyCosmetics doesn't automate gameplay or send its own gameplay packets to the server.
 
-> Formerly **Skin Studio**. Replace its jar with this one: your looks, settings and open key carry over on the first
-> start.
+![A summoned pet and power orb with custom skins](branding/gallery/01-pet-orb-hub.webp)
 
 ## Features
 
-- **Skins and variants.** Browse catalog helmet, pet and power orb skins, their color variants and SkyBlock heads, or
-  paste any texture. Animations play at the speed Hypixel plays them: timings measured in game ship with the mod, and
-  your game measures any animated head it sees and fixes the timing on its own.
-- **New skins without an update.** Skins, styles and timings published after a release arrive by themselves (one small
-  file from GitHub every few hours), and skins Hypixel shows you that the catalog doesn't have yet are remembered.
-- **Every dye, on any armor.** All static and animated Hypixel dyes, any hex color, or your own animated dye.
-  Animated dyes ripple from boots to helmet like on Hypixel.
-- **Models and armor trims.** Pick a vanilla appearance and trim pattern inline in the studio; armor remodels change
-  the worn look as well as the icon.
-- **Names and glint.** Rename items with color codes, a picker or one-click gradients, and turn the enchant glint on
-  or off per item with any color, speed and strength. Display only: other mods still see Hypixel's real name.
-- **Pets and power orbs in the world.** Your summoned pet and deployed power orb wear the skin you picked: Hypixel's own
-  entity, reskinned. Nothing extra is spawned.
-- **Rarity Backgrounds.** The slot behind each item in its rarity's color, in your inventory, menus, hotbar and the
-  equipment panels other mods add, with shapes, fills and your own colors.
-- **Head Size.** Make skull items in menus a little bigger or smaller.
-- **Nametags.** Your own name in a solid color, gradient or chroma, with a background plate, scale and fade.
-- **Tooltips.** Scroll long tooltips with the wheel, fit them to the screen, and give them your own background and
-  border.
-- **Viewmodel.** Move, turn and resize your hand and held item, with cosmetic swing controls and six saved setups.
-- **Zoom.** Optional: hold or toggle, smooth animation, wheel adjustment and gentle sensitivity. Off until you enable
-  it.
-- **Slot Locking.** Press L over a slot to lock it: its item can't be moved, sold or dropped by accident. Bind an
-  inventory slot to a hotbar slot by holding L on one and letting go over the other, or by pressing the Bind key on
-  both; a shift-click (or a plain click) then swaps the two. Padlock, dot, corner or outline marks, in any corner, size
-  and color.
-- **My Items and Favorites.** Everything you wear, hold and have seen in one searchable list; star the skins and dyes
-  you use most.
+- **Skins:** Browse helmet, pet, and power orb skins, including variants and animated textures, or use your own texture. New skins and animation fixes can arrive without a mod update.
+- **Dyes:** Use any Hypixel dye on any armor, including animated dyes. Custom colors and animated dyes work too.
+- **Item customization:** Change item names with colors or gradients, adjust enchantment glint, and choose vanilla models and armor trims.
+- **Pets and power orbs:** See your selected skins on your summoned pet and deployed power orb, not just in your inventory.
+- **Inventory tweaks:** Rarity-colored backgrounds, adjustable head size, and scrollable tooltips with custom backgrounds and borders.
+- **Viewmodel, nametags, and zoom:** Adjust your held item's position and size, customize your nametag, or enable smooth zoom.
+- **My Items and Favorites:** Find items you've used or seen, save the skins and dyes you like, and manage your custom looks in one place.
 
 ## How to use
 
-- Open your inventory and click the small **brush** next to your player, or hover any item in any menu and press your
-  **open key** (unbound at first: set it in the settings or in Controls), or type `/skycosmetics edit`.
-- Pick an item on the left, then click a skin, dye or name on the right. It applies at once; there is nothing to save.
-- **Reset** returns the item to its original look. A look for every item of a type shows only on your own items, never
-  on items in auction, bazaar, trade or shop menus.
-- The **Saved** tab lists everything you changed, by section; click a look to remove one change at a time.
+Open your inventory and click the **brush** beside your player, hover over an item and use your editor keybind, or type `/skycosmetics edit`.
 
-| Command | What it does |
-|---|---|
-| `/skycosmetics` | Opens the settings (the same screen as Mod Menu's Configure button). |
-| `/skycosmetics edit` | Opens the editor for your held item (or your helmet). |
-| `/skycosmetics debug pet`, `orb`, `item` | What the pet and orb reskin see, or the last item you hovered in a menu, for bug reports. |
+Choose a look in the editor and it applies right away. Use **Reset** to return to the original appearance, or open **Saved** to remove individual changes. Type `/skycosmetics` to open the settings.
 
-## FAQ
+## Compatibility and installation
 
-**Is it safe to use on Hypixel?** It changes how things look and sends nothing of its own: no automation and no
-gameplay advantage, the same kind of features Skyblocker, SkyHanni and NEU offer. Slot locking only stops your own
-clicks and drops on a locked slot; slot binding turns one click into the one hotbar swap vanilla already does with
-number keys. Sneaking players' names stay hidden behind walls exactly as in vanilla. As with any mod, you use it under
-Hypixel's rules on allowed modifications.
+Download the jar from [Releases](https://github.com/Terabold/SkyCosmetics/releases) and put it in your `mods` folder.
 
-**What does it download?** Only public files, and nothing about you is sent: the community item repo (only when
-neither Skyblocker nor Firmament is installed), the published skins file from
-[SkyCosmetics-data](https://github.com/Terabold/SkyCosmetics-data), and the list of SkyCosmetics releases for the
-update check. The last two can be turned off in the settings.
+Built and tested with **Minecraft 26.1.2**, **Fabric Loader 0.19.5**, **Fabric API**, and **Java 25**. Mod Menu is optional.
 
-**Can other players see my looks?** No. Only you see them.
+SkyCosmetics works alongside **Skyblocker, SkyOcean, and Firmament**. It can identify overlapping cosmetic changes, and it reuses an existing item repository from Skyblocker or Firmament when available.
 
-**Does it work with Skyblocker, SkyOcean and Firmament?** Yes. When another mod also customizes an item, the editor
-marks it ("Dyed by Skyblocker"), and the **Other Mods** tab lists them. Sections whose feature another installed mod
-also has say so, so you can keep one of the two on.
+SkyCosmetics is designed for visual customization, but you should still follow Hypixel's rules on modifications.
 
-**A skin is missing or blinks at the wrong speed?** Wear or look at it for a moment: your game learns its frames and
-timing. Report the skin's name on the issue tracker so it can be published for everyone.
+## Development and credits
 
-## Install
+The code is developed with Anthropic's Claude and OpenAI's Codex, directed and tested in-game by the author. Feedback and bug reports are welcome in [Issues](https://github.com/Terabold/SkyCosmetics/issues).
 
-- Download the jar from [Releases](https://github.com/Terabold/SkyCosmetics/releases) and put it in your `mods`
-  folder. The update checker offers newer versions in the settings.
-- Built and tested on Minecraft 26.1.2 with Fabric Loader 0.19.5, Fabric API and Java 25.
-- Optional: Mod Menu (a Configure button), Skyblocker or Firmament (SkyCosmetics reuses their copy of the item repo).
+Skin and dye data comes from the [NotEnoughUpdates repository](https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO).
 
-## Made with AI
-
-SkyCosmetics' code is developed with Anthropic's Claude and OpenAI's Codex, directed and tested in game by the author. It
-is disclosed here because players deserve to know. Bug reports and pull requests are welcome on the
-[issue tracker](https://github.com/Terabold/SkyCosmetics/issues).
-
-## Credits
-
-Skin and dye data from the [NotEnoughUpdates repository](https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO).
-
-Not affiliated with Hypixel Inc. or Mojang Studios.
-
-## License
-
-[MIT](LICENSE)
+Not affiliated with Hypixel Inc. or Mojang Studios. Licensed under [MIT](LICENSE).
