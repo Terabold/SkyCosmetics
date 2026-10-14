@@ -66,6 +66,17 @@ fabricApi {
 tasks.matching { it.name == 'runClientGameTest' }.configureEach {
     def repo = project.findProperty('skycosmeticsRepo') ?: System.getenv('SKYCOSMETICS_REPO')
     if (repo) jvmArgs "-Dskycosmetics.repo=${repo}"
+    // Every saved file starts broken (src/gametest/corrupt-config): the client must start, set the unreadable
+    // ones aside and read the rest safely. CorruptStartTest checks the outcome.
+    def config = file('build/run/clientGameTest/config/skycosmetics')
+    def broken = file('src/gametest/corrupt-config')
+    doFirst {
+        config.mkdirs()
+        config.listFiles().findAll { it.name.contains('.broken-') }.each { it.delete() }
+        broken.listFiles().findAll { it.name != 'README.md' }.each { f -> new File(config, f.name).bytes = f.bytes }
+        new File(config, 'items.json').bytes = [0x7B, 0x00, 0xFF, 0x22, 0x0A, 0x80, 0x7D, 0x7D] as byte[]
+        new File(config, 'favorites.json').text = '[' * 100_000
+    }
 }
 
 jar {

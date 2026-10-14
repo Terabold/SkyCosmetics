@@ -48,8 +48,13 @@ public final class Nametags {
         return selected(e)&&e==mc.player&&p.own&&!p.hide&&!hideHud(0)&&!e.isInvisible()
             && (mc.screen instanceof InventoryScreen?p.inventory:!mc.options.getCameraType().isFirstPerson());
     }
+    /** Every entity, every frame: a failure here leaves that label vanilla's and is reported, never thrown. */
     public static void extract(Entity e,EntityRenderState s) {
         var d=((NametagState)s).skycosmetics$tag();
+        try { extract(e,d); }
+        catch(RuntimeException ex) { d.selected=false; d.tab=null; io.github.terabold.skycosmetics.Io.failed("Reading a nametag",ex); }
+    }
+    private static void extract(Entity e,NametagState.Data d) {
         d.selected=selected(e); d.own=e==Minecraft.getInstance().player; d.kind=kind(e);
         d.inventory=d.own&&Minecraft.getInstance().screen instanceof InventoryScreen;
         d.preview=previewModel && d.own;

@@ -1,0 +1,2 @@
+{"version": "two", "buckets": {"x|y": {"locked": [999, -3, "x", 1.5, null, 40], "binds": {"9": 99, "x": 1, "10": "y", "0": 5, "11": 2}},
+ "bad|bucket": 7, "y|z": {"locked": "all"}}, "lastProfile": {"x": 5, "y": ["a"]}}

@@ -709,6 +709,11 @@ public final class SlotLocks {
     }
 
     private static void save() {
+        Io.writeAsync(file(), json());
+    }
+
+    /** What the file holds: every profile's locks and bindings, and the last profile Hypixel named per account. */
+    private static JsonObject json() {
         JsonObject root = new JsonObject();
         root.addProperty("version", 1);
         JsonObject buckets = new JsonObject();
@@ -727,7 +732,7 @@ public final class SlotLocks {
         JsonObject last = new JsonObject();
         LAST_PROFILE.forEach(last::addProperty);
         root.add("lastProfile", last);
-        Io.writeAsync(file(), root);
+        return root;
     }
 
     // --------------------------------------------------------------- tests ---
@@ -762,6 +767,12 @@ public final class SlotLocks {
     public static void testBindKey(int glfw) {
         bindKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(glfw));
         KeyMapping.resetMapping();
+    }
+
+    /** For tests: what slot-locks.json would hold now (loading it first if nothing asked for it yet). */
+    public static JsonObject testFile() {
+        load();
+        return json();
     }
 
     /** For tests: {inventory slot, hotbar slot} of the binding with this end, or null. */

@@ -24,7 +24,7 @@ import java.util.List;
 import static io.github.terabold.skycosmetics.test.StudioLayoutTest.check;
 
 /**
- * Slot locking with real input: the key over a slot locks it; a click on it, a number-key swap into it, a double-click
+ * Slot locking with real input, per SkyBlock profile: the key over a slot locks it; a click on it, a number-key swap into it, a double-click
  * gathering from it and Q on it are stopped; bindings are made by holding the lock key and letting go over the other
  * slot, or by pressing the bind key on both; a shift-click (or a plain click, when chosen) on a bound slot swaps it with
  * its hotbar slot; a click kept from the menu while the key is down doesn't act on its release either; the outline mark
@@ -44,6 +44,18 @@ public class SlotLocksTest implements FabricClientGameTest {
                 SlotLocks.testBinding(SlotLocks.Swap.SHIFT_CLICK, false, false);
                 for (int i : new int[]{9, 10, 11, 12, 13}) { SlotLocks.testLock(i, false); SlotLocks.testBind(i, -1); }
             });
+            // Locks belong to a SkyBlock profile, which Hypixel names in chat; another profile has its own.
+            world.getServer().runCommand("tellraw @a \"You are playing on profile: Apple\"");
+            ctx.waitTicks(3);
+            ctx.runOnClient(mc -> SlotLocks.testLock(20, true));
+            world.getServer().runCommand("tellraw @a \"Your profile was changed to: Banana (Co-op)\"");
+            ctx.waitTicks(3);
+            check(!ctx.computeOnClient(mc -> SlotLocks.isLocked(20)), "another profile has its own locks");
+            world.getServer().runCommand("tellraw @a \"Your profile was changed to: Apple\"");
+            ctx.waitTicks(3);
+            check(ctx.computeOnClient(mc -> SlotLocks.isLocked(20)), "back on the first profile, its locks are back");
+            ctx.runOnClient(mc -> SlotLocks.testLock(20, false));
+
             ctx.setScreen(() -> new InventoryScreen(Minecraft.getInstance().player));
             ctx.waitTicks(3);
 

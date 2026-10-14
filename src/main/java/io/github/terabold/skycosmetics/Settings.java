@@ -103,6 +103,11 @@ public final class Settings {
     }
 
     public static void save() {
+        Io.writeAsync(file(), snapshot());
+    }
+
+    /** What {@link #save} writes: every key's current value, and the keys this version doesn't know as they were. */
+    public static JsonObject snapshot() {
         JsonObject o = new JsonObject();
         for (Key k : KEYS.values()) {
             try {
@@ -116,7 +121,7 @@ public final class Settings {
         for (Map.Entry<String, JsonElement> e : last.entrySet()) {
             if (!KEYS.containsKey(e.getKey())) o.add(e.getKey(), e.getValue().deepCopy());
         }
-        Io.writeAsync(file(), o);
+        return o;
     }
 
     // For read lambdas: the value, or the current one when it is missing or of the wrong type.

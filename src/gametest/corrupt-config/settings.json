@@ -1,0 +1,18 @@
+{
+  "slotLocks": 5,
+  "rarityBackgrounds": {"on": "yes", "shape": "TRIANGLE", "opacity": 1e400, "fill": null},
+  "nametags": {"enabled": 1, "scale": "big", "opacity": -1e309, "scope": ["PLAYERS"], "ownName": 42},
+  "hand": {"pose": {"x": "NaN", "rotX": 1e308, "scale": -1e308}, "rules": {"a b": 5, "SWORD": {"pose": [1]}}, "equip": 5, "presets": "all"},
+  "updates": {"check": "yes", "channel": 7, "autoDownload": {}, "skip": [1]},
+  "zoom": null,
+  "tooltips": [1, 2],
+  "menu": "x",
+  "accent": {"a": 1},
+  "chroma": [],
+  "cornerRadius": "round",
+  "headSize": {"scale": -5, "inventory": "no"},
+  "learnTiming": "maybe",
+  "problemAlerts": 3,
+  "skinUpdates": {},
+  "nameGradients": 7
+}

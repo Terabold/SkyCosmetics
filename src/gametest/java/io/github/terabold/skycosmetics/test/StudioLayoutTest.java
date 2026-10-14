@@ -309,15 +309,16 @@ final class StudioLayoutTest {
         check(most <= 48, "and at most 48 new textures in one tick: " + most);
         ctx.getInput().setCursorPos(0, 0);
 
-        // Card names at 1920x1080, GUI scale 3: wrapped on words, hardly ever cut.
+        // Card names at 1920x1080, GUI scale 3: wrapped on words; what sets a card apart is hardly ever cut.
         int[] cut = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).labelsCut());
-        System.out.println("[SkyCosmeticsTest] card names cut at GUI 3: " + cut[0] + " of " + cut[1]);
-        check(cut[1] > 40 && cut[0] * 20 <= cut[1], "at most 1 in 20 card names is cut: " + cut[0] + "/" + cut[1]);
+        System.out.println("[SkyCosmeticsTest] card names cut at GUI 3: " + cut[0] + " of " + cut[1] + ", family name only: " + cut[2]);
+        check(cut[1] > 40 && cut[0] * 20 <= cut[1], "at most 1 in 20 card names loses what sets it apart: " + cut[0] + "/" + cut[1]);
         ctx.takeScreenshot("skycosmetics-23b-skins-names-guiscale-3");
         window(ctx, 1920, 1080, 2);
         ctx.waitTicks(20);
         int[] cut2 = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).labelsCut());
-        System.out.println("[SkyCosmeticsTest] card names cut at 1080p GUI 2: " + cut2[0] + " of " + cut2[1]);
+        System.out.println("[SkyCosmeticsTest] card names cut at 1080p GUI 2: " + cut2[0] + " of " + cut2[1] + ", family name only: " + cut2[2]);
+        check(cut2[0] * 5 <= cut2[1], "at GUI 2 too, at most 1 in 5 loses what sets it apart: " + cut2[0] + "/" + cut2[1]);
         ctx.takeScreenshot("skycosmetics-23c-skins-names-1080p-guiscale-2");
     }
 

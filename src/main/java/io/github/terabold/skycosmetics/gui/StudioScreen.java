@@ -57,6 +57,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -244,6 +246,8 @@ public class StudioScreen extends Screen {
     private List<DyeEntry> dyeResults = List.of();
     private Catalog shownCatalog;
     private final Map<String, String[]> nameLines = new HashMap<>();
+    /** Of a variant's card name lines, how many name the variant; the family's name after them is dimmed. */
+    private final Map<String, Integer> nameLead = new HashMap<>();
     private final Map<String, Integer> lastFrame = new HashMap<>();
     /** What the skins grid cost last frame (heads drawn, texture checks) and every texture it asked for. */
     private int gridItems, gridChecks;
@@ -1100,7 +1104,7 @@ public class StudioScreen extends Screen {
         labelLines = gs >= 2 ? 3 : 2;
         labelStep = gs >= 2 ? 9 : 10;
         cardH = gs >= 3 ? 48 : gs == 2 ? 50 : CARD_H;
-        nameLines.clear();
+        nameLines.clear(); nameLead.clear();
         listLayout();
         placePopup();
     }
@@ -1756,7 +1760,7 @@ public class StudioScreen extends Screen {
         cols = 1;
         cardW = midW;
         cardH = 36;
-        nameLines.clear();
+        nameLines.clear(); nameLead.clear();
         for (SkinEntry e : skinResults) listName(e.id, e.name);
         for (DyeEntry e : dyeResults) listName(e.id, e.name);
     }
@@ -1908,7 +1912,7 @@ public class StudioScreen extends Screen {
         }
         if (shownCatalog != Repo.get()) {
             refilter(); // repo finished (re)loading while open
-            nameLines.clear();
+            nameLines.clear(); nameLead.clear();
         }
         if (builtFor != OwnedItems.version() || !Objects.equals(ident(), widgetsFor)) {
             buildRows(); // finds the picked item again if it only moved
@@ -2390,6 +2394,10 @@ public class StudioScreen extends Screen {
      * A card's name, wrapped on words into at most {@link #labelLines} lines at card width; only a last line
      * that still does not fit is cut. Every card on the Skins tab is a skin, so the word is left off
      * ("Knight Skin (Aurora)" reads "Knight (Aurora)"); the tooltip has the full name. Computed once per entry.
+     *
+     * A variant ("Harvester Helmet (Cocoa Bean Brown)") leads with what sets it apart from its family, "Cocoa Bean
+     * Brown", and the family's name follows dimmed in the lines left: when something has to be cut, it is the part
+     * every card of the family shares.
      */
     private String[] lines(String id, String name) {
         String[] cached = nameLines.get(id); // not computeIfAbsent: its lambda would be a new object per card per frame
@@ -2397,10 +2405,28 @@ public class StudioScreen extends Screen {
         String label = name.replace(" Skin (", " (");
         if (label.endsWith(" Skin") && label.length() > 5) label = label.substring(0, label.length() - 5);
         int max = (int) ((cardW - 4) / labelScale);
-        String[] words = label.split(" ");
+        List<String> out;
+        Matcher variant = VARIANT_NAME.matcher(label);
+        if (variant.matches() && labelLines > 1) {
+            out = wrap(variant.group(2), max, labelLines - 1);
+            nameLead.put(id, out.size());
+            out.addAll(wrap(variant.group(1), max, labelLines - out.size()));
+        } else {
+            out = wrap(label, max, labelLines);
+        }
+        String[] lines = out.toArray(String[]::new);
+        nameLines.put(id, lines);
+        return lines;
+    }
+
+    private static final Pattern VARIANT_NAME = Pattern.compile("(.+?) \\((.+)\\)");
+
+    /** Words into at most {@code most} lines of {@code max} pixels; a last line that still does not fit is cut. */
+    private List<String> wrap(String text, int max, int most) {
+        String[] words = text.split(" ");
         List<String> out = new ArrayList<>();
         int i = 0;
-        while (i < words.length && out.size() < labelLines) {
+        while (i < words.length && out.size() < most) {
             StringBuilder b = new StringBuilder(words[i++]);
             while (i < words.length && font.width(b + " " + words[i]) <= max) b.append(' ').append(words[i++]);
             out.add(b.toString());
@@ -2409,9 +2435,7 @@ public class StudioScreen extends Screen {
             out.set(out.size() - 1, out.getLast() + " " + String.join(" ", Arrays.copyOfRange(words, i, words.length)));
         }
         out.replaceAll(l -> clip(l, max));
-        String[] lines = out.toArray(String[]::new);
-        nameLines.put(id, lines);
-        return lines;
+        return out;
     }
 
     /** Under the icon; at GUI scale 3 and up one step smaller, which keeps it crisp. Centred on a whole pixel. */
@@ -2424,7 +2448,8 @@ public class StudioScreen extends Screen {
         g.pose().pushMatrix();
         g.pose().translate(cx + cardW / 2, cy + (labelLines > 2 ? 29 : 30));
         g.pose().scale(labelScale, labelScale);
-        for (int i = 0; i < l.length; i++) g.centeredText(font, l[i], 0, i * labelStep, color);
+        int lead = nameLead.getOrDefault(id, l.length);
+        for (int i = 0; i < l.length; i++) g.centeredText(font, l[i], 0, i * labelStep, i < lead ? color : dim(color));
         g.pose().popMatrix();
     }
 
@@ -3066,11 +3091,26 @@ public class StudioScreen extends Screen {
         return summaryShown;
     }
 
-    /** Card names laid out so far at this size: how many end cut ("..."), and how many there are. */
+    /**
+     * Card names laid out so far at this size: how many lose part of what sets them apart (a plain name or a
+     * variant's own name cut with "..."), how many there are, and how many have only their family's name cut.
+     */
     public int[] labelsCut() {
-        int cut = 0;
-        for (String[] l : nameLines.values()) if (l[l.length - 1].endsWith("...")) cut++;
-        return new int[]{cut, nameLines.size()};
+        int cut = 0, family = 0;
+        for (var e : nameLines.entrySet()) {
+            String[] l = e.getValue();
+            int lead = nameLead.getOrDefault(e.getKey(), l.length);
+            boolean leadCut = false, rest = false;
+            for (int i = 0; i < l.length; i++) if (l[i].endsWith("...")) { if (i < lead) leadCut = true; else rest = true; }
+            if (leadCut) cut++; else if (rest) family++;
+        }
+        return new int[]{cut, nameLines.size(), family};
+    }
+
+    /** A dimmer version of a name color, for the part of a card name every card of the family shares. */
+    private static int dim(int argb) {
+        int r = (argb >> 16 & 255) * 3 / 5 + 40, g = (argb >> 8 & 255) * 3 / 5 + 40, b = (argb & 255) * 3 / 5 + 40;
+        return argb & 0xFF000000 | r << 16 | g << 8 | b;
     }
 
     /** The skins grid last frame: heads drawn, texture checks; and how many textures it asked for since it opened. */
