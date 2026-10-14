@@ -27,7 +27,9 @@ public final class Overlaps {
         "rarityBackgrounds", List.of(new Other("skyblocker", "Skyblocker", "Item Rarity Background"),
             new Other("firmament", "Firmament", "Item Rarity Cosmetics"), new Other("skyhanni", "SkyHanni", "Rarity Background"),
             new Other("noammaddons", "NoammAddons", "Item Rarity"), new Other("skyblock_enhancements", "Skyblock Enhancements", "Item Rarity")),
-        "tooltips", List.of(new Other("skyblock_enhancements", "Skyblock Enhancements", "Tooltip Scroll")));
+        "tooltips", List.of(new Other("skyblock_enhancements", "Skyblock Enhancements", "Tooltip Scroll")),
+        "slotLocks", List.of(new Other("skyblockaddons", "SkyblockAddons", "Lock Slots"), new Other("firmament", "Firmament", "Slot Locking"),
+            new Other("nofrills", "NoFrills", "Item Protection"), new Other("skyblocker", "Skyblocker", "Item Protection")));
 
     private Overlaps() {}
 

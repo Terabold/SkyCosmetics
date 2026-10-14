@@ -20,11 +20,13 @@ public class HotbarSlotMixin {
                                           int seed, CallbackInfo ci) {
         SlotArea.enter(SlotArea.HOTBAR);
         RarityBackgrounds.drawHotbar(g, x, y, stack); // catches its own failures
+        io.github.terabold.skycosmetics.slots.SlotLocks.drawHotbar(g, x, y, player, stack, true);
     }
 
     @Inject(method = "extractSlot", at = @At("RETURN"), require = 0)
     private void skycosmetics$leaveHotbar(GuiGraphicsExtractor g, int x, int y, DeltaTracker delta, Player player, ItemStack stack,
                                           int seed, CallbackInfo ci) {
         SlotArea.leave();
+        io.github.terabold.skycosmetics.slots.SlotLocks.drawHotbar(g, x, y, player, stack, false);
     }
 }

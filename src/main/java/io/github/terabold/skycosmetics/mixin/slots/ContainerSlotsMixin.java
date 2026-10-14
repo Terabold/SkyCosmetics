@@ -21,6 +21,7 @@ public abstract class ContainerSlotsMixin {
         target = "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;extractSlotHighlightBack(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V"))
     private void skycosmetics$rarityBackgrounds(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         RarityBackgrounds.drawSlots(g, (AbstractContainerScreen<?>) (Object) this); // catches its own failures
+        io.github.terabold.skycosmetics.slots.SlotLocks.drawUnder(g, (AbstractContainerScreen<?>) (Object) this);
     }
 
     @Inject(method = "extractSlot", at = @At("HEAD"), require = 0)

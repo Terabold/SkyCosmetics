@@ -93,8 +93,11 @@ public final class RarityBackgrounds {
     /** The ARGB tint of each rarity in the colors in use; rebuilt when they change. */
     private static final int[] TINT = new int[Rarity.values().length];
 
-    /** The texture every background is drawn from: cell 0 the style, cell 1 the recombobulated mark. */
-    private static final Mask.Sheet MAIN = new Mask.Sheet("slots/rarity_backgrounds", 2, 1);
+    /**
+     * The texture every background is drawn from: cell 0 the style, cell 1 the recombobulated mark, cell 2 the style
+     * without its outline (a locked slot's lock outline takes its place).
+     */
+    private static final Mask.Sheet MAIN = new Mask.Sheet("slots/rarity_backgrounds", 3, 1);
     /** The menu whose title was matched last (weakly: a closed menu is never kept alive), and its rule. */
     private static WeakReference<Screen> ruleScreen = new WeakReference<>(null);
     private static OwnMenus rule = OwnMenus.ALL;
@@ -149,7 +152,7 @@ public final class RarityBackgrounds {
                 int index = slot.getContainerSlot();
                 boolean loadoutButton = loadouts && !SlotArea.own(slot) && index >= 14 && index <= 43
                     && index % 9 >= 5 && index % 9 <= 7;
-                draw(g, tex, slot.x, slot.y, s, loadoutButton);
+                draw(g, tex, slot.x, slot.y, s, loadoutButton, SlotLocks.replacesOutline(slot));
             }
             // Seal the background batch before any mod's per-slot icons are extracted.
             g.nextStratum();
@@ -162,7 +165,7 @@ public final class RarityBackgrounds {
     public static void drawHotbar(GuiGraphicsExtractor g, int x, int y, ItemStack stack) {
         if (!on || !hotbar || stack.isEmpty()) return;
         try {
-            draw(g, texture(), x, y, stack);
+            draw(g, texture(), x, y, stack, false, SlotLocks.replacesHotbarOutline(stack));
         } catch (RuntimeException e) {
             Io.failed("Drawing a hotbar rarity background", e);
         }
@@ -195,22 +198,26 @@ public final class RarityBackgrounds {
     }
 
     private static void draw(GuiGraphicsExtractor g, Identifier tex, int x, int y, ItemStack s) {
-        draw(g, tex, x, y, s, false);
+        draw(g, tex, x, y, s, false, false);
     }
 
-    private static void draw(GuiGraphicsExtractor g, Identifier tex, int x, int y, ItemStack s, boolean loadoutButton) {
+    private static void draw(GuiGraphicsExtractor g, Identifier tex, int x, int y, ItemStack s, boolean loadoutButton, boolean plain) {
         ItemFacts f = ItemFacts.of(s);
         // Saved setups are menu buttons, not individual items. Only their known Loadouts slots use name color.
         int tint = loadoutButton && f.rarity() == null && f.loadoutColor() != null
             ? previewTint(f.loadoutColor()) : tintOf(f);
         if (tint == 0) return;
-        drawTint(g, tex, x, y, tint, recombMark && f.recombobulated());
+        drawTint(g, tex, x, y, tint, recombMark && f.recombobulated(), plain && outline && shape.outlined() ? 2 : 0);
     }
 
     /** One background at a slot's item position (x, y), in an ARGB tint. */
     static void drawTint(GuiGraphicsExtractor g, Identifier tex, int x, int y, int tint, boolean mark) {
+        drawTint(g, tex, x, y, tint, mark, 0);
+    }
+
+    private static void drawTint(GuiGraphicsExtractor g, Identifier tex, int x, int y, int tint, boolean mark, int cell) {
         int w = MAIN.texWidth(), h = MAIN.texHeight();
-        g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, 0, 0, Mask.CELL, Mask.CELL, w, h, tint);
+        g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, cell * Mask.CELL, 0, Mask.CELL, Mask.CELL, w, h, tint);
         if (mark) {
             g.pose().pushMatrix();
             try {
@@ -239,7 +246,8 @@ public final class RarityBackgrounds {
     static Identifier texture() {
         return MAIN.ensure(styleKey(), (img, i, x0, y0, n, s) -> {
             if (i == 0) Mask.paint(img, x0, y0, n, s, style(), 4);
-            else Mask.paintMark(img, x0, y0, n, s, markerSize);
+            else if (i == 1) Mask.paintMark(img, x0, y0, n, s, markerSize);
+            else Mask.paint(img, x0, y0, n, s, new Mask.Style(shape, fill, opacity, false, gradientMinimum, outlineOpacity), 4);
         });
     }
 

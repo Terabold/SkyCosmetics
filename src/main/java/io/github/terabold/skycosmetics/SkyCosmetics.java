@@ -100,6 +100,7 @@ public class SkyCosmetics implements ClientModInitializer {
 
         KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
         io.github.terabold.skycosmetics.zoom.Zoom.init(category);
+        io.github.terabold.skycosmetics.slots.SlotLocks.init(category);
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
             "key.skycosmetics.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category)); // unbound: K clashed with other mods
 
@@ -157,7 +158,7 @@ public class SkyCosmetics implements ClientModInitializer {
     }
 
     /** A text field has the keyboard: the screen's own, the recipe book's search, or another mod's box. */
-    private static boolean typing(Screen s) {
+    public static boolean typing(Screen s) {
         if (s instanceof AbstractRecipeBookScreen<?> rb) {
             RecipeBookComponent<?> book = ((RecipeBookScreenAccessor) rb).skycosmetics$recipeBook();
             EditBox search = book == null ? null : ((RecipeBookComponentAccessor) book).skycosmetics$searchBox();

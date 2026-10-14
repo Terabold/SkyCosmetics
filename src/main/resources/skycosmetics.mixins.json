@@ -32,6 +32,8 @@
     "slots.HotbarSlotMixin",
     "slots.ItemStackFactsMixin",
     "slots.ItemStackRenderStateAccess",
+    "slots.LocalPlayerDropMixin",
+    "slots.SlotLockScreenMixin",
     "slots.LayerRenderStateAccess",
     "hand.ItemInHandRendererMixin",
     "hand.LivingEntitySwingMixin",
