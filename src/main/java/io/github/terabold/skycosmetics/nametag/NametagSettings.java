@@ -11,7 +11,7 @@ public final class NametagSettings {
     public static final class Profile {
         public boolean enabled, hide, inventory, visibleOnly, shadow, fullBright;
         public boolean own = true, hidePlayersF1 = true, hideEntitiesF1 = true, hideArmorStandsF1 = true;
-        public boolean scores = true, styleScores, background = true, rounded = true, gradientBackground;
+        public boolean scores = true, styleScores, background = true, rounded = true, gradientBackground, tabNames = true;
         public Scope scope = Scope.PLAYERS;
         public Text text = Text.ORIGINAL;
         public NameFont font = NameFont.SERVER;

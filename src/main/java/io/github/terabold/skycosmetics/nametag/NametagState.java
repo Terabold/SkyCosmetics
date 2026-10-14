@@ -10,6 +10,8 @@ public interface NametagState {
         public int kind;
         public float previewFit = 1;
         public Cache cache;
+        /** The player's tab-list name (SkyBlock level, rank color, icons), or null. */
+        public Component tab;
     }
     final class Cache {
         public boolean own;

@@ -59,6 +59,12 @@ public final class Nametags {
             d.cache.own=d.own;
             d.cache.username=e instanceof Player player ? player.getGameProfile().name() : e.getName().getString();
         }
+        d.tab = null;
+        if (d.selected && p.tabNames && e instanceof Player player) {
+            var connection = Minecraft.getInstance().getConnection();
+            var info = connection == null ? null : connection.getPlayerInfo(player.getUUID());
+            d.tab = info == null ? null : info.getTabListDisplayName();
+        }
     }
     public static Component style(Component source, boolean own, String username) {
         // Scope controls layout/visibility, never permission to rename or recolor somebody else.
@@ -140,7 +146,10 @@ public final class Nametags {
         if(alpha<.02f)return false;
         // Prepare before touching the pose stack so a malformed external label can fall back cleanly.
         if(s.nameTag!=null&&s.nameTag.getString().length()>512)return true;
-        Component name=s.nameTag==null?null:styled(d.cache,s.nameTag);
+        // A player's tab-list name when it names them: servers often show more there (level, rank color, icons).
+        Component source = s.nameTag != null && d.tab != null && d.tab.getString().length() <= 256
+            && d.tab.getString().contains(d.cache.username) ? d.tab : s.nameTag;
+        Component name=source==null?null:styled(d.cache,source);
         // Real sneaking, read before "visible surfaces only" borrows vanilla's sneaking path below.
         boolean sneaking = s.isDiscrete;
         if (DRAW.size() >= 1024) DRAW.clear();

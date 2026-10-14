@@ -23,6 +23,7 @@ final class NametagSection {
         toggle(r,"own","Show my nametag","Show your own label in third person.",()->p.own,v->p.own=v);
         toggle(r,"inventory","Show in inventory","Show your own label above the inventory character preview.",()->p.inventory,v->p.inventory=v);
         toggle(r,"visibleOnly","Visible surfaces only","Remove the faint through-wall pass; does not reveal otherwise hidden players.",()->p.visibleOnly,v->p.visibleOnly=v);
+        toggle(r,"tabNames","Names from the tab list","Show a player's tab-list name (level, rank color, icons) on their nametag when it names them.",()->p.tabNames,v->p.tabNames=v);
         toggle(r,"scores","Show scoreboard line","Keep the server's below-name score or health display.",()->p.scores,v->p.scores=v);
         toggle(r,"hidePlayersF1","Hide players with F1","Hide player labels while the HUD is hidden.",()->p.hidePlayersF1,v->p.hidePlayersF1=v);
         toggle(r,"hideEntitiesF1","Hide entities with F1","Hide other entity labels while the HUD is hidden.",()->p.hideEntitiesF1,v->p.hideEntitiesF1=v);
@@ -57,7 +58,7 @@ final class NametagSection {
         slider(r,"paddingX","Horizontal padding",()->p.paddingX,v->p.paddingX=v,0,10,.5);
         slider(r,"paddingY","Vertical padding",()->p.paddingY,v->p.paddingY=v,0,10,.5);
         r.add(Option.of("reset",t("Reset nametags"),t("Restore defaults, including turning this feature off."),new Control.Action(t("Reset"),NametagSettings::reset,()->true,Component.empty())));
-        var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "opacity", "shadow", "ownName", "backgroundGroup", "background", "backgroundColor", "backgroundOpacity", "gradientBackground", "backgroundEnd", "radius", "paddingX", "paddingY", "reset");
+        var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "tabNames", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "opacity", "shadow", "ownName", "backgroundGroup", "background", "backgroundColor", "backgroundOpacity", "gradientBackground", "backgroundEnd", "radius", "paddingX", "paddingY", "reset");
         return r.stream().filter(o -> release.contains(o.id())).map(o -> {
             Option compact = Set.of("scale", "height", "own", "inventory", "paddingX", "paddingY", "color", "colorEnd", "backgroundColor", "backgroundOpacity").contains(o.id()) ? o.beside() : o.compact();
             return compact.visibleWhen(() -> relevant(o.id()));
