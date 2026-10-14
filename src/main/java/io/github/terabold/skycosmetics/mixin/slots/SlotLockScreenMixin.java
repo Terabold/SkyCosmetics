@@ -19,7 +19,7 @@ public abstract class SlotLockScreenMixin {
     @Inject(method = "slotClicked", at = @At("HEAD"), cancellable = true, require = 0)
     private void skycosmetics$guard(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
         try {
-            if (SlotLocks.blocks(slot, button, input)) ci.cancel();
+            if (SlotLocks.stopClick(slot, button, input)) ci.cancel();
         } catch (RuntimeException e) {
             io.github.terabold.skycosmetics.Io.failed("Checking a slot lock", e);
         }
@@ -33,6 +33,6 @@ public abstract class SlotLockScreenMixin {
 
     @Inject(method = "extractContents", at = @At("TAIL"), require = 0)
     private void skycosmetics$bindings(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta, CallbackInfo ci) {
-        SlotLocks.drawBindings(g, (AbstractContainerScreen<?>) (Object) this);
+        SlotLocks.drawBindings(g, (AbstractContainerScreen<?>) (Object) this, mouseX, mouseY);
     }
 }

@@ -534,6 +534,7 @@
   "skycosmetics.rarityBackgrounds.equipmentMenus.tooltip": "Choose which items have rarity backgrounds in Equipment and Equipment Wardrobe menus.",
   "key.skycosmetics.zoom": "Zoom",
   "key.skycosmetics.lockSlot": "Lock / Bind Slot",
+  "key.skycosmetics.bindSlot": "Bind Slots (press on both)",
   "key.skycosmetics.zoomIn": "Zoom In",
   "key.skycosmetics.zoomOut": "Zoom Out",
   "key.skycosmetics.zoomReset": "Reset Zoom Level"

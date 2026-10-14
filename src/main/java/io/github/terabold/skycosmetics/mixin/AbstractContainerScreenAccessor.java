@@ -19,4 +19,8 @@ public interface AbstractContainerScreenAccessor {
     /** The screen's own click path, for slot binding's swap: what a number key press on that slot does. */
     @org.spongepowered.asm.mixin.gen.Invoker("slotClicked")
     void skycosmetics$slotClicked(Slot slot, int slotId, int button, net.minecraft.world.inventory.ContainerInput input);
+
+    /** The slot at a point, the way the screen finds the one a click lands on. */
+    @org.spongepowered.asm.mixin.gen.Invoker("getHoveredSlot")
+    Slot skycosmetics$slotAt(double x, double y);
 }

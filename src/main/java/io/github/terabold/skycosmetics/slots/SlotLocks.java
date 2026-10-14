@@ -13,6 +13,7 @@ import io.github.terabold.skycosmetics.hub.Hub;
 import io.github.terabold.skycosmetics.hub.Option;
 import io.github.terabold.skycosmetics.hub.Section;
 import io.github.terabold.skycosmetics.items.Profiles;
+import io.github.terabold.skycosmetics.items.Where;
 import io.github.terabold.skycosmetics.mixin.AbstractContainerScreenAccessor;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -23,7 +24,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
@@ -42,21 +45,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * Slot locking and binding, per SkyBlock profile.
  *
  * Tap the lock key over one of your slots to lock it: your clicks, shift-clicks, number-key swaps and drops on it
- * are stopped before they leave the game, so a locked item can't be moved, sold or dropped by accident. Hold the key
- * on an inventory slot and let go over a hotbar slot (or the other way round) to bind the two: a shift-click on
- * either then swaps them, exactly as pressing that hotbar number over the inventory slot does. Locking only ever
- * holds back your own actions; binding turns your one shift-click into that one vanilla swap.
+ * are stopped before they leave the game, so a locked item can't be moved, sold or dropped by accident.
+ *
+ * Binding an inventory slot to a hotbar slot works the ways other mods taught people: hold the lock key on one and
+ * let go over the other, or press the bind key on one and then on the other. A shift-click (or a plain click, if
+ * chosen) on either end then swaps them, exactly as pressing that hotbar number over the inventory slot does. Locking
+ * only ever holds back your own actions; binding turns your one click into that one vanilla swap.
  *
  * Kept in {@code config/skycosmetics/slot-locks.json}. Inventory slot numbers: 0-8 hotbar, 9-35 inventory, 36-39
  * armor; the off-hand and the SkyBlock menu slot (8) are never bound.
@@ -68,28 +73,42 @@ public final class SlotLocks {
 
     public enum Place { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, CENTER }
 
+    /** What swaps a bound slot with its hotbar slot. */
+    public enum Swap { SHIFT_CLICK, CLICK, OFF }
+
+    /** When bindings are outlined. */
+    public enum Show { HOVER, ALWAYS, HIDDEN }
+
     static final class Bucket {
         final Set<Integer> locked = new LinkedHashSet<>();
-        /** Inventory slot -> hotbar slot. */
-        final Map<Integer, Integer> binds = new TreeMap<>();
+        /** Inventory slot -> hotbar slot, oldest first. */
+        final Map<Integer, Integer> binds = new LinkedHashMap<>();
     }
 
     // Settings; the draw and click paths read them directly.
-    static boolean on = true, swapBound = true, blockDrops = true, hotbar = true;
+    static boolean on = true, blockDrops = true, dungeonQ = true, hotbar = true, multiBind, everyMenu, links = true, tellStopped = true;
+    static Swap swapWith = Swap.SHIFT_CLICK;
+    static Show show = Show.HOVER;
     static Icon icon = Icon.PADLOCK;
     static Place place = Place.TOP_LEFT;
     static int size = 100, opacity = 85, color = 0xFFFFD24A, bindColor = 0xFF4BA3FF;
 
-    private static KeyMapping key;
+    private static KeyMapping key, bindKey;
     private static final Map<String, Bucket> BUCKETS = new HashMap<>();
     private static final Map<String, String> LAST_PROFILE = new HashMap<>();
     private static boolean loaded;
 
-    // The key gesture: where it started, whether a click used it up, and the short flash after a new binding.
-    private static boolean held, consumed;
-    private static Integer anchor;
+    // The key gesture: which key is down, where it started and whether a click used it up; the first slot of a
+    // two-press binding; the short flash after a new binding; when a stopped action was last mentioned.
+    private static KeyMapping held;
+    private static boolean consumed;
+    private static Integer anchor, pending;
     private static int flashFrom = -1, flashTo = -1;
-    private static long flashAt;
+    private static long flashAt, toldAt;
+    /** The mouse button whose press was kept from the menu: its release is kept too, or the menu acts on it. */
+    private static int swallowed = -1;
+    /** Hotbar slot -> the inventory slot it last swapped with, for a hotbar slot bound to several. */
+    private static final Map<Integer, Integer> LAST_SWAP = new HashMap<>();
     /** Set around our own swap so the lock check lets it through. */
     private static boolean ours;
 
@@ -100,32 +119,55 @@ public final class SlotLocks {
     public static void init(KeyMapping.Category category) {
         key = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.skycosmetics.lockSlot", InputConstants.Type.KEYSYM,
             GLFW.GLFW_KEY_L, category));
+        bindKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.skycosmetics.bindSlot", InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_UNKNOWN, category));
         Settings.register(SECTION, SlotLocks::read, SlotLocks::write);
         Hub.add(new Section(SECTION, Section.FEATURE, Component.literal("Slot Locking"),
             Component.literal("Lock and bind slots"),
             Component.literal("Lock slots so their items can't be moved, sold or dropped by accident, and bind inventory slots to hotbar slots."),
             () -> new ItemStack(Items.TRIPWIRE_HOOK), SlotLocks::rows));
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
-            if (!(screen instanceof AbstractContainerScreen<?> acs)) return;
+            if (!(screen instanceof AbstractContainerScreen<?> acs) || screen instanceof CreativeModeInventoryScreen) return;
+            // Either key may be a keyboard key or a mouse button.
             ScreenKeyboardEvents.allowKeyPress(screen).register((s, event) -> {
-                if (!on || !key.matches(event) || SkyCosmetics.typing(s)) return true;
-                if (!held) { held = true; consumed = false; anchor = playerSlot(hovered(acs)); }
+                if (!active() || SkyCosmetics.typing(s)) return true;
+                KeyMapping k = key.matches(event) ? key : !bindKey.isUnbound() && bindKey.matches(event) ? bindKey : null;
+                if (k == null) return true;
+                press(acs, k);
                 return false;
             });
             ScreenKeyboardEvents.afterKeyRelease(screen).register((s, event) -> {
-                if (held && key.matches(event)) finish(acs);
+                if (held != null && held.matches(event)) release(acs);
             });
             ScreenMouseEvents.allowMouseClick(screen).register((s, click) -> {
-                if (held) { consumed = true; return false; }
-                if (!on || !swapBound || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !click.hasShiftDown()
-                    || !(s instanceof InventoryScreen) || !acs.getMenu().getCarried().isEmpty()) return true;
-                return !swap(acs, hovered(acs));
+                if (held != null) { consumed = true; swallowed = click.button(); return false; }
+                KeyMapping k = !active() ? null : key.matchesMouse(click) ? key : !bindKey.isUnbound() && bindKey.matchesMouse(click) ? bindKey : null;
+                if (k != null) { press(acs, k); return false; }
+                if (!swapClick(acs, click)) return true;
+                swallowed = click.button();
+                return false;
             });
-            ScreenEvents.remove(screen).register(s -> { held = false; anchor = null; });
+            ScreenMouseEvents.allowMouseRelease(screen).register((s, click) -> {
+                if (held != null && held.matchesMouse(click)) { release(acs); return false; }
+                if (click.button() != swallowed) return true;
+                swallowed = -1;
+                return false;
+            });
+            ScreenEvents.remove(screen).register(s -> { held = null; anchor = null; pending = null; swallowed = -1; });
         });
     }
 
     // ---------------------------------------------------------------- state ---
+
+    /**
+     * Locks and bindings belong to SkyBlock profiles, so they only act on SkyBlock (and in singleplayer, to try them
+     * out): another game's items in those slots are left alone. Never in the creative inventory.
+     */
+    static boolean active() {
+        if (!on) return false;
+        Minecraft mc = Minecraft.getInstance();
+        return !(mc.screen instanceof CreativeModeInventoryScreen) && (Where.skyBlock() || mc.hasSingleplayerServer());
+    }
 
     public static boolean isLocked(int slot) {
         Bucket b = bucket(false);
@@ -137,33 +179,93 @@ public final class SlotLocks {
         return b != null && b.locked.contains(slot);
     }
 
-    /** {inventory slot, hotbar slot} of the binding with this end, or null. */
+    /**
+     * {inventory slot, hotbar slot} of the binding with this end, or null. A hotbar slot bound to several goes back
+     * to the one it last swapped with, else to its newest.
+     */
     static int[] bindingOf(int slot) {
         Bucket b = bucket(false);
         if (b == null) return null;
-        for (var e : b.binds.entrySet()) if (e.getKey() == slot || e.getValue() == slot) return new int[]{e.getKey(), e.getValue()};
-        return null;
+        Integer bar = b.binds.get(slot);
+        if (bar != null) return new int[]{slot, bar};
+        Integer last = LAST_SWAP.get(slot);
+        if (last != null && Integer.valueOf(slot).equals(b.binds.get(last))) return new int[]{last, slot};
+        int[] newest = null;
+        for (var e : b.binds.entrySet()) if (e.getValue() == slot) newest = new int[]{e.getKey(), slot};
+        return newest;
     }
 
-    /** Called from the menu's click path: whether this click must not happen. */
+    /** Whether this click must not happen. */
     public static boolean blocks(Slot slot, int button, ContainerInput input) {
-        if (!on || ours) return false;
+        if (!active() || ours) return false;
         if (slot != null && slot.container instanceof Inventory && isLocked(slot.getContainerSlot())) return true;
+        if (input == ContainerInput.PICKUP_ALL) return pullsFromLocked();
         return input == ContainerInput.SWAP && isLocked(button);
     }
 
-    /** Called before Q drops the held item. */
+    /** A double-click gathers every stack like the one on the cursor, locked slots' too: then it doesn't happen. */
+    private static boolean pullsFromLocked() {
+        var p = Minecraft.getInstance().player;
+        if (p == null) return false;
+        ItemStack carried = p.containerMenu.getCarried();
+        if (carried.isEmpty()) return false;
+        for (Slot s : p.containerMenu.slots) {
+            if (s.container instanceof Inventory && s.hasItem() && isLocked(s.getContainerSlot())
+                && ItemStack.isSameItemSameComponents(s.getItem(), carried)) return true;
+        }
+        return false;
+    }
+
+    /** Whether Q must not drop the held item. */
     public static boolean blocksDrop(Player player) {
-        return on && blockDrops && isLocked(player.getInventory().getSelectedSlot());
+        return active() && blockDrops && !(dungeonQ && Where.dungeon()) && isLocked(player.getInventory().getSelectedSlot());
+    }
+
+    /** The menu's click path: {@link #blocks}, saying so on the action bar. */
+    public static boolean stopClick(Slot slot, int button, ContainerInput input) {
+        boolean stop = blocks(slot, button, input);
+        if (stop) told();
+        return stop;
+    }
+
+    /** Before Q drops the held item: {@link #blocksDrop}, saying so on the action bar. */
+    public static boolean stopDrop(Player player) {
+        boolean stop = blocksDrop(player);
+        if (stop) told();
+        return stop;
+    }
+
+    private static void told() {
+        long now = System.currentTimeMillis();
+        if (!tellStopped || now - toldAt < 1500) return;
+        toldAt = now;
+        Minecraft mc = Minecraft.getInstance();
+        mc.gui.setOverlayMessage(Component.literal("Locked slot; ").append(key.getTranslatedKeyMessage()).append(" over it unlocks"), false);
+        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, .25f, .4f));
+    }
+
+    /** Bindings are made and used in your inventory, and in every menu when that's on. */
+    private static boolean bindsHere(Screen screen) {
+        return screen instanceof InventoryScreen || everyMenu && screen instanceof AbstractContainerScreen<?>;
+    }
+
+    /** A left click with or without shift, as chosen, on a bound slot: that one swap instead of the click. */
+    private static boolean swapClick(AbstractContainerScreen<?> acs, MouseButtonEvent click) {
+        if (!active() || swapWith == Swap.OFF || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !bindsHere(acs)
+            || !acs.getMenu().getCarried().isEmpty()) return false;
+        // The event's own modifiers, or the keyboard's: some input layers send clicks without them.
+        boolean shift = click.hasShiftDown() || Minecraft.getInstance().hasShiftDown();
+        // The slot under the click itself, as the menu would take it.
+        return shift == (swapWith == Swap.SHIFT_CLICK) && swap(acs, ((AbstractContainerScreenAccessor) acs).skycosmetics$slotAt(click.x(), click.y()));
     }
 
     private static boolean swap(AbstractContainerScreen<?> acs, Slot hovered) {
-        if (hovered == null || !(hovered.container instanceof Inventory)) return false;
-        int[] b = bindingOf(hovered.getContainerSlot());
+        Integer at = playerSlot(hovered);
+        int[] b = at == null ? null : bindingOf(at);
         if (b == null) return false;
-        Slot source = null;
-        for (Slot s : acs.getMenu().slots) if (s.container instanceof Inventory && s.getContainerSlot() == b[0]) source = s;
+        Slot source = slotOf(acs, b[0]);
         if (source == null) return false;
+        LAST_SWAP.put(b[1], b[0]);
         ours = true;
         try {
             ((AbstractContainerScreenAccessor) acs).skycosmetics$slotClicked(source, source.index, b[1], ContainerInput.SWAP);
@@ -173,34 +275,76 @@ public final class SlotLocks {
         return true;
     }
 
-    private static void finish(AbstractContainerScreen<?> acs) {
-        held = false;
+    /** One of the keys went down over the menu. */
+    private static void press(AbstractContainerScreen<?> acs, KeyMapping k) {
+        if (held != null) return; // a key repeat, or the other key while one is down
+        held = k;
+        consumed = false;
+        anchor = playerSlot(hovered(acs));
+        if (k == key) { pending = null; return; }
+        if (pending == null) return;
+        // The bind key's second press: bind the two, or on the same slot again remove its binding.
+        Integer first = pending, at = anchor;
+        pending = null;
+        consumed = true;
+        if (at == null) { message("Binding cancelled"); return; }
+        if (at.equals(first)) {
+            if (unbind(bucket(true), at)) changed(false, "Binding removed"); else message("Binding cancelled");
+            return;
+        }
+        if (bindable(first, at) && bindsHere(acs)) bind(first, at);
+        else pick(at);
+    }
+
+    /** The held key came up. */
+    private static void release(AbstractContainerScreen<?> acs) {
+        KeyMapping k = held;
+        held = null;
         Integer start = anchor;
         anchor = null;
         if (consumed) return;
         Integer end = playerSlot(hovered(acs));
+        if (start != null && end != null && !end.equals(start) && bindable(start, end)) {
+            // Held on one slot and let go over another.
+            if (bindsHere(acs)) bind(start, end); else message("Bind slots in your inventory, or turn on bindings in every menu");
+            return;
+        }
+        if (k == bindKey) { if (start != null) pick(start); return; }
         if (end == null) end = start;
         if (end == null || end == Inventory.SLOT_OFFHAND) return;
         Bucket b = bucket(true);
-        if (acs instanceof InventoryScreen && start != null && bindable(start, end)) {
-            int inv = hotbarSlot(start) ? end : start, bar = hotbarSlot(start) ? start : end;
-            unbind(b, inv);
-            unbind(b, bar);
-            b.locked.remove(inv);
-            b.locked.remove(bar);
-            b.binds.put(inv, bar);
-            flashFrom = inv; flashTo = bar; flashAt = System.currentTimeMillis();
-            changed(true, "Slots bound");
-            return;
-        }
         if (unbind(b, end)) { changed(false, "Binding removed"); return; }
         boolean locked = b.locked.add(end);
         if (!locked) b.locked.remove(end);
         changed(locked, locked ? "Slot locked" : "Slot unlocked");
     }
 
+    /** The bind key's first press: this slot waits for its partner. */
+    private static void pick(int slot) {
+        if (!bindableEnd(slot)) { message("This slot can't be bound"); return; }
+        pending = slot;
+        message(bindingOf(slot) != null ? "Now press it on another slot, or here again to remove the binding"
+            : "Now press it on the " + (hotbarSlot(slot) ? "inventory" : "hotbar") + " slot to bind with");
+    }
+
+    private static void bind(int a, int b) {
+        int inv = hotbarSlot(a) ? b : a, bar = hotbarSlot(a) ? a : b;
+        Bucket bk = bucket(true);
+        unbind(bk, inv);
+        if (!multiBind) unbind(bk, bar);
+        bk.locked.remove(inv);
+        bk.locked.remove(bar);
+        bk.binds.put(inv, bar);
+        flashFrom = inv; flashTo = bar; flashAt = System.currentTimeMillis();
+        changed(true, "Slots bound");
+    }
+
+    private static boolean bindableEnd(int slot) {
+        return slot >= 0 && slot < 36 && slot != 8;
+    }
+
     private static boolean bindable(int a, int b) {
-        return a != b && a != 8 && b != 8 && a < 36 && b < 36 && hotbarSlot(a) != hotbarSlot(b);
+        return a != b && bindableEnd(a) && bindableEnd(b) && hotbarSlot(a) != hotbarSlot(b);
     }
 
     static boolean hotbarSlot(int slot) {
@@ -213,13 +357,22 @@ public final class SlotLocks {
 
     private static void changed(boolean positive, String what) {
         save();
-        Minecraft mc = Minecraft.getInstance();
-        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, positive ? 1f : .25f));
-        mc.gui.setOverlayMessage(Component.literal(what), false);
+        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, positive ? 1f : .25f));
+        message(what);
+    }
+
+    private static void message(String what) {
+        Minecraft.getInstance().gui.setOverlayMessage(Component.literal(what), false);
     }
 
     private static Slot hovered(AbstractContainerScreen<?> acs) {
         return ((AbstractContainerScreenAccessor) acs).skycosmetics$hoveredSlot();
+    }
+
+    /** The menu's slot showing this inventory slot, or null. */
+    private static Slot slotOf(AbstractContainerScreen<?> acs, int index) {
+        for (Slot s : acs.getMenu().slots) if (s.container instanceof Inventory && s.getContainerSlot() == index && s.isActive()) return s;
+        return null;
     }
 
     private static Integer playerSlot(Slot s) {
@@ -244,7 +397,7 @@ public final class SlotLocks {
 
     /** Under the items, with the rarity backgrounds: the outline style. */
     public static void drawUnder(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen) {
-        if (!on || icon != Icon.OUTLINE) return;
+        if (!active() || icon != Icon.OUTLINE) return;
         try {
             for (Slot s : screen.getMenu().slots) {
                 if (s.isActive() && s.container instanceof Inventory && isLocked(s.getContainerSlot())) {
@@ -258,18 +411,20 @@ public final class SlotLocks {
 
     /** Whether the lock outline takes the place of this slot's rarity outline. */
     static boolean replacesOutline(Slot s) {
-        return on && icon == Icon.OUTLINE && s.container instanceof Inventory && isLocked(s.getContainerSlot());
+        return active() && icon == Icon.OUTLINE && s.container instanceof Inventory && isLocked(s.getContainerSlot());
     }
 
     /** Over a slot's item, under its count. */
     public static void drawIcon(GuiGraphicsExtractor g, Slot s) {
-        if (!on || !(s.container instanceof Inventory)) return;
+        if (!active() || !(s.container instanceof Inventory)) return;
         try {
             int i = s.getContainerSlot();
             boolean lock = explicitlyLocked(i), bound = !lock && bindingOf(i) != null;
             if (lock || bound) mark(g, s.x, s.y, lock ? color : bindColor);
-            if (held && anchor != null && !hotbarSlot(anchor) && hotbarSlot(i) && i != 8) {
-                g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x40FFFFFF); // where a binding can end
+            Integer from = binding();
+            if (from != null && bindsHere(Minecraft.getInstance().screen)) {
+                if (i == from) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x60000000 | bindColor & 0xFFFFFF); // where it starts
+                else if (bindable(from, i)) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x40FFFFFF);       // where it can end
             }
         } catch (RuntimeException e) {
             Io.failed("Drawing a slot lock", e);
@@ -278,7 +433,7 @@ public final class SlotLocks {
 
     /** The HUD hotbar: {@code under} the item the outline style, else over it the mark. */
     public static void drawHotbar(GuiGraphicsExtractor g, int x, int y, Player player, ItemStack stack, boolean under) {
-        if (!on || !hotbar || player == null || stack.isEmpty() || under != (icon == Icon.OUTLINE)) return;
+        if (!active() || !hotbar || player == null || stack.isEmpty() || under != (icon == Icon.OUTLINE)) return;
         try {
             int i = hotbarIndex(player, stack);
             if (i < 0 || !isLocked(i)) return;
@@ -292,7 +447,7 @@ public final class SlotLocks {
     /** Whether a hotbar slot's lock outline takes the place of its rarity outline. */
     static boolean replacesHotbarOutline(ItemStack stack) {
         var p = Minecraft.getInstance().player;
-        if (!on || !hotbar || icon != Icon.OUTLINE || p == null) return false;
+        if (!active() || !hotbar || icon != Icon.OUTLINE || p == null) return false;
         int i = hotbarIndex(p, stack);
         return i >= 0 && isLocked(i);
     }
@@ -304,35 +459,68 @@ public final class SlotLocks {
         return -1;
     }
 
-    /** The inventory screen: both ends of a binding while you hover one end or hold shift, and a new binding's flash. */
-    public static void drawBindings(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen) {
-        if (!on || !(screen instanceof InventoryScreen)) return;
+    /** The slot a binding being made starts from: held on it and moved away, or picked with the bind key. */
+    private static Integer binding() {
+        if (pending != null) return pending;
+        if (held == null || consumed || anchor == null) return null;
+        var screen = Minecraft.getInstance().screen;
+        Integer at = screen instanceof AbstractContainerScreen<?> acs ? playerSlot(hovered(acs)) : null;
+        return held == bindKey || !anchor.equals(at) ? anchor : null;
+    }
+
+    /**
+     * Over the menu: the bindings (of the hovered slot, or all while shift is held, or always), a new binding's
+     * flash, and a line from the slot a binding is being made from to the cursor.
+     */
+    public static void drawBindings(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, int mouseX, int mouseY) {
+        if (!active() || !bindsHere(screen)) return;
         try {
             Bucket b = bucket(false);
-            if (b == null) return;
             var acc = (AbstractContainerScreenAccessor) screen;
-            Slot hov = acc.skycosmetics$hoveredSlot();
-            int[] hb = hov == null || !(hov.container instanceof Inventory) ? null : bindingOf(hov.getContainerSlot());
-            boolean shift = InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-                || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+            int left = acc.skycosmetics$leftPos(), top = acc.skycosmetics$topPos();
             g.pose().pushMatrix();
-            g.pose().translate(acc.skycosmetics$leftPos(), acc.skycosmetics$topPos());
-            for (var e : b.binds.entrySet()) {
-                if (hb != null ? hb[0] == e.getKey() : shift) pair(g, screen, e.getKey(), e.getValue(), bindColor);
+            try {
+                g.pose().translate(left, top);
+                if (b != null && show != Show.HIDDEN) {
+                    Integer h = playerSlot(acc.skycosmetics$hoveredSlot());
+                    boolean all = show == Show.ALWAYS || Minecraft.getInstance().hasShiftDown();
+                    for (var e : b.binds.entrySet()) {
+                        if (all || e.getKey().equals(h) || e.getValue().equals(h)) pair(g, screen, e.getKey(), e.getValue(), bindColor);
+                    }
+                }
+                long age = System.currentTimeMillis() - flashAt;
+                if (flashFrom >= 0 && age < 650) pair(g, screen, flashFrom, flashTo, (int) (230 - age * 230 / 650) << 24 | bindColor & 0xFFFFFF);
+                Integer from = binding();
+                Slot fs = from == null ? null : slotOf(screen, from);
+                if (fs != null) line(g, fs.x + 8, fs.y + 8, mouseX - left, mouseY - top, 0xC0000000 | bindColor & 0xFFFFFF);
+            } finally {
+                g.pose().popMatrix();
             }
-            long age = System.currentTimeMillis() - flashAt;
-            if (flashFrom >= 0 && age < 650) pair(g, screen, flashFrom, flashTo, (int) (230 - age * 230 / 650) << 24 | bindColor & 0xFFFFFF);
-            g.pose().popMatrix();
         } catch (RuntimeException e) {
             Io.failed("Drawing slot bindings", e);
         }
     }
 
     private static void pair(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, int a, int b, int c) {
-        for (Slot s : screen.getMenu().slots) {
-            if (s.container instanceof Inventory && (s.getContainerSlot() == a || s.getContainerSlot() == b)) {
-                g.outline(s.x - 1, s.y - 1, 18, 18, c);
-            }
+        Slot sa = slotOf(screen, a), sb = slotOf(screen, b);
+        if (links && sa != null && sb != null) line(g, sa.x + 8, sa.y + 8, sb.x + 8, sb.y + 8, (int) ((c >>> 24) * .7) << 24 | c & 0xFFFFFF);
+        if (sa != null) g.outline(sa.x - 1, sa.y - 1, 18, 18, c);
+        if (sb != null) g.outline(sb.x - 1, sb.y - 1, 18, 18, c);
+    }
+
+    /** A one-pixel line: a thin rectangle turned to point from one end to the other. */
+    private static void line(GuiGraphicsExtractor g, float x0, float y0, float x1, float y1, int c) {
+        float dx = x1 - x0, dy = y1 - y0;
+        int len = Math.round((float) Math.sqrt(dx * dx + dy * dy));
+        if (len < 2) return;
+        g.pose().pushMatrix();
+        try {
+            g.pose().translate(x0, y0);
+            g.pose().rotate((float) Math.atan2(dy, dx));
+            g.pose().translate(0, -.5f);
+            g.fill(0, 0, len, 1, c);
+        } finally {
+            g.pose().popMatrix();
         }
     }
 
@@ -392,13 +580,30 @@ public final class SlotLocks {
         List<Option> r = new ArrayList<>();
         var overlaps = io.github.terabold.skycosmetics.compat.Overlaps.note(SECTION);
         if (overlaps != null) r.add(overlaps);
-        r.add(row("on", "Enable slot locking", "Tap the key over one of your slots to lock or unlock it. Hold it on an inventory slot and let go over a hotbar slot to bind them.",
+        r.add(row("on", "Enable slot locking", "Tap the lock key over one of your slots to lock or unlock it; bind an inventory slot to a hotbar slot with either key below. Locks are kept per SkyBlock profile and only act on SkyBlock (and in singleplayer, to try them).",
             new Control.Toggle(() -> on, v -> on = v)));
-        r.add(row("key", "Lock key", "Over a slot in any menu. Default L.", new Control.Key(() -> key, false)));
-        r.add(row("swapBound", "Shift-click swaps bound slots", "In your inventory, shift-clicking either end of a binding swaps the two, like the hotbar number key does.",
-            new Control.Toggle(() -> swapBound, v -> swapBound = v)));
+        r.add(row("key", "Lock key", "Tap over a slot to lock or unlock it. Hold it on one slot and let go over another to bind them. Default L.",
+            new Control.Key(() -> key, true)));
+        r.add(row("bindKey", "Bind key", "Press over one slot, then over the other, to bind them; press twice on the same slot to remove its binding. Holding and letting go over the other works too. Not set by default.",
+            new Control.Key(() -> bindKey, true)));
         r.add(row("blockDrops", "Stop dropping locked items", "Q does nothing while a locked hotbar slot is selected.",
             new Control.Toggle(() -> blockDrops, v -> blockDrops = v)));
+        r.add(row("dungeonQ", "Q still works in Dungeons", "In Dungeons Q uses your class Ultimate, so a lock doesn't stop it there.",
+            new Control.Toggle(() -> dungeonQ, v -> dungeonQ = v)).visibleWhen(() -> blockDrops));
+        r.add(row("tellStopped", "Say when a lock stops something", "A short note on the action bar, at most every 1.5 seconds.",
+            new Control.Toggle(() -> tellStopped, v -> tellStopped = v)));
+        r.add(Option.header("slotLocks.binding", Component.literal("Bindings")));
+        r.add(row("swapWith", "Swap with", "Clicking either end of a binding swaps the two, like that hotbar number key over the inventory slot.",
+            new Control.Choice<>(List.of(Swap.values()), v -> Component.literal(switch (v) {
+                case SHIFT_CLICK -> "Shift-click"; case CLICK -> "Click"; case OFF -> "Off"; }), () -> swapWith, v -> swapWith = v)));
+        r.add(row("multiBind", "Several per hotbar slot", "Bind one hotbar slot to more than one inventory slot. From the hotbar end, a swap goes back where the item came from.",
+            new Control.Toggle(() -> multiBind, v -> multiBind = v)));
+        r.add(row("everyMenu", "In every menu", "Make and use bindings on your own slots in chests and other menus too, not only in your inventory.",
+            new Control.Toggle(() -> everyMenu, v -> everyMenu = v)));
+        r.add(row("show", "Show bindings", "On hover: the binding of the slot under the cursor, or every binding while you hold shift.",
+            new Control.Choice<>(List.of(Show.values()), v -> Component.literal(v == Show.HOVER ? "On hover" : label(v)), () -> show, v -> show = v)));
+        r.add(row("links", "Link line", "A line between the two ends of a binding.", new Control.Toggle(() -> links, v -> links = v))
+            .visibleWhen(() -> show != Show.HIDDEN));
         r.add(Option.header("slotLocks.look", Component.literal("Look")));
         r.add(row("icon", "Mark", "Outline replaces the rarity background's outline on locked slots.",
             new Control.Choice<>(List.of(Icon.values()), v -> Component.literal(label(v)), () -> icon, v -> icon = v)));
@@ -433,8 +638,15 @@ public final class SlotLocks {
     private static void read(JsonElement v) {
         JsonObject o = Settings.obj(v);
         on = Settings.bool(o.get("on"), on);
-        swapBound = Settings.bool(o.get("swapBound"), swapBound);
+        // "swapBound" was the on/off before "swapWith".
+        swapWith = choice(Swap.values(), Settings.str(o.get("swapWith"), null), Settings.bool(o.get("swapBound"), true) ? swapWith : Swap.OFF);
         blockDrops = Settings.bool(o.get("blockDrops"), blockDrops);
+        dungeonQ = Settings.bool(o.get("dungeonQ"), dungeonQ);
+        tellStopped = Settings.bool(o.get("tellStopped"), tellStopped);
+        multiBind = Settings.bool(o.get("multiBind"), multiBind);
+        everyMenu = Settings.bool(o.get("everyMenu"), everyMenu);
+        show = choice(Show.values(), Settings.str(o.get("show"), null), show);
+        links = Settings.bool(o.get("links"), links);
         hotbar = Settings.bool(o.get("hotbar"), hotbar);
         icon = choice(Icon.values(), Settings.str(o.get("icon"), null), icon);
         place = choice(Place.values(), Settings.str(o.get("place"), null), place);
@@ -446,8 +658,9 @@ public final class SlotLocks {
 
     private static JsonElement write() {
         JsonObject o = new JsonObject();
-        o.addProperty("on", on); o.addProperty("swapBound", swapBound); o.addProperty("blockDrops", blockDrops);
-        o.addProperty("hotbar", hotbar); o.addProperty("icon", icon.name()); o.addProperty("place", place.name());
+        o.addProperty("on", on); o.addProperty("swapWith", swapWith.name()); o.addProperty("blockDrops", blockDrops);
+        o.addProperty("dungeonQ", dungeonQ); o.addProperty("tellStopped", tellStopped); o.addProperty("multiBind", multiBind); o.addProperty("everyMenu", everyMenu);
+        o.addProperty("show", show.name()); o.addProperty("links", links); o.addProperty("hotbar", hotbar); o.addProperty("icon", icon.name()); o.addProperty("place", place.name());
         o.addProperty("size", size); o.addProperty("opacity", opacity); o.addProperty("color", color); o.addProperty("bindColor", bindColor);
         return o;
     }
@@ -475,13 +688,13 @@ public final class SlotLocks {
                 if (BUCKETS.size() >= 256 || !(e.getValue() instanceof JsonObject b)) continue;
                 Bucket bucket = new Bucket();
                 if (b.get("locked") instanceof JsonArray a) for (JsonElement x : a) {
-                    int i = (int) Settings.num(x, -1, -1, 40);
-                    if (i >= 0) bucket.locked.add(i);
+                    int i = (int) Settings.num(x, -1, -1, 99);
+                    if (i >= 0 && i < Inventory.SLOT_OFFHAND) bucket.locked.add(i);
                 }
                 for (var bind : Settings.obj(b.get("binds")).entrySet()) {
                     try {
                         int inv = Integer.parseInt(bind.getKey()), bar = (int) Settings.num(bind.getValue(), -1, -1, 8);
-                        if (bindable(inv, bar)) bucket.binds.put(inv, bar);
+                        if (!hotbarSlot(inv) && bindable(inv, bar)) bucket.binds.put(inv, bar);
                     } catch (NumberFormatException ignored) { /* not a slot number */ }
                 }
                 BUCKETS.put(e.getKey(), bucket);
@@ -536,5 +749,23 @@ public final class SlotLocks {
     public static void testLook(Icon i, boolean enabled) {
         icon = i;
         on = enabled;
+    }
+
+    /** For tests: how bindings swap and where. */
+    public static void testBinding(Swap swap, boolean several, boolean anyMenu) {
+        swapWith = swap;
+        multiBind = several;
+        everyMenu = anyMenu;
+    }
+
+    /** For tests: the bind key (GLFW key code, or -1 for none). */
+    public static void testBindKey(int glfw) {
+        bindKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(glfw));
+        KeyMapping.resetMapping();
+    }
+
+    /** For tests: {inventory slot, hotbar slot} of the binding with this end, or null. */
+    public static int[] testPartner(int slot) {
+        return bindingOf(slot);
     }
 }
