@@ -422,7 +422,7 @@ public class DataSafetyTest implements FabricClientGameTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<String> chat(Minecraft mc) {
+    static List<String> chat(Minecraft mc) {
         try {
             Field f = ChatComponent.class.getDeclaredField("allMessages");
             f.setAccessible(true);

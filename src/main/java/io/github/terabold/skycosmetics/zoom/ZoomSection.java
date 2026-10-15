@@ -40,7 +40,13 @@ final class ZoomSection {
         slider(r, "inSeconds", "Zoom-in time", "Time to reach the starting zoom.", () -> p().inSeconds, v -> p().inSeconds = v, 0, .5, .01, " s");
         slider(r, "outSeconds", "Zoom-out time", "Time to return to the normal view.", () -> p().outSeconds, v -> p().outSeconds = v, 0, .5, .01, " s");
         toggle(r, "smoothCamera", "Smooth camera", "Smooth mouse movement while zooming. Off gives direct camera control; releasing zoom stops smoothing immediately.",
-            () -> p().cinematic != Cinematic.OFF, v -> { p().cinematic = v ? Cinematic.CUSTOM : Cinematic.OFF; Zoom.reset(); });
+            () -> p().cinematic != Cinematic.OFF, v -> { p().cinematic = v ? p().smoothStyle : Cinematic.OFF; Zoom.reset(); });
+        choice(r, "smoothing", "Smoothing", "Responsive: light smoothing that stops almost as soon as your mouse does. Cinematic: Minecraft's cinematic camera, like OptiFine, Essential and Zoomify zoom: slow and floaty, it keeps gliding after you stop; faster at a higher mouse sensitivity.",
+            new Cinematic[]{Cinematic.CUSTOM, Cinematic.VANILLA}, () -> p().cinematic == Cinematic.OFF ? p().smoothStyle : p().cinematic,
+            v -> { p().smoothStyle = v; if (p().cinematic != Cinematic.OFF) p().cinematic = v; Zoom.reset(); });
+        r.add(Option.of("glide", text("Glide"), text("How long Cinematic keeps gliding after you stop; 100% is Minecraft's own."),
+            new Control.Slider(() -> p().glide * 100, v -> p().glide = v / 100, 25, 250, 5,
+                v -> text(String.format(Locale.ROOT, "%d%% (%.1f s)", Math.round(v), Zoom.cinematicSeconds(v / 100))))));
         r.add(Option.header("keys", text("Keybinds")));
         key(r, "primaryKey", "Zoom key", "Hold or toggle zoom. Conflicts are shown here; zoom in, out and reset keys are in Minecraft's Controls.", () -> Zoom.primaryKey);
         r.add(Option.header("behavior", text("Zoom amount")));
@@ -81,6 +87,8 @@ final class ZoomSection {
         return switch (id) {
             case "inCurve", "inSeconds", "outSeconds" -> p().inSeconds > 0 || p().outSeconds > 0;
             case "smoothingSeconds" -> p().cinematic == Cinematic.CUSTOM;
+            case "smoothing" -> p().cinematic != Cinematic.OFF;
+            case "glide" -> p().cinematic == Cinematic.VANILLA;
             case "soundVolume" -> p().sounds;
             case "overlayOpacity" -> p().overlay == Overlay.VIGNETTE;
             case "barColor" -> p().bars > 0;

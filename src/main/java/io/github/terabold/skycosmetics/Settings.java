@@ -36,6 +36,8 @@ public final class Settings {
      * wear and carry; nothing more is learned and items.json stays as it is, so On brings them back.
      */
     public static boolean storedItems = true;
+    /** Your item names where chat and tooltip lines name your renamed items Hypixel's way. */
+    public static boolean chatNames = true;
     /** The studio's first-open tip about binding a key has been shown. */
     public static boolean keyTipShown = false;
 
@@ -51,6 +53,7 @@ public final class Settings {
         flag("worldReskin", () -> worldReskin, v -> worldReskin = v);
         flag("learnSkins", () -> learnSkins, v -> learnSkins = v);
         flag("storedItems", () -> storedItems, v -> storedItems = v);
+        flag("chatNames", () -> chatNames, v -> chatNames = v);
         flag("keyTipShown", () -> keyTipShown, v -> keyTipShown = v);
     }
 

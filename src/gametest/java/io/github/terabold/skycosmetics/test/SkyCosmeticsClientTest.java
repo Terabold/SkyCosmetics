@@ -105,6 +105,26 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             String realName = ctx.computeOnClient(mc -> mc.player.getItemBySlot(EquipmentSlot.CHEST).getHoverName().getString());
             System.out.println("[SkyCosmeticsTest] renamed chest shows '" + renamed + "', mods still read '" + realName + "'");
             if (!renamed.equals("Golden Tunic") || renamed.equals(realName)) throw new AssertionError("rename not applied to display name only");
+
+            // Where chat or a tooltip line names the renamed item Hypixel's way, the name shown is yours.
+            String said = "Your " + realName + " was repaired!";
+            ctx.runOnClient(mc -> {
+                io.github.terabold.skycosmetics.ChatNames.rebuild();
+                mc.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(said));
+            });
+            ctx.waitTicks(2);
+            List<String> chat = ctx.computeOnClient(DataSafetyTest::chat);
+            System.out.println("[SkyCosmeticsTest] chat with your item names: " + chat.stream().limit(2).toList());
+            if (!chat.contains("Your Golden Tunic was repaired!")) throw new AssertionError("chat does not show your name: " + chat.stream().limit(3).toList());
+            String longer = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.ChatNames.apply(
+                net.minecraft.network.chat.Component.literal("Two " + realName + "s")).getString());
+            if (!longer.equals("Two " + realName + "s")) throw new AssertionError("a longer word was changed: " + longer);
+            List<String> lore = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.ChatNames.applyLore(List.of(
+                net.minecraft.network.chat.Component.literal(realName), net.minecraft.network.chat.Component.literal("Chestplate: " + realName)))
+                .stream().map(net.minecraft.network.chat.Component::getString).toList());
+            if (!lore.get(0).equals(realName) || !lore.get(1).equals("Chestplate: Golden Tunic")) {
+                throw new AssertionError("tooltip lines (not the item's own name) should show your name: " + lore);
+            }
             boolean ironDyed = ctx.computeOnClient(mc -> {
                 ItemStack shown = io.github.terabold.skycosmetics.Cosmetics.apply(mc.player.getInventory().getItem(4), true);
                 return shown.is(net.minecraft.world.item.Items.LEATHER_CHESTPLATE) && shown.has(net.minecraft.core.component.DataComponents.DYED_COLOR);

@@ -4,6 +4,7 @@ import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.Cosmetics;
 import io.github.terabold.skycosmetics.Io;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -25,7 +26,8 @@ import java.util.List;
 /**
  * The live hand editor: a panel at the side of the screen, opposite your main hand, while the game keeps drawing
  * your real first-person hand next to it. Every slider applies at once, so what you see is exactly what you get.
- * The game isn't paused and nothing is dimmed or blurred.
+ * The game isn't paused and nothing is dimmed or blurred. In third person the view turns to first person while the
+ * editor is open, and back when it closes.
  *
  * Edits one pose at a time (arrows switch between Everything and your rules). While it is open your main hand
  * shows that pose, holding a fitting item when the rule is for another kind (a bow for the Bow pose): drawn only,
@@ -39,6 +41,8 @@ public final class HandScreen extends Screen {
     private static final int REPEAT_REST = 12;
 
     private final Screen parent;
+    /** The view before the editor opened: third person hides your hand, so the editor shows first person until it closes. */
+    private CameraType camera;
     private String key;
     private boolean repeat;
     private int restTicks;
@@ -63,6 +67,10 @@ public final class HandScreen extends Screen {
 
     @Override
     protected void init() {
+        if (camera == null) {
+            camera = minecraft.options.getCameraType(); // a client-only view setting, like pressing F5
+            if (!camera.isFirstPerson()) minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+        }
         sliders.clear();
         pw = Math.clamp(width * 2 / 5, Math.min(150, width - 2 * PAD), 240);
         boolean rightHanded = minecraft.player == null || minecraft.player.getMainArm() == HumanoidArm.RIGHT;
@@ -242,6 +250,8 @@ public final class HandScreen extends Screen {
     public void removed() {
         Hand.endPreview();
         Hand.save();
+        if (camera != null && minecraft.options.getCameraType().isFirstPerson()) minecraft.options.setCameraType(camera);
+        camera = null;
         super.removed();
     }
 

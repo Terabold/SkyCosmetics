@@ -181,7 +181,6 @@ public final class Zoom {
     public static boolean hideCrosshair() { return visible() && rendering.hideCrosshair; }
     public static boolean hideHand() { return visible() && rendering.hideHand; }
     public static boolean cameraActive() { return visible() && selected >= 0 && allowed(Minecraft.getInstance()); }
-    public static boolean vanillaCinematic() { return cameraActive() && rendering.cinematic == Cinematic.VANILLA; }
     public static float bobbing() { return visible() ? (float) (1 + (rendering.bobbing - 1) * amount) : 1; }
     public static double magnification() { return magnification; }
     public static double amount() { return amount; }
@@ -198,16 +197,27 @@ public final class Zoom {
         return 1 / Math.pow(Math.max(1, zoom), .22);
     }
 
-    /** Integrates filtered angular velocity exactly over the frame, including its decaying tail. */
+    /**
+     * Integrates filtered angular velocity exactly over the frame, including its decaying tail. Responsive settles
+     * in a few tenths of a second; Cinematic is Minecraft's cinematic camera (its time constant at your mouse
+     * sensitivity, 1 s at 100%), solved exactly instead of stepped per frame, so it glides the same at any frame rate.
+     * Zoom's own sensitivity change stays outside it: the glide never stretches as you zoom further.
+     */
     public static double smooth(double delta, double dt, boolean horizontal) {
-        if (!cameraActive() || rendering.cinematic != Cinematic.CUSTOM) { velocityX = velocityY = 0; return delta; }
+        if (!cameraActive() || rendering.cinematic == Cinematic.OFF) { velocityX = velocityY = 0; return delta; }
         if (!Double.isFinite(dt) || dt <= 0) return delta;
         dt = Math.min(dt, .25);
         double old = horizontal ? velocityX : velocityY;
-        double input = delta / dt, tau = rendering.smoothingSeconds;
+        double input = delta / dt, tau = rendering.cinematic == Cinematic.VANILLA ? cinematicSeconds(rendering.glide) : rendering.smoothingSeconds;
         double decay = Math.exp(-dt / tau), next = input + (old - input) * decay;
         if (horizontal) velocityX = next; else velocityY = next;
         return input * dt + (old - input) * tau * (1 - decay);
+    }
+
+    /** Cinematic's time constant: Minecraft's at the mouse sensitivity in Options, times the glide. */
+    public static double cinematicSeconds(double glide) {
+        double s = Minecraft.getInstance().options.sensitivity().get(), ss = .6 * s + .2;
+        return Math.clamp(glide / (8 * ss * ss * ss), .02, 20);
     }
 
     public static String indicator() {

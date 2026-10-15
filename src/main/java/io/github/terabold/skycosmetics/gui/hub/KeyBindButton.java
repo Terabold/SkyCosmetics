@@ -21,8 +21,8 @@ import java.util.function.Supplier;
 
 /**
  * A key bound in place: click it, then press a key. While it listens it reads "> Press a key <" in a pulsing
- * accent frame, and the settings screen hands it every key and click first: a key binds, Esc cancels, Backspace
- * or Delete unbinds, a side mouse button binds and any other click cancels. A key another mapping also uses
+ * accent frame, and the settings screen hands it every key and click first: a key binds, Esc, Backspace or Delete
+ * unbinds (Esc as in Controls), a side mouse button binds and any other click cancels. A key another mapping also uses
  * shows in red, with the clash in the row's help.
  */
 public final class KeyBindButton extends ThemedButton {
@@ -30,6 +30,8 @@ public final class KeyBindButton extends ThemedButton {
     private final Supplier<KeyMapping> mapping;
     private final Runnable onChange;
     private final boolean allowMiddleMouse;
+    /** Shown instead of "Not bound" when no key means something ("Same as the lock key"); null for the usual. */
+    private final Component unbound;
     private boolean listening;
     private boolean clash;
     private String shown = "";
@@ -40,11 +42,24 @@ public final class KeyBindButton extends ThemedButton {
     }
 
     public KeyBindButton(int width, Supplier<KeyMapping> mapping, Runnable onChange, boolean allowMiddleMouse) {
+        this(width, mapping, onChange, allowMiddleMouse, null);
+    }
+
+    public KeyBindButton(int width, Supplier<KeyMapping> mapping, Runnable onChange, boolean allowMiddleMouse, Component unbound) {
         super(width, H, Component.empty(), b -> ((KeyBindButton) b).listen());
         this.mapping = mapping;
         this.onChange = onChange;
         this.allowMiddleMouse = allowMiddleMouse;
+        this.unbound = unbound;
         update();
+    }
+
+    /** Mappings made to work on one key together (a lock key that also binds): no clash shown between them. */
+    private static final java.util.Set<String> SHARED = new java.util.HashSet<>();
+
+    public static void mayShare(KeyMapping a, KeyMapping b) {
+        SHARED.add(a.getName() + "|" + b.getName());
+        SHARED.add(b.getName() + "|" + a.getName());
     }
 
     public boolean listening() {
@@ -60,7 +75,7 @@ public final class KeyBindButton extends ThemedButton {
         KeyMapping m = mapping.get();
         clash = !listening && !conflicts().isEmpty();
         Component label = listening ? Component.translatable("skycosmetics.option.openKey.listening")
-            : m == null ? Component.empty() : keyLabel(m);
+            : m == null ? Component.empty() : m.isUnbound() && unbound != null ? unbound : keyLabel(m);
         setMessage(label);
         shown = Ui.clip(Minecraft.getInstance().font, label.getString(), getWidth() - 8);
     }
@@ -116,7 +131,9 @@ public final class KeyBindButton extends ThemedButton {
         Minecraft mc = Minecraft.getInstance();
         if (open == null || open.isUnbound()) return out;
         for (KeyMapping m : mc.options.keyMappings) {
-            if (m != open && m.same(open)) out.add(Component.translatable(m.getName()).getString());
+            if (m != open && m.same(open) && !SHARED.contains(open.getName() + "|" + m.getName())) {
+                out.add(Component.translatable(m.getName()).getString());
+            }
         }
         return out;
     }
@@ -124,10 +141,7 @@ public final class KeyBindButton extends ThemedButton {
     /** While listening every key is ours, so nothing else reacts to it. False when not listening. */
     public boolean handleKey(KeyEvent e) {
         if (!listening) return false;
-        if (e.isEscape()) {
-            listening = false;
-            refresh();
-        } else if (e.key() == GLFW.GLFW_KEY_BACKSPACE || e.key() == GLFW.GLFW_KEY_DELETE) {
+        if (e.isEscape() || e.key() == GLFW.GLFW_KEY_BACKSPACE || e.key() == GLFW.GLFW_KEY_DELETE) {
             bind(InputConstants.UNKNOWN);
         } else {
             bind(InputConstants.getKey(e));

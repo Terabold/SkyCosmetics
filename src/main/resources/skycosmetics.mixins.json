@@ -24,6 +24,8 @@
     "RenderTypeAccessor",
     "SkinManagerMixin",
     "TooltipGraphicsMixin",
+    "ChatNamesMixin",
+    "TooltipNamesMixin",
     "TooltipBackgroundMixin",
     "TextureBindingAccessor",
     "slots.ContainerSlotsMixin",

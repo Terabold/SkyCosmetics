@@ -34,10 +34,11 @@ abstract class MouseHandlerMixin {
     private boolean skycosmetics$cinematic(boolean original) {
         try {
             Zoom.update();
-            boolean smoothing = Zoom.vanillaCinematic();
-            if (smoothing != skycosmetics$wasSmoothing) { smoothTurnX.reset(); smoothTurnY.reset(); }
-            skycosmetics$wasSmoothing = smoothing;
-            return Zoom.visible() ? smoothing : original;
+            // While zoomed only Zoom.smooth smooths (Cinematic included), never vanilla's camera on top of it.
+            boolean zoomed = Zoom.visible();
+            if (zoomed != skycosmetics$wasSmoothing) { smoothTurnX.reset(); smoothTurnY.reset(); }
+            skycosmetics$wasSmoothing = zoomed;
+            return !zoomed && original;
         }
         catch (RuntimeException e) { Zoom.reset(); Io.failed("Checking cinematic zoom", e); return original; }
     }

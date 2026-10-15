@@ -9,6 +9,7 @@ public final class ZoomSettings {
     public enum Mode { HOLD, TOGGLE, PERSISTENT }
     public enum Scroll { OFF, EXPONENTIAL, LINEAR }
     public enum Sensitivity { UNCHANGED, RELATIVE, ANGULAR_FOV, FIXED }
+    /** Smooth camera while zoomed: off, Cinematic (Minecraft's own feel, named VANILLA on disk) or Responsive (CUSTOM). */
     public enum Cinematic { OFF, VANILLA, CUSTOM }
     public enum Overlay { OFF, VIGNETTE }
     public enum Modifier { NONE, SHIFT, CONTROL, ALT }
@@ -29,6 +30,10 @@ public final class ZoomSettings {
         public double minimum = 1, maximum = 1000, initial = 5, scrollStep = 1.25;
         public double inSeconds = .08, outSeconds = .08, scrollSeconds = .1;
         public double sensitivityScale = 1, smoothingSeconds = .12, bobbing = 0;
+        /** Cinematic's glide: 1 is Minecraft's own (1 s at 100% mouse sensitivity). */
+        public double glide = 1;
+        /** The smoothing turned on again after Smooth camera was off. */
+        public Cinematic smoothStyle = Cinematic.CUSTOM;
         public double bars = 0, overlayOpacity = .65, soundVolume = .5;
         public int barColor = 0xFF000000;
         public boolean remember, invertScroll, affectHand, hideHand, hideHud, hideCrosshair;
@@ -91,6 +96,9 @@ public final class ZoomSettings {
         p.scrollSeconds = Settings.num(o.get("scrollSeconds"), p.scrollSeconds, 0, 10);
         p.sensitivityScale = Settings.num(o.get("sensitivityScale"), p.sensitivityScale, .01, 2);
         p.smoothingSeconds = Settings.num(o.get("smoothingSeconds"), p.smoothingSeconds, .01, 1);
+        p.glide = Settings.num(o.get("glide"), p.glide, .25, 2.5);
+        p.smoothStyle = p.cinematic != Cinematic.OFF ? p.cinematic : enumeration(o.get("smoothStyle"), p.smoothStyle);
+        if (p.smoothStyle == Cinematic.OFF) p.smoothStyle = Cinematic.CUSTOM;
         p.bobbing = Settings.num(o.get("bobbing"), p.bobbing, 0, 1);
         p.bars = Settings.num(o.get("bars"), p.bars, 0, .4);
         p.overlayOpacity = Settings.num(o.get("overlayOpacity"), p.overlayOpacity, 0, 1);

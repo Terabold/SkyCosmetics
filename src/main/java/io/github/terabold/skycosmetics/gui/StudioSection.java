@@ -54,6 +54,10 @@ public final class StudioSection {
 
         rows.add(Option.header("groupWhereLooksShow", Component.translatable("skycosmetics.menu.group.whereLooksShow")));
         rows.add(toggle("worldReskin", () -> Settings.worldReskin, v -> Settings.worldReskin = v));
+        rows.add(toggle("chatNames", () -> Settings.chatNames, v -> {
+            Settings.chatNames = v;
+            io.github.terabold.skycosmetics.ChatNames.rebuild();
+        }));
         return rows.stream().map(o -> o.control() instanceof Control.Header || o.title().getString().isEmpty() ? o : o.beside()).toList();
     }
 

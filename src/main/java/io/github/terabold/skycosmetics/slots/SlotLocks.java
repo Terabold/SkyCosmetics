@@ -69,15 +69,39 @@ import java.util.Set;
 public final class SlotLocks {
     public static final String SECTION = "slotLocks";
 
-    public enum Icon { PADLOCK, DOT, CORNER, OUTLINE, NONE }
+    /**
+     * A mark, drawn by hand here. Besides this mod's own, the looks players know from other mods, redrawn to their
+     * shapes and colors (none of their files is used): NEU's and SkyblockAddons' gold padlock over the slot,
+     * Firmament's small red lock, SkyBlock Enhancements' corner padlock, Skyblocker's dashed frame and NEU's stitched
+     * frame for bound slots. The tinted ones take the color picked here.
+     */
+    public enum Icon {
+        PADLOCK, NEU_PADLOCK, SBA_PADLOCK, FIRMAMENT_LOCK, SBE_LOCK, DOT, CORNER, OUTLINE, BOX, DASHED, STITCHED, TINT, NONE;
+
+        /** Drawn at the chosen corner and size. */
+        boolean small() { return this == PADLOCK || this == DOT || this == CORNER || this == SBE_LOCK; }
+
+        /** Drawn in the color picked here; the others keep their own colors. */
+        boolean tinted() { return this == PADLOCK || this == DOT || this == CORNER || this == OUTLINE || this == BOX || this == DASHED || this == TINT; }
+    }
+
+    static final List<Icon> LOCK_MARKS = List.of(Icon.PADLOCK, Icon.NEU_PADLOCK, Icon.SBA_PADLOCK, Icon.FIRMAMENT_LOCK, Icon.SBE_LOCK,
+        Icon.DOT, Icon.CORNER, Icon.OUTLINE, Icon.BOX, Icon.DASHED, Icon.TINT, Icon.NONE);
+    static final List<Icon> BOUND_MARKS = List.of(Icon.OUTLINE, Icon.BOX, Icon.STITCHED, Icon.DASHED, Icon.TINT, Icon.DOT, Icon.CORNER, Icon.NONE);
+
+    /** Where the lines between bound slots start: the outlines' edges, or the slots' centres. */
+    public enum LineFrom { EDGES, CENTRES }
 
     public enum Place { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, CENTER }
 
     /** What swaps a bound slot with its hotbar slot. */
-    public enum Swap { SHIFT_CLICK, CLICK, OFF }
+    public enum Swap { SHIFT_CLICK, CLICK, CTRL_CLICK, OFF }
 
-    /** When bindings are outlined. */
-    public enum Show { HOVER, ALWAYS, HIDDEN }
+    /** When the lines between bound slots show. */
+    public enum Show { ALWAYS, HOVER, HIDDEN }
+
+    /** Where a lock that stopped something says so. */
+    public enum Tell { CHAT, ACTION_BAR, OFF }
 
     static final class Bucket {
         final Set<Integer> locked = new LinkedHashSet<>();
@@ -86,10 +110,13 @@ public final class SlotLocks {
     }
 
     // Settings; the draw and click paths read them directly.
-    static boolean on = true, blockDrops = true, dungeonQ = true, hotbar = true, multiBind, everyMenu, links = true, tellStopped = true;
+    static boolean on = true, blockDrops = true, dungeonQ = true, hotbar = true, multiBind, everyMenu, boundLocked = true, redHover = true;
+    static LineFrom lineFrom = LineFrom.EDGES;
     static Swap swapWith = Swap.SHIFT_CLICK;
-    static Show show = Show.HOVER;
-    static Icon icon = Icon.PADLOCK;
+    static Show show = Show.ALWAYS;
+    static Tell tell = Tell.CHAT;
+    /** The mark of a locked slot, and of a bound one. */
+    static Icon icon = Icon.PADLOCK, bindIcon = Icon.OUTLINE;
     static Place place = Place.TOP_LEFT;
     static int size = 100, opacity = 85, color = 0xFFFFD24A, bindColor = 0xFF4BA3FF;
 
@@ -103,6 +130,8 @@ public final class SlotLocks {
     private static KeyMapping held;
     private static boolean consumed;
     private static Integer anchor, pending;
+    /** With the key held, the slot clicked first: the next click on its partner binds the two. */
+    private static Integer clickFrom;
     private static int flashFrom = -1, flashTo = -1;
     private static long flashAt, toldAt;
     /** The mouse button whose press was kept from the menu: its release is kept too, or the menu acts on it. */
@@ -121,6 +150,7 @@ public final class SlotLocks {
             GLFW.GLFW_KEY_L, category));
         bindKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.skycosmetics.bindSlot", InputConstants.Type.KEYSYM,
             GLFW.GLFW_KEY_UNKNOWN, category));
+        io.github.terabold.skycosmetics.gui.hub.KeyBindButton.mayShare(key, bindKey); // one key may both lock and bind
         Settings.register(SECTION, SlotLocks::read, SlotLocks::write);
         Hub.add(new Section(SECTION, Section.FEATURE, Component.literal("Slot Locking"),
             Component.literal("Lock and bind slots"),
@@ -132,15 +162,14 @@ public final class SlotLocks {
             ScreenKeyboardEvents.allowKeyPress(screen).register((s, event) -> {
                 if (!active() || SkyCosmetics.typing(s)) return true;
                 KeyMapping k = key.matches(event) ? key : !bindKey.isUnbound() && bindKey.matches(event) ? bindKey : null;
-                if (k == null) return true;
-                press(acs, k);
-                return false;
+                if (k != null) press(acs, k);
+                return true; // never kept from the menu: another mod's slot lock on the same key still gets it
             });
             ScreenKeyboardEvents.afterKeyRelease(screen).register((s, event) -> {
                 if (held != null && held.matches(event)) release(acs);
             });
             ScreenMouseEvents.allowMouseClick(screen).register((s, click) -> {
-                if (held != null) { consumed = true; swallowed = click.button(); return false; }
+                if (held != null) { heldClick(acs, click); consumed = true; swallowed = click.button(); return false; }
                 KeyMapping k = !active() ? null : key.matchesMouse(click) ? key : !bindKey.isUnbound() && bindKey.matchesMouse(click) ? bindKey : null;
                 if (k != null) { press(acs, k); return false; }
                 if (!swapClick(acs, click)) return true;
@@ -153,7 +182,7 @@ public final class SlotLocks {
                 swallowed = -1;
                 return false;
             });
-            ScreenEvents.remove(screen).register(s -> { held = null; anchor = null; pending = null; swallowed = -1; });
+            ScreenEvents.remove(screen).register(s -> { held = null; anchor = null; pending = null; clickFrom = null; swallowed = -1; });
         });
     }
 
@@ -171,7 +200,7 @@ public final class SlotLocks {
 
     public static boolean isLocked(int slot) {
         Bucket b = bucket(false);
-        return b != null && (b.locked.contains(slot) || b.binds.containsKey(slot) || b.binds.containsValue(slot));
+        return b != null && (b.locked.contains(slot) || boundLocked && (b.binds.containsKey(slot) || b.binds.containsValue(slot)));
     }
 
     static boolean explicitlyLocked(int slot) {
@@ -221,26 +250,44 @@ public final class SlotLocks {
         return active() && blockDrops && !(dungeonQ && Where.dungeon()) && isLocked(player.getInventory().getSelectedSlot());
     }
 
-    /** The menu's click path: {@link #blocks}, saying so on the action bar. */
+    /** The menu's click path: {@link #blocks}, saying so. */
     public static boolean stopClick(Slot slot, int button, ContainerInput input) {
         boolean stop = blocks(slot, button, input);
-        if (stop) told();
+        if (stop) {
+            var p = Minecraft.getInstance().player;
+            int at = slot != null && slot.container instanceof Inventory && isLocked(slot.getContainerSlot()) ? slot.getContainerSlot() : button;
+            told(p == null || at < 0 || at >= p.getInventory().getContainerSize() ? ItemStack.EMPTY : p.getInventory().getItem(at), at);
+        }
         return stop;
     }
 
-    /** Before Q drops the held item: {@link #blocksDrop}, saying so on the action bar. */
+    /** Before Q drops the held item: {@link #blocksDrop}, saying so. */
     public static boolean stopDrop(Player player) {
         boolean stop = blocksDrop(player);
-        if (stop) told();
+        if (stop) told(player.getInventory().getSelectedItem(), player.getInventory().getSelectedSlot());
         return stop;
     }
 
-    private static void told() {
+    /** "Protected your item: Hyperion." in chat as Firmament says it, the how-to-unlock under the mouse; at most every 3 s. */
+    private static void told(ItemStack item, int slot) {
         long now = System.currentTimeMillis();
-        if (!tellStopped || now - toldAt < 1500) return;
+        if (tell == Tell.OFF || now - toldAt < (tell == Tell.CHAT ? 3000 : 1500)) return;
         toldAt = now;
         Minecraft mc = Minecraft.getInstance();
-        mc.gui.setOverlayMessage(Component.literal("Locked slot; ").append(key.getTranslatedKeyMessage()).append(" over it unlocks"), false);
+        boolean bound = !explicitlyLocked(slot) && bindingOf(slot) != null;
+        Component name = item == null || item.isEmpty() ? Component.literal("this slot") : item.getStyledHoverName();
+        Component how = Component.literal(bound
+            ? "This slot is bound to a hotbar slot, which locks it. Tap " : "This slot is locked. Tap ")
+            .append(key.getTranslatedKeyMessage())
+            .append(bound ? " over it to remove the binding, or turn off \"Bound slots are locked\" in Slot Locking." : " over it to unlock it.");
+        if (tell == Tell.CHAT && mc.player != null) {
+            mc.player.sendSystemMessage(SkyCosmetics.prefix().append(Component.literal("Protected your item: ")
+                .withStyle(net.minecraft.ChatFormatting.RED).append(name.copy()).append(Component.literal(". "))
+                .append(Component.literal("Hover for more info.").withStyle(net.minecraft.ChatFormatting.GRAY))
+                .withStyle(s -> s.withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(how)))));
+        } else {
+            mc.gui.setOverlayMessage(Component.literal("Protected your item: ").append(name.copy()), false);
+        }
         mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, .25f, .4f));
     }
 
@@ -254,9 +301,16 @@ public final class SlotLocks {
         if (!active() || swapWith == Swap.OFF || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !bindsHere(acs)
             || !acs.getMenu().getCarried().isEmpty()) return false;
         // The event's own modifiers, or the keyboard's: some input layers send clicks without them.
-        boolean shift = click.hasShiftDown() || Minecraft.getInstance().hasShiftDown();
+        Minecraft mc = Minecraft.getInstance();
+        boolean shift = click.hasShiftDown() || mc.hasShiftDown(), ctrl = click.hasControlDown() || mc.hasControlDown();
+        boolean wanted = switch (swapWith) {
+            case SHIFT_CLICK -> shift && !ctrl;
+            case CLICK -> !shift && !ctrl;
+            case CTRL_CLICK -> ctrl && !shift;
+            case OFF -> false;
+        };
         // The slot under the click itself, as the menu would take it.
-        return shift == (swapWith == Swap.SHIFT_CLICK) && swap(acs, ((AbstractContainerScreenAccessor) acs).skycosmetics$slotAt(click.x(), click.y()));
+        return wanted && swap(acs, ((AbstractContainerScreenAccessor) acs).skycosmetics$slotAt(click.x(), click.y()));
     }
 
     private static boolean swap(AbstractContainerScreen<?> acs, Slot hovered) {
@@ -304,19 +358,47 @@ public final class SlotLocks {
         anchor = null;
         if (consumed) return;
         Integer end = playerSlot(hovered(acs));
-        if (start != null && end != null && !end.equals(start) && bindable(start, end)) {
-            // Held on one slot and let go over another.
-            if (bindsHere(acs)) bind(start, end); else message("Bind slots in your inventory, or turn on bindings in every menu");
+        if (start != null && end != null && !end.equals(start)) {
+            // Held on one slot and let go over another: bind them, or say why not; never a lock on either.
+            if (!bindable(start, end)) refuse("Bind one inventory slot to one hotbar slot (not the SkyBlock menu)");
+            else if (bindsHere(acs)) bind(start, end);
+            else refuse("Bind slots in your inventory, or turn on bindings in every menu");
             return;
         }
         if (k == bindKey) { if (start != null) pick(start); return; }
-        if (end == null) end = start;
-        if (end == null || end == Inventory.SLOT_OFFHAND) return;
+        if (start == null || end == null || end == Inventory.SLOT_OFFHAND) return; // let go off the slots: nothing
         Bucket b = bucket(true);
         if (unbind(b, end)) { changed(false, "Binding removed"); return; }
         boolean locked = b.locked.add(end);
         if (!locked) b.locked.remove(end);
         changed(locked, locked ? "Slot locked" : "Slot unlocked");
+    }
+
+    /**
+     * A click with the key held: left on one slot and then on its partner binds the two (from the slot the key went
+     * down on, too); right on a bound slot removes its binding.
+     */
+    private static void heldClick(AbstractContainerScreen<?> acs, MouseButtonEvent click) {
+        Integer at = playerSlot(((AbstractContainerScreenAccessor) acs).skycosmetics$slotAt(click.x(), click.y()));
+        if (at == null) return;
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            if (unbind(bucket(true), at)) changed(false, "Binding removed");
+            clickFrom = null;
+            return;
+        }
+        if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
+        Integer from = clickFrom != null ? clickFrom : anchor;
+        if (from != null && !from.equals(at) && bindable(from, at)) {
+            if (bindsHere(acs)) bind(from, at); else refuse("Bind slots in your inventory, or turn on bindings in every menu");
+            clickFrom = null;
+        } else {
+            clickFrom = at;
+        }
+    }
+
+    private static void refuse(String why) {
+        message(why);
+        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_BASS.value(), .5f, .4f));
     }
 
     /** The bind key's first press: this slot waits for its partner. */
@@ -395,13 +477,23 @@ public final class SlotLocks {
 
     // ------------------------------------------------------------- drawing ---
 
-    /** Under the items, with the rarity backgrounds: the outline style. */
+    /** The mark of an inventory slot: a locked slot's, a bound slot's, or null. */
+    private static Icon markOf(int slot) {
+        if (explicitlyLocked(slot)) return icon;
+        return bindingOf(slot) != null ? bindIcon : null;
+    }
+
+    private static int colorOf(int slot) {
+        return explicitlyLocked(slot) ? color : bindColor;
+    }
+
+    /** Under the items, with the rarity backgrounds: the outline marks. */
     public static void drawUnder(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen) {
-        if (!active() || icon != Icon.OUTLINE) return;
+        if (!active() || icon != Icon.OUTLINE && bindIcon != Icon.OUTLINE) return;
         try {
             for (Slot s : screen.getMenu().slots) {
-                if (s.isActive() && s.container instanceof Inventory && isLocked(s.getContainerSlot())) {
-                    outline(g, s.x, s.y, explicitlyLocked(s.getContainerSlot()) ? color : bindColor);
+                if (s.isActive() && s.container instanceof Inventory && markOf(s.getContainerSlot()) == Icon.OUTLINE) {
+                    outline(g, s.x, s.y, colorOf(s.getContainerSlot()));
                 }
             }
         } catch (RuntimeException e) {
@@ -411,7 +503,7 @@ public final class SlotLocks {
 
     /** Whether the lock outline takes the place of this slot's rarity outline. */
     static boolean replacesOutline(Slot s) {
-        return active() && icon == Icon.OUTLINE && s.container instanceof Inventory && isLocked(s.getContainerSlot());
+        return active() && s.container instanceof Inventory && markOf(s.getContainerSlot()) == Icon.OUTLINE;
     }
 
     /** Over a slot's item, under its count. */
@@ -419,12 +511,18 @@ public final class SlotLocks {
         if (!active() || !(s.container instanceof Inventory)) return;
         try {
             int i = s.getContainerSlot();
-            boolean lock = explicitlyLocked(i), bound = !lock && bindingOf(i) != null;
-            if (lock || bound) mark(g, s.x, s.y, lock ? color : bindColor);
+            Icon m = markOf(i);
+            var screen = Minecraft.getInstance().screen;
+            boolean under = screen instanceof AbstractContainerScreen<?> acs && hovered(acs) == s;
+            if (redHover && under && isLocked(i)) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x50FF5555); // as NEU shows a locked slot
+            if (m != null) mark(g, s.x, s.y, colorOf(i), m);
             Integer from = binding();
-            if (from != null && bindsHere(Minecraft.getInstance().screen)) {
+            if (from != null && bindsHere(screen)) {
                 if (i == from) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x60000000 | bindColor & 0xFFFFFF); // where it starts
-                else if (bindable(from, i)) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x40FFFFFF);       // where it can end
+                else if (bindable(from, i)) {
+                    g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x40FFFFFF);                                  // where it can end
+                    if (under) g.outline(s.x - 1, s.y - 1, 18, 18, 0xFF000000 | bindColor);
+                } else if (under) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x50FF3030);                      // where it can't
             }
         } catch (RuntimeException e) {
             Io.failed("Drawing a slot lock", e);
@@ -433,12 +531,12 @@ public final class SlotLocks {
 
     /** The HUD hotbar: {@code under} the item the outline style, else over it the mark. */
     public static void drawHotbar(GuiGraphicsExtractor g, int x, int y, Player player, ItemStack stack, boolean under) {
-        if (!active() || !hotbar || player == null || stack.isEmpty() || under != (icon == Icon.OUTLINE)) return;
+        if (!active() || !hotbar || player == null || stack.isEmpty()) return;
         try {
             int i = hotbarIndex(player, stack);
-            if (i < 0 || !isLocked(i)) return;
-            int c = explicitlyLocked(i) ? color : bindColor;
-            if (under) outline(g, x, y, c); else mark(g, x, y, c);
+            Icon m = i < 0 ? null : markOf(i);
+            if (m == null || under != (m == Icon.OUTLINE)) return;
+            if (under) outline(g, x, y, colorOf(i)); else mark(g, x, y, colorOf(i), m);
         } catch (RuntimeException e) {
             Io.failed("Drawing a hotbar lock", e);
         }
@@ -447,9 +545,9 @@ public final class SlotLocks {
     /** Whether a hotbar slot's lock outline takes the place of its rarity outline. */
     static boolean replacesHotbarOutline(ItemStack stack) {
         var p = Minecraft.getInstance().player;
-        if (!active() || !hotbar || icon != Icon.OUTLINE || p == null) return false;
+        if (!active() || !hotbar || p == null) return false;
         int i = hotbarIndex(p, stack);
-        return i >= 0 && isLocked(i);
+        return i >= 0 && markOf(i) == Icon.OUTLINE;
     }
 
     /** The HUD draws the hotbar's own stacks: which slot holds this one. */
@@ -462,6 +560,7 @@ public final class SlotLocks {
     /** The slot a binding being made starts from: held on it and moved away, or picked with the bind key. */
     private static Integer binding() {
         if (pending != null) return pending;
+        if (held != null && clickFrom != null) return clickFrom;
         if (held == null || consumed || anchor == null) return null;
         var screen = Minecraft.getInstance().screen;
         Integer at = screen instanceof AbstractContainerScreen<?> acs ? playerSlot(hovered(acs)) : null;
@@ -469,8 +568,9 @@ public final class SlotLocks {
     }
 
     /**
-     * Over the menu: the bindings (of the hovered slot, or all while shift is held, or always), a new binding's
-     * flash, and a line from the slot a binding is being made from to the cursor.
+     * Over the menu: the lines between bound slots (always, or for the hovered slot and all while shift is held),
+     * the hovered binding framed, a new binding's flash, and a line from the slot a binding is being made from to
+     * the cursor. Lines run from one slot's outline edge to the other's.
      */
     public static void drawBindings(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, int mouseX, int mouseY) {
         if (!active() || !bindsHere(screen)) return;
@@ -484,15 +584,17 @@ public final class SlotLocks {
                 if (b != null && show != Show.HIDDEN) {
                     Integer h = playerSlot(acc.skycosmetics$hoveredSlot());
                     boolean all = show == Show.ALWAYS || Minecraft.getInstance().hasShiftDown();
+                    int faint = (int) ((bindColor >>> 24) * .55) << 24 | bindColor & 0xFFFFFF;
                     for (var e : b.binds.entrySet()) {
-                        if (all || e.getKey().equals(h) || e.getValue().equals(h)) pair(g, screen, e.getKey(), e.getValue(), bindColor);
+                        boolean hovered = e.getKey().equals(h) || e.getValue().equals(h);
+                        if (all || hovered) pair(g, screen, e.getKey(), e.getValue(), hovered ? bindColor : faint, hovered);
                     }
                 }
                 long age = System.currentTimeMillis() - flashAt;
-                if (flashFrom >= 0 && age < 650) pair(g, screen, flashFrom, flashTo, (int) (230 - age * 230 / 650) << 24 | bindColor & 0xFFFFFF);
+                if (flashFrom >= 0 && age < 650) pair(g, screen, flashFrom, flashTo, (int) (230 - age * 230 / 650) << 24 | bindColor & 0xFFFFFF, true);
                 Integer from = binding();
                 Slot fs = from == null ? null : slotOf(screen, from);
-                if (fs != null) line(g, fs.x + 8, fs.y + 8, mouseX - left, mouseY - top, 0xC0000000 | bindColor & 0xFFFFFF);
+                if (fs != null) link(g, fs.x + 8, fs.y + 8, mouseX - left, mouseY - top, lineFrom == LineFrom.EDGES ? 9 : 0, 0, 0xC0000000 | bindColor & 0xFFFFFF);
             } finally {
                 g.pose().popMatrix();
             }
@@ -501,11 +603,25 @@ public final class SlotLocks {
         }
     }
 
-    private static void pair(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, int a, int b, int c) {
+    private static void pair(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, int a, int b, int c, boolean framed) {
         Slot sa = slotOf(screen, a), sb = slotOf(screen, b);
-        if (links && sa != null && sb != null) line(g, sa.x + 8, sa.y + 8, sb.x + 8, sb.y + 8, (int) ((c >>> 24) * .7) << 24 | c & 0xFFFFFF);
+        float r = lineFrom == LineFrom.EDGES ? 9 : 0;
+        if (sa != null && sb != null) link(g, sa.x + 8, sa.y + 8, sb.x + 8, sb.y + 8, r, r, c);
+        if (!framed) return;
         if (sa != null) g.outline(sa.x - 1, sa.y - 1, 18, 18, c);
         if (sb != null) g.outline(sb.x - 1, sb.y - 1, 18, 18, c);
+    }
+
+    /**
+     * A line between two points that starts and ends at the edges of the squares around them ({@code r0} and
+     * {@code r1} from the centre; 9 is a slot outline, 0 the cursor), so it never crosses an item: straight down
+     * it runs from the bottom edge of one outline to the top edge of the other.
+     */
+    private static void link(GuiGraphicsExtractor g, float x0, float y0, float x1, float y1, float r0, float r1, int c) {
+        float dx = x1 - x0, dy = y1 - y0, m = Math.max(Math.abs(dx), Math.abs(dy));
+        if (m <= r0 + r1 + 1) return; // touching: the outlines say it
+        float t0 = r0 / m, t1 = r1 / m;
+        line(g, x0 + dx * t0, y0 + dy * t0, x1 - dx * t1, y1 - dy * t1, c);
     }
 
     /** A one-pixel line: a thin rectangle turned to point from one end to the other. */
@@ -533,17 +649,77 @@ public final class SlotLocks {
         g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, 0, 0, Mask.CELL, Mask.CELL, OUTLINE.texWidth(), OUTLINE.texHeight(), tint);
     }
 
-    /** A small mark in the chosen corner: a padlock, a dot or a corner tab. */
-    private static void mark(GuiGraphicsExtractor g, int x, int y, int rgb) {
-        if (icon == Icon.NONE) return;
-        if (icon == Icon.OUTLINE) return; // drawn under the item instead
-        int a = (int) Math.round((rgb >>> 24) * opacity / 100.0);
-        int c = a << 24 | rgb & 0xFFFFFF, shadow = (int) (a * .7) << 24;
+    // Pixel art, 16 columns a row unless noted; each letter a color of the mark's palette, '.' nothing.
+    private static final String[] NEU_LOCK = {
+        "................", "......OOOO......", ".....OYYYYO.....", "....OYYMMYYO....", "....OYS..SMO....", "....OYS..SMO....",
+        "....OYS..SMO....", "...OOOOOOOOOO...", "...OYYYYMMMSD...", "...OYYYYMMMSD...", "...OYYYKKMMSD...", "...OYYMMKMSSD...",
+        "...OYMMMKSSSD...", "...OMMSSSSSSD...", "...DDDDDDDDDD...", "................"};
+    private static final Map<Character, Integer> NEU_GOLD = Map.of('Y', 0xF2EE00, 'M', 0xD0CD00, 'S', 0xAA9908, 'O', 0x8E7100, 'D', 0x715405, 'K', 0x000000);
+    private static final Map<Character, Integer> SBA_OLIVE = Map.of('Y', 0xD6C358, 'M', 0xA09242, 'S', 0x6E6530, 'O', 0x453F1C, 'D', 0x453F1C, 'K', 0x2A2611);
+    private static final String[] FIRMAMENT = {".RRRR.", ".R..R.", ".R..R.", "RRRRRR", "RRRRRR", "RRRRRR"};
+    private static final String[] SBE = {"..KKK..", ".KBWBK.", ".KB.BK.", "KKKKKKK", "KGHGGGK", "KGGKGGK", "KAAAOAK", "KKKKKKK"};
+    private static final Map<Character, Integer> SBE_COLORS = Map.of('K', 0x121116, 'B', 0x647591, 'W', 0x93A1BB, 'G', 0xF7CC25,
+        'H', 0xFFE956, 'A', 0xFFA314, 'O', 0xED7514, 'R', 0xFF0000);
+
+    /** A mark over the slot's item: a padlock, a dot, a corner, a frame or a tint, in the chosen corner when it's small. */
+    private static void mark(GuiGraphicsExtractor g, int x, int y, int rgb, Icon icon) {
+        int a = (int) Math.round((rgb >>> 24) * opacity / 100.0), c = a << 24 | rgb & 0xFFFFFF;
+        switch (icon) {
+            case NONE, OUTLINE -> { }                                         // nothing, or drawn under the item
+            case NEU_PADLOCK -> pixels(g, x, y, NEU_LOCK, NEU_GOLD, 0x80); // the whole slot at half opacity
+            case SBA_PADLOCK -> pixels(g, x, y, NEU_LOCK, SBA_OLIVE, 0x66);
+            case FIRMAMENT_LOCK -> pixels(g, x + 1, y + 1, FIRMAMENT, SBE_COLORS, 0xFF);
+            case BOX -> g.outline(x, y, 17, 17, c);                          // over the item's edge, as Firmament draws it
+            case TINT -> g.fill(x, y, x + 16, y + 16, (int) (a * .4) << 24 | rgb & 0xFFFFFF);
+            case DASHED -> {
+                for (int i = 0; i < 16; i++) {
+                    if (i % 3 == 2) continue; // two on, one off
+                    g.fill(x + i, y, x + i + 1, y + 1, c); g.fill(x + i, y + 15, x + i + 1, y + 16, c);
+                    g.fill(x, y + i, x + 1, y + i + 1, c); g.fill(x + 15, y + i, x + 16, y + i + 1, c);
+                }
+            }
+            case STITCHED -> stitched(g, x, y);
+            default -> small(g, x, y, c, icon);
+        }
+    }
+
+    /** NEU's bound-slot frame: a rope of two blues weaving between the slot's edge and one pixel in. */
+    private static void stitched(GuiGraphicsExtractor g, int x, int y) {
+        int dark = 0xB3325D9F, light = 0xB33279B9;
+        for (int i = 1; i < 15; i++) {
+            int in = (i / 2) % 2, col = i % 2 == 0 ? dark : light; // in and out every two pixels
+            g.fill(x + i, y + in, x + i + 1, y + in + 1, col);
+            g.fill(x + i, y + 15 - in, x + i + 1, y + 16 - in, col);
+            g.fill(x + in, y + i, x + in + 1, y + i + 1, col);
+            g.fill(x + 15 - in, y + i, x + 16 - in, y + i + 1, col);
+        }
+    }
+
+    /** Rows of pixel art at x, y, each run of one color a single fill; {@code alpha} over the whole mark. */
+    private static void pixels(GuiGraphicsExtractor g, int x, int y, String[] rows, Map<Character, Integer> palette, int alpha) {
+        for (int r = 0; r < rows.length; r++) {
+            String row = rows[r];
+            for (int i = 0; i < row.length(); ) {
+                char ch = row.charAt(i);
+                int j = i + 1;
+                while (j < row.length() && row.charAt(j) == ch) j++;
+                Integer rgb = palette.get(ch);
+                if (rgb != null) g.fill(x + i, y + r, x + j, y + r + 1, alpha << 24 | rgb);
+                i = j;
+            }
+        }
+    }
+
+    /** The small marks, at the chosen corner and size. */
+    private static void small(GuiGraphicsExtractor g, int x, int y, int c, Icon icon) {
+        int shadow = (int) ((c >>> 24) * .7) << 24;
         float scale = size / 100f;
-        int w = icon == Icon.PADLOCK ? 7 : icon == Icon.DOT ? 4 : 6, h = icon == Icon.PADLOCK ? 8 : w;
+        int w = switch (icon) { case PADLOCK -> 7; case DOT -> 4; case SBE_LOCK -> 7; default -> 6; };
+        int h = switch (icon) { case PADLOCK, SBE_LOCK -> 8; case DOT -> 4; default -> 6; };
+        Place at = place;
         float sw = w * scale, sh = h * scale;
-        float px = switch (place) { case TOP_LEFT, BOTTOM_LEFT -> x; case TOP_RIGHT, BOTTOM_RIGHT -> x + 16 - sw; case CENTER -> x + (16 - sw) / 2; };
-        float py = switch (place) { case TOP_LEFT, TOP_RIGHT -> y; case BOTTOM_LEFT, BOTTOM_RIGHT -> y + 16 - sh; case CENTER -> y + (16 - sh) / 2; };
+        float px = switch (at) { case TOP_LEFT, BOTTOM_LEFT -> x; case TOP_RIGHT, BOTTOM_RIGHT -> x + 16 - sw; case CENTER -> x + (16 - sw) / 2; };
+        float py = switch (at) { case TOP_LEFT, TOP_RIGHT -> y; case BOTTOM_LEFT, BOTTOM_RIGHT -> y + 16 - sh; case CENTER -> y + (16 - sh) / 2; };
         g.pose().pushMatrix();
         try {
             g.pose().translate(px, py);
@@ -554,10 +730,11 @@ public final class SlotLocks {
                     rect(g, 0, 3, 7, 5, c);                                               // body
                     rect(g, 3, 4, 1, 2, shadow);                                          // keyhole
                 }
+                case SBE_LOCK -> pixels(g, 0, 0, SBE, SBE_COLORS, 0xFF);
                 case DOT -> { rect(g, 1, 0, 2, 4, c); rect(g, 0, 1, 4, 2, c); }
                 case CORNER -> {
-                    boolean left = place == Place.TOP_LEFT || place == Place.BOTTOM_LEFT || place == Place.CENTER;
-                    boolean top = place != Place.BOTTOM_LEFT && place != Place.BOTTOM_RIGHT;
+                    boolean left = at == Place.TOP_LEFT || at == Place.BOTTOM_LEFT || at == Place.CENTER;
+                    boolean top = at != Place.BOTTOM_LEFT && at != Place.BOTTOM_RIGHT;
                     for (int r = 0; r < 6; r++) {
                         int len = 6 - r, row = top ? r : 5 - r;
                         rect(g, left ? 0 : 6 - len, row, len, 1, c);
@@ -580,49 +757,95 @@ public final class SlotLocks {
         List<Option> r = new ArrayList<>();
         var overlaps = io.github.terabold.skycosmetics.compat.Overlaps.note(SECTION);
         if (overlaps != null) r.add(overlaps);
-        r.add(row("on", "Enable slot locking", "Tap the lock key over one of your slots to lock or unlock it; bind an inventory slot to a hotbar slot with either key below. Locks are kept per SkyBlock profile and only act on SkyBlock (and in singleplayer, to try them).",
+        r.add(row("on", "Enable slot locking", "Lock slots so their items can't be moved, sold or dropped by accident, and bind inventory slots to hotbar slots to swap them in one click. Kept per SkyBlock profile; acts only on SkyBlock (and in singleplayer, to try it).",
             new Control.Toggle(() -> on, v -> on = v)));
-        r.add(row("key", "Lock key", "Tap over a slot to lock or unlock it. Hold it on one slot and let go over another to bind them. Default L.",
+
+        r.add(Option.header("slotLocks.keys", Component.literal("Keys")));
+        r.add(row("key", "Lock key", "Tap over a slot to lock or unlock it. Hold it on one slot and let go over another to bind the two. Default L.",
             new Control.Key(() -> key, true)));
-        r.add(row("bindKey", "Bind key", "Press over one slot, then over the other, to bind them; press twice on the same slot to remove its binding. Holding and letting go over the other works too. Not set by default.",
-            new Control.Key(() -> bindKey, true)));
+        r.add(row("bindKey", "Bind key", "The lock key binds too (hold and let go over the other slot). Pick a key of its own to press it over one slot and then the other; twice on one slot removes its binding.",
+            new Control.Key(() -> bindKey, true, Component.literal("Same as lock key"))));
+
+        r.add(Option.header("slotLocks.locked", Component.literal("Locked slots")));
+        r.add(picker("icon", "Mark", "Outline takes the place of the rarity background's outline. The NEU, SkyblockAddons, Firmament and SkyBlock Enhancements looks keep their own colors.",
+            LOCK_MARKS, () -> icon, v -> icon = v, () -> color));
+        r.add(row("color", "Color", "", new Control.Color(() -> color, v -> color = v, false)));
         r.add(row("blockDrops", "Stop dropping locked items", "Q does nothing while a locked hotbar slot is selected.",
             new Control.Toggle(() -> blockDrops, v -> blockDrops = v)));
         r.add(row("dungeonQ", "Q still works in Dungeons", "In Dungeons Q uses your class Ultimate, so a lock doesn't stop it there.",
             new Control.Toggle(() -> dungeonQ, v -> dungeonQ = v)).visibleWhen(() -> blockDrops));
-        r.add(row("tellStopped", "Say when a lock stops something", "A short note on the action bar, at most every 1.5 seconds.",
-            new Control.Toggle(() -> tellStopped, v -> tellStopped = v)));
-        r.add(Option.header("slotLocks.binding", Component.literal("Bindings")));
+        r.add(row("redHover", "Red under the mouse", "A locked slot turns red while the mouse is over it, as in NEU.",
+            new Control.Toggle(() -> redHover, v -> redHover = v)));
+        r.add(row("tell", "When a lock stops something", "Say so in chat (at most every 3 seconds) or on the action bar.",
+            new Control.Choice<>(List.of(Tell.values()), v -> Component.literal(switch (v) {
+                case CHAT -> "Chat"; case ACTION_BAR -> "Action bar"; case OFF -> "Off"; }), () -> tell, v -> tell = v)));
+
+        r.add(Option.header("slotLocks.bound", Component.literal("Bound slots")));
+        r.add(picker("bindIcon", "Mark", "Outline takes the place of the rarity background's outline; Box is Firmament's; the blue rope is NEU's.",
+            BOUND_MARKS, () -> bindIcon, v -> bindIcon = v, () -> bindColor));
+        r.add(row("bindColor", "Color", "", new Control.Color(() -> bindColor, v -> bindColor = v, false)));
         r.add(row("swapWith", "Swap with", "Clicking either end of a binding swaps the two, like that hotbar number key over the inventory slot.",
             new Control.Choice<>(List.of(Swap.values()), v -> Component.literal(switch (v) {
-                case SHIFT_CLICK -> "Shift-click"; case CLICK -> "Click"; case OFF -> "Off"; }), () -> swapWith, v -> swapWith = v)));
+                case SHIFT_CLICK -> "Shift-click"; case CLICK -> "Click"; case CTRL_CLICK -> "Ctrl-click"; case OFF -> "Off"; }),
+                () -> swapWith, v -> swapWith = v)));
+        r.add(row("show", "Lines between them", "From one slot's outline to the other's: always, or for the slot under the mouse (and all while you hold shift).",
+            new Control.Choice<>(List.of(Show.values()), v -> Component.literal(switch (v) {
+                case ALWAYS -> "Always"; case HOVER -> "On hover"; case HIDDEN -> "Hidden"; }), () -> show, v -> show = v)));
+        r.add(row("lineFrom", "Lines start at", "The outlines' edges (bottom of one, top of the other, as in Firmament), or the slots' centres.",
+            new Control.Choice<>(List.of(LineFrom.values()), v -> Component.literal(v == LineFrom.EDGES ? "Edges" : "Centres"),
+                () -> lineFrom, v -> lineFrom = v)).visibleWhen(() -> show != Show.HIDDEN));
+        r.add(row("boundLocked", "Bound slots are locked", "Off: a bound slot moves like any other, and only the swap click swaps it (Firmament's and NEU's way).",
+            new Control.Toggle(() -> boundLocked, v -> boundLocked = v)));
         r.add(row("multiBind", "Several per hotbar slot", "Bind one hotbar slot to more than one inventory slot. From the hotbar end, a swap goes back where the item came from.",
             new Control.Toggle(() -> multiBind, v -> multiBind = v)));
         r.add(row("everyMenu", "In every menu", "Make and use bindings on your own slots in chests and other menus too, not only in your inventory.",
             new Control.Toggle(() -> everyMenu, v -> everyMenu = v)));
-        r.add(row("show", "Show bindings", "On hover: the binding of the slot under the cursor, or every binding while you hold shift.",
-            new Control.Choice<>(List.of(Show.values()), v -> Component.literal(v == Show.HOVER ? "On hover" : label(v)), () -> show, v -> show = v)));
-        r.add(row("links", "Link line", "A line between the two ends of a binding.", new Control.Toggle(() -> links, v -> links = v))
-            .visibleWhen(() -> show != Show.HIDDEN));
-        r.add(Option.header("slotLocks.look", Component.literal("Look")));
-        r.add(row("icon", "Mark", "Outline replaces the rarity background's outline on locked slots.",
-            new Control.Choice<>(List.of(Icon.values()), v -> Component.literal(label(v)), () -> icon, v -> icon = v)));
-        r.add(row("place", "Position", "Where the mark sits in the slot.",
+
+        r.add(Option.header("slotLocks.marks", Component.literal("Marks")));
+        r.add(row("place", "Position", "Where a padlock, dot or corner sits in the slot.",
             new Control.Choice<>(List.of(Place.values()), v -> Component.literal(label(v)), () -> place, v -> place = v))
-            .visibleWhen(() -> icon != Icon.OUTLINE && icon != Icon.NONE));
-        r.add(row("size", "Mark size", "", new Control.Slider(() -> size, v -> size = (int) Math.round(v), 50, 200, 10,
-            v -> Component.literal(Math.round(v) + "%"))).visibleWhen(() -> icon != Icon.OUTLINE && icon != Icon.NONE));
+            .visibleWhen(SlotLocks::smallMarks));
+        r.add(row("size", "Size", "", new Control.Slider(() -> size, v -> size = (int) Math.round(v), 50, 200, 10,
+            v -> Component.literal(Math.round(v) + "%"))).visibleWhen(SlotLocks::smallMarks));
         r.add(row("opacity", "Opacity", "", new Control.Slider(() -> opacity, v -> opacity = (int) Math.round(v), 10, 100, 5,
             v -> Component.literal(Math.round(v) + "%"))));
-        r.add(row("color", "Lock color", "", new Control.Color(() -> color, v -> color = v, false)));
-        r.add(row("bindColor", "Binding color", "", new Control.Color(() -> bindColor, v -> bindColor = v, false)));
-        r.add(row("hotbar", "Show on the hotbar", "Mark locked hotbar slots on the HUD too.", new Control.Toggle(() -> hotbar, v -> hotbar = v)));
+        r.add(row("hotbar", "Show on the hotbar", "Mark locked and bound hotbar slots on the HUD too.", new Control.Toggle(() -> hotbar, v -> hotbar = v)));
         r.add(Option.of("slotLocks.clear", Component.literal("Clear this profile"), Component.literal("Unlocks and unbinds every slot of the current profile."),
             new Control.Action(Component.literal("Clear"), () -> {
                 Bucket b = bucket(false);
                 if (b != null) { b.locked.clear(); b.binds.clear(); save(); }
             }, () -> { Bucket b = bucket(false); return b != null && (!b.locked.isEmpty() || !b.binds.isEmpty()); }, Component.literal("Nothing locked"))));
         return r.stream().map(o -> List.of("slotLocks.opacity", "slotLocks.size", "slotLocks.color", "slotLocks.bindColor").contains(o.id()) ? o.compact().beside() : o.compact()).toList();
+    }
+
+    /** Whether a mark drawn at a corner is in use, so position and size matter. */
+    private static boolean smallMarks() {
+        return icon.small() || bindIcon.small();
+    }
+
+    /** A mark picked by its look: every choice drawn in a slot, in the color it will have. */
+    private static Option picker(String id, String title, String help, List<Icon> marks, java.util.function.Supplier<Icon> get,
+                                 java.util.function.Consumer<Icon> set, java.util.function.IntSupplier tint) {
+        return row(id, title, help, new Control.Custom((host, width) -> new io.github.terabold.skycosmetics.gui.hub.PreviewPicker<>(
+            Component.literal(title), width, marks, v -> Component.literal(markName(v)), get, set,
+            (g, v, x, y) -> preview(g, v, x, y, tint.getAsInt()), host)));
+    }
+
+    private static String markName(Icon v) {
+        return switch (v) {
+            case PADLOCK -> "Padlock"; case NEU_PADLOCK -> "NEU padlock"; case SBA_PADLOCK -> "SkyblockAddons padlock";
+            case FIRMAMENT_LOCK -> "Firmament lock"; case SBE_LOCK -> "SkyBlock Enhancements lock"; case DOT -> "Dot";
+            case CORNER -> "Corner"; case OUTLINE -> "Outline (rarity background's shape)"; case BOX -> "Box (Firmament)";
+            case DASHED -> "Dashed frame (Skyblocker)"; case STITCHED -> "Blue rope (NEU)"; case TINT -> "Tint"; case NONE -> "None";
+        };
+    }
+
+    private static void preview(GuiGraphicsExtractor g, Icon v, int x, int y, int rgb) {
+        switch (v) {
+            case OUTLINE -> outline(g, x, y, rgb);
+            case NONE -> g.fill(x + 4, y + 7, x + 12, y + 9, 0x60FFFFFF); // a dash: nothing drawn
+            default -> mark(g, x, y, rgb, v);
+        }
     }
 
     private static Option row(String id, String title, String help, Control c) {
@@ -642,13 +865,18 @@ public final class SlotLocks {
         swapWith = choice(Swap.values(), Settings.str(o.get("swapWith"), null), Settings.bool(o.get("swapBound"), true) ? swapWith : Swap.OFF);
         blockDrops = Settings.bool(o.get("blockDrops"), blockDrops);
         dungeonQ = Settings.bool(o.get("dungeonQ"), dungeonQ);
-        tellStopped = Settings.bool(o.get("tellStopped"), tellStopped);
+        // "tellStopped" was the on/off before "tell".
+        tell = choice(Tell.values(), Settings.str(o.get("tell"), null), Settings.bool(o.get("tellStopped"), true) ? tell : Tell.OFF);
         multiBind = Settings.bool(o.get("multiBind"), multiBind);
         everyMenu = Settings.bool(o.get("everyMenu"), everyMenu);
-        show = choice(Show.values(), Settings.str(o.get("show"), null), show);
-        links = Settings.bool(o.get("links"), links);
+        boundLocked = Settings.bool(o.get("boundLocked"), boundLocked);
+        redHover = Settings.bool(o.get("redHover"), redHover);
+        lineFrom = choice(LineFrom.values(), Settings.str(o.get("lineFrom"), null), lineFrom);
+        // The lines' own choice; the old "show" (hover by default) is left behind on purpose.
+        show = choice(Show.values(), Settings.str(o.get("linkLines"), null), show);
         hotbar = Settings.bool(o.get("hotbar"), hotbar);
         icon = choice(Icon.values(), Settings.str(o.get("icon"), null), icon);
+        bindIcon = choice(Icon.values(), Settings.str(o.get("bindIcon"), null), bindIcon);
         place = choice(Place.values(), Settings.str(o.get("place"), null), place);
         size = (int) Settings.num(o.get("size"), size, 50, 200);
         opacity = (int) Settings.num(o.get("opacity"), opacity, 10, 100);
@@ -659,8 +887,10 @@ public final class SlotLocks {
     private static JsonElement write() {
         JsonObject o = new JsonObject();
         o.addProperty("on", on); o.addProperty("swapWith", swapWith.name()); o.addProperty("blockDrops", blockDrops);
-        o.addProperty("dungeonQ", dungeonQ); o.addProperty("tellStopped", tellStopped); o.addProperty("multiBind", multiBind); o.addProperty("everyMenu", everyMenu);
-        o.addProperty("show", show.name()); o.addProperty("links", links); o.addProperty("hotbar", hotbar); o.addProperty("icon", icon.name()); o.addProperty("place", place.name());
+        o.addProperty("dungeonQ", dungeonQ); o.addProperty("tell", tell.name()); o.addProperty("multiBind", multiBind); o.addProperty("everyMenu", everyMenu);
+        o.addProperty("linkLines", show.name()); o.addProperty("hotbar", hotbar);
+        o.addProperty("boundLocked", boundLocked); o.addProperty("redHover", redHover); o.addProperty("lineFrom", lineFrom.name());
+        o.addProperty("icon", icon.name()); o.addProperty("bindIcon", bindIcon.name()); o.addProperty("place", place.name());
         o.addProperty("size", size); o.addProperty("opacity", opacity); o.addProperty("color", color); o.addProperty("bindColor", bindColor);
         return o;
     }

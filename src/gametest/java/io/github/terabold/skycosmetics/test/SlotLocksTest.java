@@ -71,6 +71,8 @@ public class SlotLocksTest implements FabricClientGameTest {
             ctx.waitTicks(3);
             check(ctx.computeOnClient(mc -> mc.player.containerMenu.getCarried().isEmpty()
                 && mc.player.getInventory().getItem(10).is(Items.GOLDEN_APPLE)), "a click on a locked slot picks nothing up");
+            check(ctx.computeOnClient(mc -> DataSafetyTest.chat(mc).stream().anyMatch(l -> l.contains("This slot is locked"))),
+                "and chat says the slot is locked");
 
             ctx.runOnClient(mc -> {
                 Slot s10 = slot(mc, 10), s9 = slot(mc, 9), s15 = slot(mc, 15);
@@ -105,6 +107,23 @@ public class SlotLocksTest implements FabricClientGameTest {
             ctx.waitTicks(4);
             check(ctx.computeOnClient(mc -> mc.player.getInventory().getItem(0).is(Items.STICK)
                 && mc.player.getInventory().getItem(9).is(Items.DIAMOND_SWORD)), "a plain click swaps when that's chosen");
+
+            // Or with ctrl held.
+            ctx.runOnClient(mc -> SlotLocks.testBinding(SlotLocks.Swap.CTRL_CLICK, false, false));
+            ctx.getInput().holdControl();
+            ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            ctx.getInput().releaseControl();
+            ctx.waitTicks(4);
+            check(ctx.computeOnClient(mc -> mc.player.getInventory().getItem(0).is(Items.DIAMOND_SWORD)
+                && mc.player.getInventory().getItem(9).is(Items.STICK)), "a ctrl-click swaps when that's chosen");
+            ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            ctx.waitTicks(4);
+            check(ctx.computeOnClient(mc -> mc.player.getInventory().getItem(9).is(Items.STICK)), "and a plain click doesn't then");
+            ctx.runOnClient(mc -> SlotLocks.testBinding(SlotLocks.Swap.CTRL_CLICK, false, false));
+            ctx.getInput().holdControl();
+            ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            ctx.getInput().releaseControl();
+            ctx.waitTicks(4);
             ctx.runOnClient(mc -> SlotLocks.testBinding(SlotLocks.Swap.SHIFT_CLICK, false, false));
 
             // Hold the lock key on one slot and let go over the other.

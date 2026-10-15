@@ -370,19 +370,31 @@ public final class Repo {
         }));
     }
 
-    /** A recorded preview. A repo entry that already has frames wins, so this is dropped then. */
-    static void learn(String key, Captured.Anim anim, Component news) {
+    /**
+     * A recorded preview. A repo entry that already has frames wins, so this is dropped then. {@code same} (may be
+     * null) is said instead of {@code news} when nothing new was learned, so a recording someone asked for always
+     * ends with a line.
+     */
+    static void learn(String key, Captured.Anim anim, Component news, Component same) {
         EXEC.execute(() -> guarded(() -> {
             if (captured == null) captured = Captured.load();
             RepoParser.Parsed b = base;
             SkinEntry known = b == null ? null : b.skins.get(key);
-            if (known != null && (known.animated() || anim.textures().length < 2)) return;
-            if (anim.textures().length < 2 && captured.stills.containsKey(key)) return;
             Captured.Anim had = captured.anims.get(key);
-            if (had != null && java.util.Arrays.equals(had.textures(), anim.textures())
-                && had.ticks() == anim.ticks() && java.util.Arrays.equals(had.ticksPerTexture(), anim.ticksPerTexture())
-                && had.evidence().ordinal() >= anim.evidence().ordinal()) return;
-            if (anim.textures().length > Captured.MAX_FRAMES || !mayLearn()) return;
+            boolean nothingNew = known != null && (known.animated() || anim.textures().length < 2)
+                || anim.textures().length < 2 && captured.stills.containsKey(key)
+                || had != null && java.util.Arrays.equals(had.textures(), anim.textures())
+                    && had.ticks() == anim.ticks() && java.util.Arrays.equals(had.ticksPerTexture(), anim.ticksPerTexture())
+                    && had.evidence().ordinal() >= anim.evidence().ordinal();
+            if (nothingNew || anim.textures().length > Captured.MAX_FRAMES) {
+                if (same != null) say(same);
+                return;
+            }
+            if (!mayLearn()) {
+                if (same != null) say(Component.literal("Learned enough skins for one session; restart the game to learn more")
+                    .withStyle(ChatFormatting.GRAY));
+                return;
+            }
             captured.anims.put(key, anim);
             captured.trim(Looks.usedSkins());
             capturedDirty = true;

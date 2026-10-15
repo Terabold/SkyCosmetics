@@ -100,15 +100,20 @@ public final class PreviewRecorder {
         String k = identified != null && identified.parent != null ? identified.id : key(type, name, c);
         if (!SkinLearner.validId(k)) return;
         SkinEntry known = c.skins.get(k);
+        String base = c.itemNames.getOrDefault(type, c.skins.containsKey(type) ? c.skins.get(type).name : Catalog.title(type));
+        String next = k.equals(type) ? base : base + " (" + name + ")";
+        // Another preview while one is being watched: that one stops; say so, or it just goes quiet.
+        if (key != null && announce && !k.equals(key)) say(Component.literal("Stopped watching " + label + ": another preview was opened")
+            .withStyle(ChatFormatting.GRAY));
         if (known != null && known.animated()) {
             result = "Preview: animation already recorded for " + name;
+            say(Component.literal(next + ": its animation is already known, nothing to learn").withStyle(ChatFormatting.GRAY));
             reset(); return;
         }
 
-        String base = c.itemNames.getOrDefault(type, c.skins.containsKey(type) ? c.skins.get(type).name : Catalog.title(type));
         reset();
         key = k;
-        label = k.equals(type) ? base : base + " (" + name + ")";
+        label = next;
         String rarity = SkinLearner.cosmeticLine(SkinLearner.lore(stack));
         int rc = rarity != null ? RepoParser.rarityColor(rarity) : 0;
         color = rc != 0 ? rc : known != null ? known.color : c.skins.containsKey(type) ? c.skins.get(type).color : 0;
@@ -119,7 +124,7 @@ public final class PreviewRecorder {
         anchor = SkinLearner.mojangTexture(thumbnail) ? SkinLearner.textureHash(thumbnail) : null;
         if (anchor == null) { result = "Preview: selected item has no usable thumbnail"; reset(); return; }
         startTick = lastTick = SkinLearner.ticks();
-        if (announce) say(Component.literal("Watching the preview of " + label + " to learn its animation...")
+        if (announce) say(Component.literal("Watching the preview of " + label + " to learn its animation (up to a minute)...")
             .withStyle(ChatFormatting.GRAY));
     }
 
@@ -257,6 +262,9 @@ public final class PreviewRecorder {
         long now = SkinLearner.ticks();
         if (!io.github.terabold.skycosmetics.Settings.learnSkins || mc.level != level || VALUES.isEmpty() && now - startTick > APPEAR_TICKS) {
             result = "Preview: " + (mc.level != level ? "recording stopped after leaving the world" : !io.github.terabold.skycosmetics.Settings.learnSkins ? "skin learning is off" : "no matching preview appeared for " + label);
+            if (announce && mc.level == level && io.github.terabold.skycosmetics.Settings.learnSkins) {
+                say(Component.literal("No preview of " + label + " showed up near you, so nothing was learned").withStyle(ChatFormatting.YELLOW));
+            }
             reset(); // left the world, or no preview showed up
             return;
         }
@@ -301,7 +309,9 @@ public final class PreviewRecorder {
             .withStyle(ChatFormatting.GRAY)
             .append(Component.literal(label).withColor((color != 0 ? color : 0xFFFF55FF) & 0xFFFFFF))
             .append(Component.literal(" (" + timing + ")").withStyle(ChatFormatting.GRAY));
-        Repo.learn(key, anim, news);
+        Component same = announce ? Component.literal("Recorded " + label + ": it matches what the mod already had")
+            .withStyle(ChatFormatting.GRAY) : null;
+        Repo.learn(key, anim, news, same);
         result = "Preview: recorded " + label + " (" + timing + ")";
         reset();
     }

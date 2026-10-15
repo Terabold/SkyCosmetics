@@ -176,7 +176,7 @@ public class SettingsClientTest implements FabricClientGameTest {
         }
     }
 
-    /** Click the key button, press a key: it binds and saves; Esc cancels; conflicts show; Backspace unbinds. */
+    /** Click the key button, press a key: it binds and saves; Esc unbinds; conflicts show; Backspace unbinds. */
     private static void keyButton(ClientGameTestContext ctx) {
         String before = ctx.computeOnClient(mc -> KeyMapping.get(OPEN).saveString());
         ctx.runOnClient(mc -> bindDirect(InputConstants.UNKNOWN));
@@ -201,10 +201,11 @@ public class SettingsClientTest implements FabricClientGameTest {
         ctx.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> mc.screen instanceof SettingsScreen), "Esc while waiting does not close the screen");
-        check(key(ctx).equals("key.keyboard.j") && button(ctx, "J") != null, "Esc keeps the old key");
+        check(ctx.computeOnClient(mc -> KeyMapping.get(OPEN).isUnbound()) && button(ctx, notBound(ctx)) != null,
+            "Esc unbinds, as in Controls");
 
         // E is also the inventory key: the screen takes the press (the inventory never sees it) and warns.
-        clickButton(ctx, "J");
+        clickButton(ctx, notBound(ctx));
         ctx.getInput().pressKey(GLFW.GLFW_KEY_E);
         ctx.waitTicks(2);
         check(key(ctx).equals("key.keyboard.e"), "E is the open key");

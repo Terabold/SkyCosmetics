@@ -293,7 +293,7 @@ public class MenuClientTest implements FabricClientGameTest {
         check(ctx.computeOnClient(mc -> mc.screen instanceof SettingsScreen s && s.overlay() == null),
             "Esc closes the list, not the settings");
 
-        // Key box: a click listens ("> Press a key <"), Esc cancels and keeps the settings open.
+        // Key box: a click listens ("> Press a key <"), Esc unbinds and keeps the settings open.
         String listening = ctx.computeOnClient(mc -> I18n.get("skycosmetics.option.openKey.listening"));
         click(ctx, "testKey");
         check(ctx.computeOnClient(mc -> ((KeyBindButton) screen(mc).widget("testKey")).listening()

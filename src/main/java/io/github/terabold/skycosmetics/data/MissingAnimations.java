@@ -77,7 +77,7 @@ final class MissingAnimations {
         String name = current != null ? current.name : root.name + " (Captured style)";
         String[] frames = t.values.subList(fit.start(), fit.start() + fit.frames()).toArray(String[]::new);
         Repo.learn(t.skin, new Captured.Anim(name, root.color, fit.ticks(), fit.ticksPerTexture(), frames, System.currentTimeMillis(), Captured.Evidence.REPEATED_UPDATES),
-            Component.literal("Learned the animation of " + name).withColor(root.color & 0xFFFFFF));
+            Component.literal("Learned the animation of " + name).withColor(root.color & 0xFFFFFF), null);
         TRACKS.remove(slot);
     }
 }

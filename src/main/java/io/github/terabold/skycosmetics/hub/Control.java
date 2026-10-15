@@ -35,8 +35,9 @@ public sealed interface Control {
     record Choice<T>(List<T> values, Function<T, Component> label, Supplier<T> get, Consumer<T> set) implements Control {}
 
     /** A key mapping, bound in place: click, then press a key. */
-    record Key(Supplier<KeyMapping> mapping, boolean allowMiddleMouse) implements Control {
-        public Key(Supplier<KeyMapping> mapping) { this(mapping, false); }
+    record Key(Supplier<KeyMapping> mapping, boolean allowMiddleMouse, Component unbound) implements Control {
+        public Key(Supplier<KeyMapping> mapping) { this(mapping, false, null); }
+        public Key(Supplier<KeyMapping> mapping, boolean allowMiddleMouse) { this(mapping, allowMiddleMouse, null); }
     }
 
     /** Does something now, e.g. Open Studio; grayed out with {@code inactiveTip} when {@code active} is false. */
