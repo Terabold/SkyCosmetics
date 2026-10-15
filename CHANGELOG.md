@@ -2,6 +2,37 @@
 
 SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions use its old command, `/skinstudio`.
 
+## 1.4.0-beta.4 — 2026-10-15
+
+### New
+- **Slot binding the ways other mods do it.** Hold L on one slot and let go over the other, or click one and then the
+  other while holding L (right-click removes a binding), or give the Bind key its own key and press it on both. The
+  Bind key reads "Same as lock key" by default and may share L without a clash.
+- **Marks you know from other mods**, picked from previews, separately for locked and bound slots: NEU's and
+  SkyblockAddons' gold padlock, Firmament's red lock and box, SkyBlock Enhancements' corner lock, Skyblocker's dashed
+  frame, NEU's blue rope, plus outline, tint, dot and corner (all redrawn by hand). Bound slots default to an
+  outline; lines run from the middle of one slot's bottom edge to the middle of the other's top edge, and show
+  always. The Rift and the Safari keep locks of their own, as their inventories are their own. Swap with shift-click, click or
+  ctrl-click. A red highlight on locked slots under the mouse, like NEU.
+- **"Protected your item: <name>."** in chat when a lock stops something, with how to unlock it on hover.
+- **Your item names in chat and tooltips**: where a line names one of your renamed items the way Hypixel does, your
+  name shows instead (only on screen; other mods still read Hypixel's text).
+- **Zoom: Cinematic smoothing** next to Responsive: Minecraft's own cinematic camera, like OptiFine, Essential and
+  Zoomify, with a Glide slider.
+- **A new viewmodel editor:** the mod's own controls on three pages (Pose, Swing, Behaviour) that fit without
+  scrolling, quick presets (Vanilla, Compact, Low, Centered), a line saying what each turn and swing style does,
+  Undo, and first person while it's open.
+
+### Fixed
+- The lock key no longer hides the key press from other mods, so their slot locks on L keep working.
+- Dragging between two slots that can't be bound no longer locks one of them.
+- Watching a skin preview always ends with a line in chat: learned, already known, or why not.
+- Esc unbinds a key in every key picker, as in Controls. Keys that only act in menus no longer show a clash with
+  Minecraft keys that never do there (L and Advancements).
+- Nametags: a see-through name no longer shows its own shadow through its letters, in the world and the preview.
+  Other players' names find their level, rank color and icons on any tab list line that names them, and keep them
+  once the tab list has no room for them. `/skycosmetics debug names` shows where each name comes from.
+
 ## 1.4.0-beta.3 — 2026-10-14
 
 ### New

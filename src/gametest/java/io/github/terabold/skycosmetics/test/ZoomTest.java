@@ -162,6 +162,15 @@ public class ZoomTest implements FabricClientGameTest {
                 Zoom.resetKey.setKey(InputConstants.getKey(resetBefore)); Zoom.inKey.setKey(InputConstants.getKey(inBefore)); Zoom.outKey.setKey(InputConstants.getKey(outBefore));
                 KeyMapping.resetMapping(); mc.options.save(); });
         }
+        // Cinematic is Minecraft's own glide: 1 s at the default sensitivity (100%), and the Glide slider scales it.
+        double[] glide = ctx.computeOnClient(mc -> {
+            double was = mc.options.sensitivity().get();
+            mc.options.sensitivity().set(.5);
+            double[] out = {Zoom.cinematicSeconds(1), Zoom.cinematicSeconds(2)};
+            mc.options.sensitivity().set(was);
+            return out;
+        });
+        check(Math.abs(glide[0] - 1) < 1e-9 && Math.abs(glide[1] - 2) < 1e-9, "cinematic glides as Minecraft's: " + java.util.Arrays.toString(glide));
         System.out.println("[SkyCosmeticsTest] zoom camera, input, menu and transition checks passed");
     }
 

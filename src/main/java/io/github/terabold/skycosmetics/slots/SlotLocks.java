@@ -151,6 +151,8 @@ public final class SlotLocks {
         bindKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.skycosmetics.bindSlot", InputConstants.Type.KEYSYM,
             GLFW.GLFW_KEY_UNKNOWN, category));
         io.github.terabold.skycosmetics.gui.hub.KeyBindButton.mayShare(key, bindKey); // one key may both lock and bind
+        io.github.terabold.skycosmetics.gui.hub.KeyBindButton.onlyInMenus(key);       // L and Advancements never both act
+        io.github.terabold.skycosmetics.gui.hub.KeyBindButton.onlyInMenus(bindKey);
         Settings.register(SECTION, SlotLocks::read, SlotLocks::write);
         Hub.add(new Section(SECTION, Section.FEATURE, Component.literal("Slot Locking"),
             Component.literal("Lock and bind slots"),
@@ -461,7 +463,10 @@ public final class SlotLocks {
         return s != null && s.container instanceof Inventory ? s.getContainerSlot() : null;
     }
 
-    /** Locks are kept per account and SkyBlock profile; until Hypixel names the profile, the last one it named. */
+    /**
+     * Locks are kept per account and SkyBlock profile (until Hypixel names the profile, the last one it named), with
+     * a set of their own in the Rift and in the Safari, whose inventories are their own.
+     */
     private static Bucket bucket(boolean create) {
         load();
         var user = Minecraft.getInstance().getUser();
@@ -471,7 +476,11 @@ public final class SlotLocks {
             LAST_PROFILE.put(account, profile);
             save();
         }
-        String k = account + "|" + LAST_PROFILE.getOrDefault(account, "*");
+        String k = account + "|" + LAST_PROFILE.getOrDefault(account, "*") + switch (Where.island()) {
+            case RIFT -> "|rift";
+            case SAFARI -> "|safari";
+            case MAIN -> "";
+        };
         return create ? BUCKETS.computeIfAbsent(k, x -> new Bucket()) : BUCKETS.get(k);
     }
 
@@ -594,7 +603,10 @@ public final class SlotLocks {
                 if (flashFrom >= 0 && age < 650) pair(g, screen, flashFrom, flashTo, (int) (230 - age * 230 / 650) << 24 | bindColor & 0xFFFFFF, true);
                 Integer from = binding();
                 Slot fs = from == null ? null : slotOf(screen, from);
-                if (fs != null) link(g, fs.x + 8, fs.y + 8, mouseX - left, mouseY - top, lineFrom == LineFrom.EDGES ? 9 : 0, 0, 0xC0000000 | bindColor & 0xFFFFFF);
+                if (fs != null) {
+                    float[] at = anchor(fs, mouseX - left, mouseY - top);
+                    line(g, at[0], at[1], mouseX - left, mouseY - top, 0xC0000000 | bindColor & 0xFFFFFF);
+                }
             } finally {
                 g.pose().popMatrix();
             }
@@ -605,23 +617,24 @@ public final class SlotLocks {
 
     private static void pair(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, int a, int b, int c, boolean framed) {
         Slot sa = slotOf(screen, a), sb = slotOf(screen, b);
-        float r = lineFrom == LineFrom.EDGES ? 9 : 0;
-        if (sa != null && sb != null) link(g, sa.x + 8, sa.y + 8, sb.x + 8, sb.y + 8, r, r, c);
+        if (sa != null && sb != null) {
+            float[] from = anchor(sa, sb.x + 8, sb.y + 8), to = anchor(sb, sa.x + 8, sa.y + 8);
+            line(g, from[0], from[1], to[0], to[1], c);
+        }
         if (!framed) return;
         if (sa != null) g.outline(sa.x - 1, sa.y - 1, 18, 18, c);
         if (sb != null) g.outline(sb.x - 1, sb.y - 1, 18, 18, c);
     }
 
     /**
-     * A line between two points that starts and ends at the edges of the squares around them ({@code r0} and
-     * {@code r1} from the centre; 9 is a slot outline, 0 the cursor), so it never crosses an item: straight down
-     * it runs from the bottom edge of one outline to the top edge of the other.
+     * Where a line leaves a slot toward a point, as Firmament draws it: the middle of the outline's bottom edge when
+     * the point is lower, of its top edge when higher, of a side when level; or the slot's centre.
      */
-    private static void link(GuiGraphicsExtractor g, float x0, float y0, float x1, float y1, float r0, float r1, int c) {
-        float dx = x1 - x0, dy = y1 - y0, m = Math.max(Math.abs(dx), Math.abs(dy));
-        if (m <= r0 + r1 + 1) return; // touching: the outlines say it
-        float t0 = r0 / m, t1 = r1 / m;
-        line(g, x0 + dx * t0, y0 + dy * t0, x1 - dx * t1, y1 - dy * t1, c);
+    private static float[] anchor(Slot s, float tx, float ty) {
+        float cx = s.x + 8, cy = s.y + 8;
+        if (lineFrom == LineFrom.CENTRES) return new float[]{cx, cy};
+        if (Math.abs(ty - cy) < 9) return new float[]{tx > cx ? s.x + 16 : s.x - 1, cy};
+        return new float[]{cx, ty > cy ? s.y + 16 : s.y - 1};
     }
 
     /** A one-pixel line: a thin rectangle turned to point from one end to the other. */
@@ -757,7 +770,7 @@ public final class SlotLocks {
         List<Option> r = new ArrayList<>();
         var overlaps = io.github.terabold.skycosmetics.compat.Overlaps.note(SECTION);
         if (overlaps != null) r.add(overlaps);
-        r.add(row("on", "Enable slot locking", "Lock slots so their items can't be moved, sold or dropped by accident, and bind inventory slots to hotbar slots to swap them in one click. Kept per SkyBlock profile; acts only on SkyBlock (and in singleplayer, to try it).",
+        r.add(row("on", "Enable slot locking", "Lock slots so their items can't be moved, sold or dropped by accident, and bind inventory slots to hotbar slots to swap them in one click. Kept per SkyBlock profile, with a set of its own in the Rift and the Safari; acts only on SkyBlock (and in singleplayer, to try it).",
             new Control.Toggle(() -> on, v -> on = v)));
 
         r.add(Option.header("slotLocks.keys", Component.literal("Keys")));
@@ -791,7 +804,7 @@ public final class SlotLocks {
         r.add(row("show", "Lines between them", "From one slot's outline to the other's: always, or for the slot under the mouse (and all while you hold shift).",
             new Control.Choice<>(List.of(Show.values()), v -> Component.literal(switch (v) {
                 case ALWAYS -> "Always"; case HOVER -> "On hover"; case HIDDEN -> "Hidden"; }), () -> show, v -> show = v)));
-        r.add(row("lineFrom", "Lines start at", "The outlines' edges (bottom of one, top of the other, as in Firmament), or the slots' centres.",
+        r.add(row("lineFrom", "Lines start at", "The middle of the outlines' edges (the bottom of one, the top of the other, as in Firmament), or the slots' centres.",
             new Control.Choice<>(List.of(LineFrom.values()), v -> Component.literal(v == LineFrom.EDGES ? "Edges" : "Centres"),
                 () -> lineFrom, v -> lineFrom = v)).visibleWhen(() -> show != Show.HIDDEN));
         r.add(row("boundLocked", "Bound slots are locked", "Off: a bound slot moves like any other, and only the swap click swaps it (Firmament's and NEU's way).",
@@ -984,6 +997,12 @@ public final class SlotLocks {
     public static void testLook(Icon i, boolean enabled) {
         icon = i;
         on = enabled;
+    }
+
+    /** For tests: the marks of locked and of bound slots. */
+    public static void testMarks(Icon locked, Icon bound) {
+        icon = locked;
+        bindIcon = bound;
     }
 
     /** For tests: how bindings swap and where. */

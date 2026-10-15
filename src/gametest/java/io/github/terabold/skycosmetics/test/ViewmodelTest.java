@@ -46,6 +46,16 @@ public final class ViewmodelTest implements FabricClientGameTest {
             ctx.setScreen(() -> new HandScreen(null, "item:TEST_VIEWMODEL_SWORD")); ctx.waitTicks(2);
             check(ctx.computeOnClient(mc -> ((HandScreen)mc.screen).key().equals(Hand.EVERYTHING)), "the editor always opens the shared pose");
             ctx.takeScreenshot("skycosmetics-viewmodel-shared-editor");
+            // In third person the editor shows first person, and gives the view back when it closes.
+            ctx.setScreen(() -> null);
+            ctx.runOnClient(mc -> mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK));
+            ctx.setScreen(() -> new HandScreen(null, Hand.EVERYTHING)); ctx.waitTicks(2);
+            check(ctx.computeOnClient(mc -> mc.options.getCameraType() == net.minecraft.client.CameraType.FIRST_PERSON),
+                "the editor shows first person");
+            ctx.setScreen(() -> null); ctx.waitTicks(2);
+            check(ctx.computeOnClient(mc -> mc.options.getCameraType() == net.minecraft.client.CameraType.THIRD_PERSON_BACK),
+                "and gives the third-person view back");
+            ctx.runOnClient(mc -> mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON));
             quickSlots(ctx);
             thirdPersonSwing(ctx, world);
         } finally {

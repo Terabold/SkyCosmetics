@@ -62,6 +62,23 @@ public final class KeyBindButton extends ThemedButton {
         SHARED.add(b.getName() + "|" + a.getName());
     }
 
+    /** Mappings that only act while a menu is open (slot locking's keys). */
+    private static final java.util.Set<String> MENUS_ONLY = new java.util.HashSet<>();
+    /** Minecraft's own keys that do something while a menu is open; its others (Advancements...) never do. */
+    private static final java.util.Set<String> VANILLA_IN_MENUS = java.util.Set.of("key.inventory", "key.drop", "key.swapOffhand",
+        "key.pickItem", "key.screenshot", "key.fullscreen", "key.hotbar.1", "key.hotbar.2", "key.hotbar.3", "key.hotbar.4",
+        "key.hotbar.5", "key.hotbar.6", "key.hotbar.7", "key.hotbar.8", "key.hotbar.9");
+
+    /** Marks a mapping that only acts in menus: Minecraft keys that never act there aren't shown as a clash. */
+    public static void onlyInMenus(KeyMapping m) {
+        MENUS_ONLY.add(m.getName());
+    }
+
+    private static boolean neverTogether(KeyMapping open, KeyMapping other) {
+        return MENUS_ONLY.contains(open.getName()) && "minecraft".equals(other.getCategory().id().getNamespace())
+            && !VANILLA_IN_MENUS.contains(other.getName());
+    }
+
     public boolean listening() {
         return listening;
     }
@@ -131,7 +148,7 @@ public final class KeyBindButton extends ThemedButton {
         Minecraft mc = Minecraft.getInstance();
         if (open == null || open.isUnbound()) return out;
         for (KeyMapping m : mc.options.keyMappings) {
-            if (m != open && m.same(open) && !SHARED.contains(open.getName() + "|" + m.getName())) {
+            if (m != open && m.same(open) && !SHARED.contains(open.getName() + "|" + m.getName()) && !neverTogether(open, m)) {
                 out.add(Component.translatable(m.getName()).getString());
             }
         }

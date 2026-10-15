@@ -24,6 +24,7 @@ public class NameTagFeatureRendererMixin {
             var style = Nametags.drawStyle(text);
             if (style != null) {
                 if (NametagOverlay.defer(text, x, y, color, pose, mode, light, style)) return;
+                if (mode == Font.DisplayMode.NORMAL && NametagOverlay.drawNow(font, text, x, y, color, pose, buffers, light, style)) return;
                 boolean normal = mode == Font.DisplayMode.NORMAL;
                 shadow = style.shadow();
                 color = (normal ? style.normalAlpha() : style.faintAlpha()) << 24 | color & 0xFFFFFF;

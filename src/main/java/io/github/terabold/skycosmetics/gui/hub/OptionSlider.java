@@ -31,10 +31,12 @@ public final class OptionSlider extends AbstractWidget {
     private final Control.Slider slider;
     private final Host host;
     private final Anim knobHover = new Anim(90, 0);
-    private final int labelW;
+    private int labelW;
     private double current;
     private String label = "";
     private boolean dragging;
+    /** Right-click puts the value back to this; null: right-click does nothing. */
+    private java.util.function.DoubleSupplier resetTo;
 
     /** Without a title: narration reads only the value. */
     public OptionSlider(int width, Control.Slider slider, Host host) {
@@ -51,6 +53,28 @@ public final class OptionSlider extends AbstractWidget {
         int widest = Math.max(font.width(slider.label().apply(slider.min())), font.width(slider.label().apply(slider.max())));
         labelW = Math.min(Math.max(widest, font.width(slider.label().apply(current))) + 2, width / 2);
         updateLabel();
+    }
+
+    /** A value column of this width, so a column of sliders lines up whatever their values. */
+    public OptionSlider valueWidth(int w) {
+        labelW = Math.min(w, getWidth() / 2);
+        return this;
+    }
+
+    /** Lets a right-click put the value back to {@code to} (Minecraft's, say). */
+    public OptionSlider resettable(java.util.function.DoubleSupplier to) {
+        resetTo = to;
+        return this;
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT && resetTo != null && active && visible && isMouseOver(event.x(), event.y())) {
+            apply(resetTo.getAsDouble());
+            host.changed();
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     /** Reads the value again (another row may have changed it). */

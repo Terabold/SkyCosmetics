@@ -56,6 +56,17 @@ public class SlotLocksTest implements FabricClientGameTest {
             check(ctx.computeOnClient(mc -> SlotLocks.isLocked(20)), "back on the first profile, its locks are back");
             ctx.runOnClient(mc -> SlotLocks.testLock(20, false));
 
+            // The Rift and the Safari have inventories of their own, and so locks of their own.
+            ctx.runOnClient(mc -> { io.github.terabold.skycosmetics.items.Where.testArea("Safari"); SlotLocks.testLock(21, true); });
+            check(ctx.computeOnClient(mc -> SlotLocks.isLocked(21)), "a lock in the Safari holds there");
+            ctx.runOnClient(mc -> io.github.terabold.skycosmetics.items.Where.testArea("The Rift"));
+            check(!ctx.computeOnClient(mc -> SlotLocks.isLocked(21)), "the Rift has its own locks");
+            ctx.runOnClient(mc -> io.github.terabold.skycosmetics.items.Where.testArea("Hub"));
+            check(!ctx.computeOnClient(mc -> SlotLocks.isLocked(21)), "and so does the rest of the profile");
+            ctx.runOnClient(mc -> io.github.terabold.skycosmetics.items.Where.testArea("Safari"));
+            check(ctx.computeOnClient(mc -> SlotLocks.isLocked(21)), "back in the Safari, its lock is back");
+            ctx.runOnClient(mc -> { SlotLocks.testLock(21, false); io.github.terabold.skycosmetics.items.Where.testArea(null); });
+
             ctx.setScreen(() -> new InventoryScreen(Minecraft.getInstance().player));
             ctx.waitTicks(3);
 
@@ -71,8 +82,8 @@ public class SlotLocksTest implements FabricClientGameTest {
             ctx.waitTicks(3);
             check(ctx.computeOnClient(mc -> mc.player.containerMenu.getCarried().isEmpty()
                 && mc.player.getInventory().getItem(10).is(Items.GOLDEN_APPLE)), "a click on a locked slot picks nothing up");
-            check(ctx.computeOnClient(mc -> DataSafetyTest.chat(mc).stream().anyMatch(l -> l.contains("This slot is locked"))),
-                "and chat says the slot is locked");
+            check(ctx.computeOnClient(mc -> DataSafetyTest.chat(mc).stream().anyMatch(l -> l.contains("Protected your item: Golden Apple"))),
+                "and chat says the item was protected, by name");
 
             ctx.runOnClient(mc -> {
                 Slot s10 = slot(mc, 10), s9 = slot(mc, 9), s15 = slot(mc, 15);
@@ -177,6 +188,15 @@ public class SlotLocksTest implements FabricClientGameTest {
             ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
             ctx.waitTicks(2);
 
+            // Other mods' looks, redrawn: NEU's padlock and rope, Firmament's lock and box.
+            ctx.runOnClient(mc -> SlotLocks.testMarks(SlotLocks.Icon.NEU_PADLOCK, SlotLocks.Icon.STITCHED));
+            ctx.waitTicks(3);
+            ctx.takeScreenshot("skycosmetics-slot-lock-neu-look");
+            ctx.runOnClient(mc -> SlotLocks.testMarks(SlotLocks.Icon.FIRMAMENT_LOCK, SlotLocks.Icon.BOX));
+            ctx.waitTicks(3);
+            ctx.takeScreenshot("skycosmetics-slot-lock-firmament-look");
+            ctx.runOnClient(mc -> SlotLocks.testMarks(SlotLocks.Icon.PADLOCK, SlotLocks.Icon.OUTLINE));
+
             // Outline mark with rarity backgrounds: the lock outline replaces the rarity outline.
             ctx.runOnClient(mc -> {
                 var apple = mc.player.getInventory().getItem(10);
@@ -186,6 +206,9 @@ public class SlotLocksTest implements FabricClientGameTest {
             });
             ctx.waitTicks(3);
             ctx.takeScreenshot("skycosmetics-slot-lock-outline");
+            ctx.setScreen(() -> new io.github.terabold.skycosmetics.gui.SettingsScreen(null, "slotLocks"));
+            ctx.waitTicks(5);
+            ctx.takeScreenshot("skycosmetics-slot-lock-settings");
 
             // Q on a locked hotbar slot, for real.
             ctx.setScreen(() -> null);
@@ -203,6 +226,7 @@ public class SlotLocksTest implements FabricClientGameTest {
                 SlotLocks.testBinding(SlotLocks.Swap.SHIFT_CLICK, false, false);
                 SlotLocks.testBindKey(GLFW.GLFW_KEY_UNKNOWN);
                 SlotLocks.testLook(SlotLocks.Icon.PADLOCK, true);
+                SlotLocks.testMarks(SlotLocks.Icon.PADLOCK, SlotLocks.Icon.OUTLINE);
                 RarityBackgrounds.reset();
             });
         }

@@ -44,9 +44,17 @@ final class LabelText {
 
     /** Buffers that route the font's glyphs into the given pass; anything else is dropped from a depth-only pass. */
     static MultiBufferSource buffers(MultiBufferSource buffers, Pass pass) {
+        return buffers(buffers, pass, 0);
+    }
+
+    /**
+     * The same, every glyph moved {@code lift} toward the camera in the label's own units: letters drawn without
+     * their shadow, lifted to where a shadowed label has them ({@code Font.SHADOW_DEPTH}).
+     */
+    static MultiBufferSource buffers(MultiBufferSource buffers, Pass pass, float lift) {
         return type -> {
             RenderType[] v = variants(type);
-            if (v != null) return new Flat(buffers.getBuffer(v[pass.ordinal()]));
+            if (v != null) return new Flat(buffers.getBuffer(v[pass.ordinal()]), lift);
             return pass == Pass.PAINT ? buffers.getBuffer(type) : DISCARD;
         };
     }
@@ -56,9 +64,9 @@ final class LabelText {
      * the copy pass the depth test again. Offsets that small go back onto their layer (0.01 steps: shadow, text,
      * effects keep theirs), so a glyph and its bold copy are one surface.
      */
-    private record Flat(VertexConsumer to) implements VertexConsumer {
+    private record Flat(VertexConsumer to, float lift) implements VertexConsumer {
         @Override public VertexConsumer addVertex(org.joml.Matrix4fc pose, float x, float y, float z) {
-            to.addVertex(pose, x, y, Math.round(z * 100) / 100f);
+            to.addVertex(pose, x, y, Math.round((z + lift) * 100) / 100f);
             return this;
         }
         @Override public VertexConsumer addVertex(float x, float y, float z) { to.addVertex(x, y, z); return this; }

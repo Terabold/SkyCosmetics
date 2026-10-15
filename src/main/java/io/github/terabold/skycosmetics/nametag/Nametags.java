@@ -27,7 +27,7 @@ public final class Nametags {
     private static final Map<Component, DrawStyle> DRAW = new java.util.IdentityHashMap<>();
     public static DrawStyle drawStyle(Component text) { return p.enabled ? DRAW.get(text) : null; }
     private Nametags() {}
-    public static void init() { Settings.register("nametags",NametagSettings::read,NametagSettings::write); NametagSection.register(); NametagOverlay.init(); }
+    public static void init() { Settings.register("nametags",NametagSettings::read,NametagSettings::write); NametagSection.register(); NametagOverlay.init(); TabNames.register(); }
     public static int kind(Entity e) { return e instanceof Player?0:e instanceof ArmorStand?2:1; }
     public static boolean selected(Entity e) {
         if(!p.enabled)return false;
@@ -65,11 +65,7 @@ public final class Nametags {
             d.cache.username=e instanceof Player player ? player.getGameProfile().name() : e.getName().getString();
         }
         d.tab = null;
-        if (d.selected && p.tabNames && e instanceof Player player) {
-            var connection = Minecraft.getInstance().getConnection();
-            var info = connection == null ? null : connection.getPlayerInfo(player.getUUID());
-            d.tab = info == null ? null : info.getTabListDisplayName();
-        }
+        if (d.selected && p.tabNames && e instanceof Player player) d.tab = TabNames.of(player.getUUID(), player.getGameProfile().name());
     }
     public static Component style(Component source, boolean own, String username) {
         // Scope controls layout/visibility, never permission to rename or recolor somebody else.
@@ -153,7 +149,7 @@ public final class Nametags {
         if(s.nameTag!=null&&s.nameTag.getString().length()>512)return true;
         // A player's tab-list name when it names them: servers often show more there (level, rank color, icons).
         Component source = s.nameTag != null && d.tab != null && d.tab.getString().length() <= 256
-            && d.tab.getString().contains(d.cache.username) ? d.tab : s.nameTag;
+            && TabNames.names(d.tab.getString(), d.cache.username) ? d.tab : s.nameTag;
         Component name=source==null?null:styled(d.cache,source);
         // Real sneaking, read before "visible surfaces only" borrows vanilla's sneaking path below.
         boolean sneaking = s.isDiscrete;
