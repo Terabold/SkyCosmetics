@@ -41,7 +41,8 @@ public final class ChatNames {
 
     /** The line with your names in it, or the line itself (most lines: one regex search). Never throws. */
     public static Component apply(Component line) {
-        if (!Settings.chatNames || line == null) return line;
+        // Out of a world (a mod's line at the title screen) items aren't ready yet, and there is nothing of yours to name.
+        if (!Settings.chatNames || line == null || Minecraft.getInstance().level == null) return line;
         try {
             build();
             if (any == null) return line;
