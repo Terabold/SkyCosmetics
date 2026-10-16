@@ -39,7 +39,7 @@ final class NametagSection {
         r.add(Option.header("text",t("Text")));
         choice(r,"font","Font","Font for player names in Apply to. Server badges keep their own fonts.",NameFont.values(),()->p.font,v->p.font=v);
         choice(r,"textMode","My name color","Only your username changes. Server levels, emblems, other players and score lines keep their formatting.",Text.values(),()->p.text,v->p.text=v);
-        color(r,"color","Text color",()->p.color,v->p.color=v,false);
+        color(r,"color","Name color",()->p.color,v->p.color=v,false);
         color(r,"colorEnd","Gradient end",()->p.colorEnd,v->p.colorEnd=v,false);
         add(r,"gradientMid","Gradient balance","Where the two colors meet: drag right for more of the first color, left for more of the end one. Right-click puts it back in the middle.",
             new Control.Custom((host,width)->new GradientBalance(width,host)));
@@ -93,5 +93,5 @@ final class NametagSection {
         String s=value.toString().toLowerCase(Locale.ROOT).replace('_',' ');
         return Character.toUpperCase(s.charAt(0))+s.substring(1);
     }
-    private static void color(List<Option>r,String id,String title,IntSupplier get,IntConsumer set,boolean alpha){add(r,id,title,alpha?"Color and opacity.":"Text color.",new Control.Color(get,v->{set.accept(v);changed();},alpha));}
+    private static void color(List<Option>r,String id,String title,IntSupplier get,IntConsumer set,boolean alpha){add(r,id,title,alpha?"Color and opacity.":"Your name's color.",new Control.Color(get,v->{set.accept(v);changed();},alpha));}
 }

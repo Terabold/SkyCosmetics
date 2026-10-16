@@ -2,6 +2,19 @@
 
 SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions use its old command, `/skinstudio`.
 
+## 1.4.0-beta.6 — 2026-10-16
+
+### Changed
+- **Rarity backgrounds, fewer switches:** Inventory now covers the hotbar on screen too, and Armor slots the
+  equipment other mods show beside your armor. The menu choices are for the Wardrobe, the **Pets menu** (new: all or
+  nothing) and Loadouts; Equipment menus show backgrounds like any other menu.
+- Settings read the same way on every page: labels in sentence case (proper names such as SkyBlock, Hypixel and
+  My Items kept), as Slot locking, Nametags and Zoom already were.
+- Zoom: the zoom-in animation once called Cinematic is now **Eased**, apart from the camera's Cinematic smoothing;
+  Activation (hold or toggle) sits with the zoom key.
+- Viewmodel: Equip reads "On switch" everywhere, and its tooltip says what that does.
+- Nametags: "Text color" is now "Name color", as it only colors your name.
+
 ## 1.4.0-beta.5 — 2026-10-16
 
 ### New

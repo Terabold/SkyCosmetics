@@ -36,7 +36,7 @@ final class ZoomSection {
         List<Option> r = new ArrayList<>();
         toggle(r, "enabled", "Enable zoom", "Off by default to avoid competing with another mod's zoom.", () -> enabled, v -> { enabled = v; Zoom.reset(); });
         choice(r, "style", "Initial zoom animation", "How the view reaches the starting zoom when you press the key. Independent of mouse movement.",
-            new String[]{"Instant", "Linear", "Smooth", "Cinematic"}, ZoomSection::style, ZoomSection::style);
+            new String[]{"Instant", "Linear", "Smooth", "Eased"}, ZoomSection::style, ZoomSection::style);
         slider(r, "inSeconds", "Zoom-in time", "Time to reach the starting zoom.", () -> p().inSeconds, v -> p().inSeconds = v, 0, .5, .01, " s");
         slider(r, "outSeconds", "Zoom-out time", "Time to return to the normal view.", () -> p().outSeconds, v -> p().outSeconds = v, 0, .5, .01, " s");
         toggle(r, "smoothCamera", "Smooth camera", "Smooth mouse movement while zooming. Off gives direct camera control; releasing zoom stops smoothing immediately.",
@@ -49,8 +49,8 @@ final class ZoomSection {
                 v -> text(String.format(Locale.ROOT, "%d%% (%.1f s)", Math.round(v), Zoom.cinematicSeconds(v / 100))))));
         r.add(Option.header("keys", text("Keybinds")));
         key(r, "primaryKey", "Zoom key", "Hold or toggle zoom. Conflicts are shown here; zoom in, out and reset keys are in Minecraft's Controls.", () -> Zoom.primaryKey);
-        r.add(Option.header("behavior", text("Zoom amount")));
         choice(r, "mode", "Activation", "Hold the key or press it to toggle zoom. Menus and focus loss cancel toggles.", new Mode[]{Mode.HOLD, Mode.TOGGLE}, () -> p().mode, v -> { p().mode = v; Zoom.reset(); });
+        r.add(Option.header("behavior", text("Zoom amount")));
         magnification(r, "initial", "Starting zoom", "Optical magnification; 1x is the normal view, up to 1000x. Logarithmic slider; arrow keys adjust finely.", () -> p().initial, v -> p().initial = p().bounded(v));
         toggle(r, "scroll", "Scroll to zoom", "Adjust the zoom with the wheel while zooming.", () -> p().scroll != Scroll.OFF, v -> p().scroll = v ? Scroll.EXPONENTIAL : Scroll.OFF);
         r.add(Option.header("camera", text("Mouse and camera")));
@@ -68,14 +68,14 @@ final class ZoomSection {
     }
 
     private static String style() {
-        if (p().inSeconds > 0 && p().inCurve == ZoomTransition.Curve.IN_OUT_SINE) return "Cinematic";
+        if (p().inSeconds > 0 && p().inCurve == ZoomTransition.Curve.IN_OUT_SINE) return "Eased";
         if (p().inSeconds > 0 && p().inCurve == ZoomTransition.Curve.LINEAR) return "Linear";
         return p().inSeconds > 0 || p().outSeconds > 0 ? "Smooth" : "Instant";
     }
     private static void style(String value) {
         Profile profile = p();
         boolean instant = value.equals("Instant");
-        boolean cinematic = value.equals("Cinematic");
+        boolean cinematic = value.equals("Eased");
         profile.inSeconds = instant ? 0 : cinematic ? .14 : .08;
         profile.outSeconds = instant ? 0 : cinematic ? .12 : .08;
         profile.scrollSeconds = instant ? 0 : .12;

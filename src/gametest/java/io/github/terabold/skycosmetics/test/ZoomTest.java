@@ -195,7 +195,7 @@ public class ZoomTest implements FabricClientGameTest {
             ((SettingsScreen)mc.screen).changed();
             check(((SettingsScreen)mc.screen).widget("advanced") == null, "instant animation has no empty timing disclosure");
             animation.set().accept("Linear"); check(primary.inCurve == ZoomTransition.Curve.LINEAR && primary.cinematic == camera, "linear animation does not change camera smoothing");
-            animation.set().accept("Cinematic"); check(primary.inCurve == ZoomTransition.Curve.IN_OUT_SINE && primary.cinematic == camera, "cinematic animation does not change camera smoothing");
+            animation.set().accept("Eased"); check(primary.inCurve == ZoomTransition.Curve.IN_OUT_SINE && primary.cinematic == camera, "the eased animation does not change camera smoothing");
             animation.set().accept("Smooth"); ((SettingsScreen)mc.screen).changed();
         });
         ctx.takeScreenshot("skycosmetics-zoom-compact");

@@ -267,7 +267,7 @@ public class SlotsTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> {
             RarityBackgrounds.reset();
             RarityBackgrounds.set(true, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, false);
-            RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, true);
+            RarityBackgrounds.where(true, true, true, RarityBackgrounds.OwnMenus.ALL, true);
         });
         ctx.setScreen(() -> menu(Minecraft.getInstance(), AUCTIONS));
         for (int scale : new int[]{2, 3}) {
@@ -320,9 +320,9 @@ public class SlotsTest implements FabricClientGameTest {
             setScale(ctx, scale);
             ctx.takeScreenshot("skycosmetics-63-rarity-inventory-guiscale-" + scale);
         }
-        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, false, true, RarityBackgrounds.OwnMenus.ALL, true));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, false, RarityBackgrounds.OwnMenus.ALL, true));
         int noArmor = drawnInFrame(ctx);
-        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, true));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, RarityBackgrounds.OwnMenus.ALL, true));
         int withArmor = drawnInFrame(ctx);
         check(withArmor == noArmor + 5, "the four armor slots and the off-hand have their own switch: " + noArmor + " -> " + withArmor);
         ctx.getInput().resizeWindow(854, 480);
@@ -339,10 +339,10 @@ public class SlotsTest implements FabricClientGameTest {
         setScale(ctx, 3);
         Map<RarityBackgrounds.OwnMenus, Integer> counts = new LinkedHashMap<>();
         for (RarityBackgrounds.OwnMenus rule : RarityBackgrounds.OwnMenus.values()) {
-            ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, rule, false));
+            ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, rule, false));
             ctx.setScreen(() -> wardrobe(Minecraft.getInstance()));
             counts.put(rule, drawnInFrame(ctx));
-            ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, false, rule, false));
+            ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, rule, false));
             ctx.waitTicks(2);
             ctx.takeScreenshot("skycosmetics-64-rarity-wardrobe-" + rule.name().toLowerCase().replace('_', '-'));
         }
@@ -351,7 +351,7 @@ public class SlotsTest implements FabricClientGameTest {
         check(counts.get(RarityBackgrounds.OwnMenus.NO_HEADS) == 27, "Wardrobe, no heads: the 27 armor pieces");
         check(counts.get(RarityBackgrounds.OwnMenus.NONE) == 0, "Wardrobe, nothing");
         ctx.runOnClient(mc -> {
-            RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false);
+            RarityBackgrounds.where(false, true, false, RarityBackgrounds.OwnMenus.NONE, false);
             for (var option : Hub.find(RarityBackgrounds.SECTION).rows().apply(null)) {
                 if (option.id().equals("rarityBackgrounds.wardrobeMenus"))
                     ((io.github.terabold.skycosmetics.hub.Control.Choice<RarityBackgrounds.OwnMenus>)option.control()).set().accept(RarityBackgrounds.OwnMenus.NO_HEADS);
@@ -380,10 +380,24 @@ public class SlotsTest implements FabricClientGameTest {
         });
         check(drawnInFrame(ctx) == 32, "Loadouts No Heads leaves out helmets that aren't heads too: a worn one and a custom-model one");
         ctx.takeScreenshot("skycosmetics-loadouts-right-heads-only");
-        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false));
+        // The Pets menu: all or nothing, on its own.
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, RarityBackgrounds.OwnMenus.ALL, false));
+        ctx.setScreen(() -> {
+            var source = (AbstractContainerScreen<?>)wardrobe(Minecraft.getInstance());
+            return new ContainerScreen((ChestMenu)source.getMenu(), Minecraft.getInstance().player.getInventory(), Component.literal("Pets"));
+        });
+        check(drawnInFrame(ctx) == 36, "Pets menu, all items");
+        ctx.runOnClient(mc -> {
+            for (var option : Hub.find(RarityBackgrounds.SECTION).rows().apply(null)) {
+                if (option.id().equals("rarityBackgrounds.petMenus"))
+                    ((io.github.terabold.skycosmetics.hub.Control.Choice<RarityBackgrounds.OwnMenus>)option.control()).set().accept(RarityBackgrounds.OwnMenus.NONE);
+            }
+        });
+        check(drawnInFrame(ctx) == 0, "Pets menu has its own choice: nothing");
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, RarityBackgrounds.OwnMenus.NONE, false));
         ctx.setScreen(() -> menu(Minecraft.getInstance(), AUCTIONS));
         check(drawnInFrame(ctx) > 40, "the rule leaves other menus alone");
-        ctx.runOnClient(mc -> RarityBackgrounds.where(true, false, true, true, RarityBackgrounds.OwnMenus.ALL, false));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(true, false, true, RarityBackgrounds.OwnMenus.ALL, false));
         int own = ctx.computeOnClient(mc -> {
             int n = 0;
             for (Slot s : ((AbstractContainerScreen<?>) mc.screen).getMenu().slots) {
@@ -393,7 +407,7 @@ public class SlotsTest implements FabricClientGameTest {
         });
         check(drawnInFrame(ctx) == own, "Menus off: only your own rows in a menu (" + own + ")");
         ctx.setScreen(() -> null);
-        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, false));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, RarityBackgrounds.OwnMenus.ALL, false));
         System.out.println(TAG + "menu exclusions checked");
     }
 
@@ -413,7 +427,7 @@ public class SlotsTest implements FabricClientGameTest {
     /** Formats omitted by ordinary item fixtures: saved setup buttons and Oringo's name-only pet heads. */
     private static void menuVariants(ClientGameTestContext ctx) {
         ctx.runOnClient(mc -> {
-            RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.ALL, false);
+            RarityBackgrounds.where(false, true, false, RarityBackgrounds.OwnMenus.ALL, false);
             RarityBackgrounds.which(true, true, true);
         });
         ctx.setScreen(() -> {
@@ -434,9 +448,9 @@ public class SlotsTest implements FabricClientGameTest {
         });
         check(drawnInFrame(ctx) == 4, "Loadouts All includes style-backed and name-backed right-hand buttons, never unrelated controls");
         ctx.takeScreenshot("skycosmetics-loadout-button-formats");
-        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NO_HEADS, false));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, RarityBackgrounds.OwnMenus.NO_HEADS, false));
         check(drawnInFrame(ctx) == 2, "Loadouts No Heads keeps the left armor preview and pets, not saved-setup heads");
-        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, RarityBackgrounds.OwnMenus.NONE, false));
         check(drawnInFrame(ctx) == 0, "Loadouts None excludes all its backgrounds");
         ctx.setScreen(() -> {
             var mc = Minecraft.getInstance(); var box = new SimpleContainer(27);
@@ -451,7 +465,7 @@ public class SlotsTest implements FabricClientGameTest {
         ctx.runOnClient(mc -> RarityBackgrounds.which(true, false, true));
         check(drawnInFrame(ctx) == 0, "Pets off excludes shop pets with no petInfo");
         ctx.runOnClient(mc -> { RarityBackgrounds.which(true, true, false);
-            RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, false); });
+            RarityBackgrounds.where(true, true, true, RarityBackgrounds.OwnMenus.ALL, false); });
         ctx.setScreen(() -> null);
         System.out.println(TAG + "Loadouts button and pet shop rarity formats checked");
     }
@@ -462,7 +476,7 @@ public class SlotsTest implements FabricClientGameTest {
         return item;
     }
 
-    /** The HUD hotbar draws backgrounds only with its switch on. */
+    /** The HUD hotbar draws backgrounds with Inventory on, as part of it. */
     private static void hotbar(ClientGameTestContext ctx) {
         ctx.setScreen(() -> null);
         ctx.runOnClient(mc -> RarityBackgrounds.set(true, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 60, false));
@@ -473,12 +487,12 @@ public class SlotsTest implements FabricClientGameTest {
         long before = ctx.computeOnClient(mc -> RarityBackgrounds.drawn());
         ctx.waitTicks(5);
         check(ctx.computeOnClient(mc -> RarityBackgrounds.drawn()) > before, "the hotbar draws backgrounds");
-        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, false, RarityBackgrounds.OwnMenus.ALL, false));
+        ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, true, RarityBackgrounds.OwnMenus.ALL, false));
         ctx.waitTicks(2);
         before = ctx.computeOnClient(mc -> RarityBackgrounds.drawn());
         ctx.waitTicks(5);
-        check(ctx.computeOnClient(mc -> RarityBackgrounds.drawn()) == before, "Hotbar off: none");
-        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, false));
+        check(ctx.computeOnClient(mc -> RarityBackgrounds.drawn()) == before, "Inventory off: none on the screen hotbar either");
+        ctx.runOnClient(mc -> RarityBackgrounds.where(true, true, true, RarityBackgrounds.OwnMenus.ALL, false));
         System.out.println(TAG + "hotbar backgrounds checked");
     }
 
@@ -789,7 +803,7 @@ public class SlotsTest implements FabricClientGameTest {
         setScale(ctx, 2);
         ctx.runOnClient(mc -> {
             RarityBackgrounds.set(true, Mask.Shape.SQUARE, Mask.Fill.SOLID, 100, false);
-            RarityBackgrounds.where(true, true, true, true, RarityBackgrounds.OwnMenus.ALL, true);
+            RarityBackgrounds.where(true, true, true, RarityBackgrounds.OwnMenus.ALL, true);
             for (var option : Hub.find(RarityBackgrounds.SECTION).rows().apply(null)) {
                 if (option.id().equals("rarityBackgrounds.markerSize")) ((io.github.terabold.skycosmetics.hub.Control.Slider)option.control()).set().accept(3);
                 if (option.id().equals("rarityBackgrounds.markerColor")) ((io.github.terabold.skycosmetics.hub.Control.Color)option.control()).set().accept(0xFFFF0000);

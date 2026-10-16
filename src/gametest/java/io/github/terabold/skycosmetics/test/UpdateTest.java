@@ -372,8 +372,8 @@ public class UpdateTest implements FabricClientGameTest {
         check(ctx.computeOnClient(mc -> Updater.status().offer().version()).equals("1.5.0"), "Stable offers 1.5.0, not the beta");
         check(ctx.computeOnClient(mc -> card(mc).isCard() && card(mc).text().startsWith("SkyCosmetics 1.5.0 is available")),
             "the card says so: " + ctx.computeOnClient(mc -> card(mc).text()));
-        check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Download & Install on Restart", "Release Page",
-            "Skip This Version")), "with its three buttons");
+        check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Download & install on restart", "Release page",
+            "Skip this version")), "with its three buttons");
         check(ctx.computeOnClient(mc -> ((SettingsScreen) mc.screen).toastText()).equals("SkyCosmetics 1.5.0 is available."),
             "Check Now says what it found");
         check(!Updater.toasted(), "no toast for a check you asked for");
@@ -408,7 +408,7 @@ public class UpdateTest implements FabricClientGameTest {
         waitFor(ctx, Updater.Kind.AVAILABLE);
 
         // Skip This Version: a quiet line; Check Now brings it back.
-        clickCard(ctx, "Skip This Version");
+        clickCard(ctx, "Skip this version");
         check(ctx.computeOnClient(mc -> Updater.status().kind() == Updater.Kind.SKIPPED && "1.5.0".equals(Updater.skippedVersion())),
             "1.5.0 is skipped");
         ctx.waitTicks(2);
@@ -423,7 +423,7 @@ public class UpdateTest implements FabricClientGameTest {
         // Download: halfway (the fake holds it there), then Cancel; then the whole way.
         CountDownLatch gate = new CountDownLatch(1);
         gh.gate = gate;
-        clickCard(ctx, "Download & Install on Restart");
+        clickCard(ctx, "Download & install on restart");
         ctx.waitFor(mc -> Updater.status().kind() == Updater.Kind.DOWNLOADING && Updater.status().done() > 0, 20 * 10);
         ctx.waitTicks(3);
         check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Cancel")), "downloading: only Cancel");
@@ -434,7 +434,7 @@ public class UpdateTest implements FabricClientGameTest {
         check(!Files.exists(Installer.part(mods, "skycosmetics-1.5.0+26.1.2.jar")), "a cancelled download leaves nothing");
         gh.gate = null;
 
-        clickCard(ctx, "Download & Install on Restart");
+        clickCard(ctx, "Download & install on restart");
         waitFor(ctx, Updater.Kind.READY);
         Path newJar = mods.resolve("skycosmetics-1.5.0+26.1.2.jar");
         check(Files.exists(newJar) && FakeGitHub.sha256(Files.readAllBytes(newJar)).equals(FakeGitHub.sha256(jar150)),
@@ -442,7 +442,7 @@ public class UpdateTest implements FabricClientGameTest {
         check(Files.exists(oldJar) && !Files.exists(Installer.part(mods, newJar.getFileName().toString())), "the old one stays for now");
         ctx.waitTicks(3);
         check(ctx.computeOnClient(mc -> card(mc).text().startsWith("SkyCosmetics 1.5.0 installs when you restart")
-            && card(mc).buttonLabels().equals(List.of("Release Page", "Undo"))), "ready: Release Page and Undo");
+            && card(mc).buttonLabels().equals(List.of("Release page", "Undo"))), "ready: Release Page and Undo");
         ctx.takeScreenshot("skycosmetics-93-update-ready");
         ctx.waitFor(mc -> readState(state).contains("\"pending\""), 20 * 5);
 
@@ -450,7 +450,7 @@ public class UpdateTest implements FabricClientGameTest {
         clickCard(ctx, "Undo");
         waitFor(ctx, Updater.Kind.AVAILABLE);
         check(!Files.exists(newJar) && Files.exists(oldJar), "Undo deletes the new jar");
-        clickCard(ctx, "Download & Install on Restart");
+        clickCard(ctx, "Download & install on restart");
         waitFor(ctx, Updater.Kind.READY);
         ctx.waitFor(mc -> readState(state).contains("\"pending\""), 20 * 5);
 
@@ -520,13 +520,13 @@ public class UpdateTest implements FabricClientGameTest {
         openGeneral(ctx);
         checkNow(ctx);
         waitFor(ctx, Updater.Kind.AVAILABLE);
-        clickCard(ctx, "Download & Install on Restart");
+        clickCard(ctx, "Download & install on restart");
         waitFor(ctx, Updater.Kind.FAILED);
         ctx.waitTicks(3);
         check(Updater.status().message().contains("checksum"), "a wrong checksum: " + Updater.status().message());
         check(!Files.exists(mods2.resolve("skycosmetics-1.5.0+26.1.2.jar"))
             && !Files.exists(Installer.part(mods2, "skycosmetics-1.5.0+26.1.2.jar")), "nothing is left of it");
-        check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Release Page", "Try Again", "Skip This Version")),
+        check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Release page", "Try again", "Skip this version")),
             "failed: Release Page first, Try Again, Skip");
         ctx.takeScreenshot("skycosmetics-96-update-failed");
         gh.files.put("v1.5.0/skycosmetics-1.5.0+26.1.2.jar", jar150);
@@ -550,7 +550,7 @@ public class UpdateTest implements FabricClientGameTest {
         checkNow(ctx);
         waitFor(ctx, Updater.Kind.AVAILABLE);
         ctx.waitTicks(2);
-        check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Release Page", "Skip This Version")),
+        check(ctx.computeOnClient(mc -> card(mc).buttonLabels()).equals(List.of("Release page", "Skip this version")),
             "no download where it can't install");
 
         // The automatic check: one toast a session; with Auto-download it downloads by itself.
@@ -633,7 +633,7 @@ public class UpdateTest implements FabricClientGameTest {
         ctx.waitTicks(2);
         int[] at = ctx.computeOnClient(mc -> {
             var w = ((SettingsScreen) mc.screen).widget("updateNow");
-            check(w != null && w.getMessage().getString().equals("Check Now"), "the Check Now button");
+            check(w != null && w.getMessage().getString().equals("Check now"), "the Check Now button");
             return new int[]{w.getX() + w.getWidth() / 2, w.getY() + w.getHeight() / 2};
         });
         double scale = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());

@@ -61,7 +61,7 @@ public final class RarityBackgrounds {
         }
     }
 
-    /** What the Wardrobe, Equipment and Loadouts menus show. */
+    /** What the Wardrobe, Pets and Loadouts menus show. */
     public enum OwnMenus {
         ALL, NO_HEADS, NONE;
 
@@ -82,11 +82,10 @@ public final class RarityBackgrounds {
     static MarkerCorner markerCorner = MarkerCorner.TOP_RIGHT;
     static Colors colors = Colors.HYPIXEL;
     static final int[] custom = Colors.HYPIXEL.rgb.clone();
-    static boolean inventory = true, menus = true, armor = true, hotbar = true;
+    static boolean inventory = true, menus = true, armor = true;
     static boolean common = true, pets = true, skyblockOnly = false, recombMark = false;
     static OwnMenus ownMenus = OwnMenus.ALL;
-    static OwnMenus wardrobeMenus = OwnMenus.ALL, loadoutMenus = OwnMenus.ALL, equipmentMenus = OwnMenus.ALL;
-    static boolean equipment = true;
+    static OwnMenus wardrobeMenus = OwnMenus.ALL, loadoutMenus = OwnMenus.ALL, petMenus = OwnMenus.ALL;
     /** The outline opacity follows the fill (x1.2) until it is set on its own. */
     static boolean outlineLinked = true;
 
@@ -133,7 +132,7 @@ public final class RarityBackgrounds {
                 rule = source == null ? OwnMenus.ALL : switch (source) {
                     case "Wardrobe" -> wardrobeMenus;
                     case "Loadouts", "Loadout" -> loadoutMenus;
-                    case "Equipment wardrobe", "Equipment" -> equipmentMenus;
+                    case "Pets" -> petMenus == OwnMenus.NONE ? OwnMenus.NONE : OwnMenus.ALL;
                     default -> OwnMenus.ALL;
                 };
                 ruleScreen = new WeakReference<>(screen); // a menu's title never changes while it is open
@@ -170,7 +169,7 @@ public final class RarityBackgrounds {
 
     /** A HUD hotbar or off-hand slot. Never throws. */
     public static void drawHotbar(GuiGraphicsExtractor g, int x, int y, ItemStack stack) {
-        if (!on || !hotbar || stack.isEmpty()) return;
+        if (!on || !inventory || stack.isEmpty()) return;
         try {
             draw(g, texture(), x, y, stack, false, SlotLocks.replacesHotbarOutline(stack));
         } catch (RuntimeException e) {
@@ -183,7 +182,7 @@ public final class RarityBackgrounds {
      * equipment and pet panels of Skyblocker, SkyblockAddons and any mod built the same way.
      */
     public static void drawEquipmentSlot(GuiGraphicsExtractor g, AbstractContainerScreen<?> screen, Slot slot) {
-        if (!on || !equipment) return;
+        if (!on || !armor) return;
         try {
             var slots = screen.getMenu().slots;
             if (slot.index >= 0 && slot.index < slots.size() && slots.get(slot.index) == slot || !slot.isActive()) return;
@@ -195,7 +194,7 @@ public final class RarityBackgrounds {
 
     /** Only known equipment positions, never arbitrary fake items such as buttons or catalogues. */
     public static void drawExtraInventoryItem(GuiGraphicsExtractor g, int x, int y, ItemStack stack) {
-        if (!on || !equipment || stack.isEmpty() || SlotArea.forced != SlotArea.OTHER
+        if (!on || !armor || stack.isEmpty() || SlotArea.forced != SlotArea.OTHER
             || !(net.minecraft.client.Minecraft.getInstance().screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) return;
         try {
             if (!SlotArea.adjacentEquipment(x, y) || tintOf(ItemFacts.of(stack)) == 0) return;
@@ -315,14 +314,12 @@ public final class RarityBackgrounds {
     }
 
     /** For tests: where and on what backgrounds show. */
-    public static void where(boolean inventory, boolean menus, boolean armor, boolean hotbar, OwnMenus ownMenus,
-                             boolean recombMark) {
+    public static void where(boolean inventory, boolean menus, boolean armor, OwnMenus ownMenus, boolean recombMark) {
         RarityBackgrounds.inventory = inventory;
         RarityBackgrounds.menus = menus;
         RarityBackgrounds.armor = armor;
-        RarityBackgrounds.hotbar = hotbar;
         RarityBackgrounds.ownMenus = ownMenus;
-        wardrobeMenus = loadoutMenus = equipmentMenus = ownMenus;
+        wardrobeMenus = loadoutMenus = petMenus = ownMenus;
         RarityBackgrounds.recombMark = recombMark;
         ruleScreen = new WeakReference<>(null);
     }
@@ -339,9 +336,8 @@ public final class RarityBackgrounds {
         set(false, Mask.Shape.ROUNDED, Mask.Fill.SOLID, 55, true);
         outlineOpacity = 66; outlineLinked = true;
         gradientMinimum = 20; markerSize = 6; markerColor = 0xFFFFFFFF; markerCorner = MarkerCorner.TOP_RIGHT;
-        where(true, true, true, true, OwnMenus.ALL, false);
+        where(true, true, true, OwnMenus.ALL, false);
         which(true, true, false);
-        equipment = true;
         System.arraycopy(Colors.HYPIXEL.rgb, 0, custom, 0, custom.length);
         colors(Colors.HYPIXEL);
     }
@@ -392,7 +388,6 @@ public final class RarityBackgrounds {
         inventory = Settings.bool(o.get("inventory"), inventory);
         menus = Settings.bool(o.get("menus"), menus);
         armor = Settings.bool(o.get("armor"), armor);
-        hotbar = Settings.bool(o.get("hotbar"), hotbar);
         common = Settings.bool(o.get("common"), common);
         pets = Settings.bool(o.get("pets"), pets);
         skyblockOnly = Settings.bool(o.get("skyblockOnly"), skyblockOnly);
@@ -400,8 +395,7 @@ public final class RarityBackgrounds {
         ownMenus = choice(o, "gearMenus", OwnMenus.values(), ownMenus);
         wardrobeMenus = choice(o, "wardrobeMenus", OwnMenus.values(), ownMenus);
         loadoutMenus = choice(o, "loadoutMenus", OwnMenus.values(), ownMenus);
-        equipmentMenus = choice(o, "equipmentMenus", OwnMenus.values(), ownMenus);
-        equipment = Settings.bool(o.get("equipment"), equipment);
+        petMenus = choice(o, "petMenus", OwnMenus.values(), OwnMenus.ALL);
         ruleScreen = new WeakReference<>(null);
         colorsChanged();
     }
@@ -424,7 +418,6 @@ public final class RarityBackgrounds {
         o.addProperty("inventory", inventory);
         o.addProperty("menus", menus);
         o.addProperty("armor", armor);
-        o.addProperty("hotbar", hotbar);
         o.addProperty("common", common);
         o.addProperty("pets", pets);
         o.addProperty("skyblockOnly", skyblockOnly);
@@ -432,8 +425,7 @@ public final class RarityBackgrounds {
         o.addProperty("gearMenus", ownMenus.name());
         o.addProperty("wardrobeMenus", wardrobeMenus.name());
         o.addProperty("loadoutMenus", loadoutMenus.name());
-        o.addProperty("equipmentMenus", equipmentMenus.name());
-        o.addProperty("equipment", equipment);
+        o.addProperty("petMenus", petMenus.name());
         return o;
     }
 
@@ -493,12 +485,11 @@ public final class RarityBackgrounds {
         rows.add(Option.header("rarityBackgrounds.groupWhere", Component.translatable("skycosmetics.rarityBackgrounds.group.where")));
         rows.add(toggle("inventory", () -> inventory, v -> inventory = v).enabledWhen(isOn));
         rows.add(toggle("armor", () -> armor, v -> armor = v).enabledWhen(isOn));
-        rows.add(toggle("hotbar", () -> hotbar, v -> hotbar = v).enabledWhen(isOn));
         rows.add(toggle("menus", () -> menus, v -> menus = v).enabledWhen(isOn));
-        rows.add(toggle("equipment", () -> equipment, v -> equipment = v).enabledWhen(isOn));
-        rows.add(menuRule("wardrobeMenus", () -> wardrobeMenus, v -> wardrobeMenus = v));
-        rows.add(menuRule("loadoutMenus", () -> loadoutMenus, v -> loadoutMenus = v));
-        rows.add(menuRule("equipmentMenus", () -> equipmentMenus, v -> equipmentMenus = v));
+        rows.add(menuRule("wardrobeMenus", List.of(OwnMenus.values()), () -> wardrobeMenus, v -> wardrobeMenus = v));
+        rows.add(menuRule("petMenus", List.of(OwnMenus.ALL, OwnMenus.NONE), () -> petMenus == OwnMenus.NONE ? OwnMenus.NONE : OwnMenus.ALL,
+            v -> petMenus = v));
+        rows.add(menuRule("loadoutMenus", List.of(OwnMenus.values()), () -> loadoutMenus, v -> loadoutMenus = v));
 
         rows.add(Option.header("rarityBackgrounds.groupWhich", Component.translatable("skycosmetics.rarityBackgrounds.group.which")));
         rows.add(toggle("common", () -> common, v -> common = v).enabledWhen(isOn));
@@ -517,10 +508,10 @@ public final class RarityBackgrounds {
             .visibleWhen(() -> recombMark).enabledWhen(isOn));
         return rows.stream().map(o -> {
             Option compact = o.compact();
-            if (List.of("rarityBackgrounds.inventory", "rarityBackgrounds.armor", "rarityBackgrounds.hotbar", "rarityBackgrounds.menus").contains(o.id())) compact = compact.beside();
+            if (List.of("rarityBackgrounds.inventory", "rarityBackgrounds.armor", "rarityBackgrounds.menus").contains(o.id())) compact = compact.beside();
             return compact.visibleWhen(() -> o.visible().getAsBoolean() && switch(o.id()) {
                 case "rarityBackgrounds.outline" -> shape.outlined();
-                case "rarityBackgrounds.wardrobeMenus", "rarityBackgrounds.loadoutMenus", "rarityBackgrounds.equipmentMenus" -> menus;
+                case "rarityBackgrounds.wardrobeMenus", "rarityBackgrounds.petMenus", "rarityBackgrounds.loadoutMenus" -> menus;
                 default -> true;
             });
         }).toList();
@@ -531,8 +522,8 @@ public final class RarityBackgrounds {
         return fill != Mask.Fill.SOLID && fill != Mask.Fill.BEVELED;
     }
 
-    private static Option menuRule(String id, Supplier<OwnMenus> get, Consumer<OwnMenus> set) {
-        return option(id, choice(List.of(OwnMenus.values()), OwnMenus::label, get, v -> {
+    private static Option menuRule(String id, List<OwnMenus> values, Supplier<OwnMenus> get, Consumer<OwnMenus> set) {
+        return option(id, choice(values, OwnMenus::label, get, v -> {
             set.accept(v); ruleScreen = new WeakReference<>(null);
         })).enabledWhen(() -> on && menus).beside();
     }

@@ -135,8 +135,8 @@ final class OtherModsTest {
         List<String> rows = rows(ctx);
         System.out.println("[SkyCosmeticsTest] Other Mods lists " + rows);
         List<String> headers = rows.stream().filter(r -> r.startsWith("# ")).toList();
-        check(headers.equals(List.of("# Helmets (1)", "# Armor (2)", "# Weapons & Tools (1)", "# Power Orbs (1)",
-            "# Every Item of a Type (1)", "# Items Not Seen Yet (1)")), "Other Mods groups per item, in Saved's sections: " + headers);
+        check(headers.equals(List.of("# Helmets (1)", "# Armor (2)", "# Weapons & tools (1)", "# Power orbs (1)",
+            "# Every item of a type (1)", "# Items not seen yet (1)")), "Other Mods groups per item, in Saved's sections: " + headers);
         String knight = ctx.computeOnClient(mc -> Repo.get().skin("NECRON_DIAMOND_KNIGHT").name);
         String aurora = ctx.computeOnClient(mc -> Repo.get().dye("DYE_AURORA").name);
         for (String want : new String[]{"Zephyr Helmet [HELMETS]", "  Skyblocker skin: " + knight + " [move]",

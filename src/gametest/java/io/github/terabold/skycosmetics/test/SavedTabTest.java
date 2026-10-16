@@ -48,10 +48,10 @@ final class SavedTabTest {
         List<String> rows = rows(ctx);
         System.out.println("[SkyCosmeticsTest] Saved lists " + rows);
         List<String> headers = rows.stream().filter(r -> r.startsWith("# ")).toList();
-        check(headers.equals(List.of("# Helmets (1)", "# Armor (2)", "# Weapons & Tools (1)", "# Pets (1)", "# Power Orbs (1)",
-            "# Every Item of a Type (1)")), "Saved has one section per kind of item, in order: " + headers);
+        check(headers.equals(List.of("# Helmets (1)", "# Armor (2)", "# Weapons & tools (1)", "# Pets (1)", "# Power orbs (1)",
+            "# Every item of a type (1)")), "Saved has one section per kind of item, in order: " + headers);
         int gone = indexOf(rows, "> Zephyr Leggings | ");
-        check(gone > rows.indexOf("# Armor (2)") && gone < rows.indexOf("# Weapons & Tools (1)"),
+        check(gone > rows.indexOf("# Armor (2)") && gone < rows.indexOf("# Weapons & tools (1)"),
             "a look on an item never seen is sorted by its saved type (Armor): " + rows);
         check(indexOf(rows, "> Every Spring Boots | " + ctx.computeOnClient(mc -> Repo.get().dye("DYE_WARDEN").name)) >= 0,
             "the look for every Spring Boots is listed by its type");
@@ -68,8 +68,8 @@ final class SavedTabTest {
         for (int i = at + 1; i < rows.size() && rows.get(i).startsWith("  "); i++) parts.add(rows.get(i).trim());
         System.out.println("[SkyCosmeticsTest] the open helmet look: " + parts);
         String knight = ctx.computeOnClient(mc -> Repo.get().skin("NECRON_DIAMOND_KNIGHT").name);
-        check(parts.equals(List.of("Skin: " + knight, "Name: Zephyr", "Glint: On", "Glint Color: #FF3B3B",
-            "Glint Speed: 2.0x", "Glint Strength: 1.5x", "[Edit]")), "each change on its own line: " + parts);
+        check(parts.equals(List.of("Skin: " + knight, "Name: Zephyr", "Glint: On", "Glint color: #FF3B3B",
+            "Glint speed: 2.0x", "Glint strength: 1.5x", "[Edit]")), "each change on its own line: " + parts);
         ctx.takeScreenshot("skycosmetics-60-saved-open");
 
         // Hover: the row under the mouse lights up (screenshot), and its × says what it removes.
@@ -96,7 +96,7 @@ final class SavedTabTest {
 
         // One change off: only the glint color goes; Undo puts it back.
         helm = buttons(ctx, "I" + HELM);
-        int color = 4 + 2 * parts.indexOf("Glint Color: #FF3B3B");
+        int color = 4 + 2 * parts.indexOf("Glint color: #FF3B3B");
         click(ctx, helm[color], helm[color + 1]);
         ctx.waitTicks(2);
         Looks.Look l = ctx.computeOnClient(mc -> Looks.byUuid(HELM));
@@ -105,7 +105,7 @@ final class SavedTabTest {
             "the part's × removes only the glint color: " + l);
         String foot = ctx.computeOnClient(mc -> screen(mc).footer());
         check(foot.equals("Removed the glint color on Zephyr Helmet"), "the footer says what was removed: " + foot);
-        check(!rows(ctx).contains("  Glint Color: #FF3B3B"), "the removed change is gone from the list");
+        check(!rows(ctx).contains("  Glint color: #FF3B3B"), "the removed change is gone from the list");
         ctx.clickScreenButton("Undo");
         ctx.waitTicks(2);
         check("#FF3B3B".equals(ctx.computeOnClient(mc -> Looks.byUuid(HELM).glintColor())), "Undo puts the glint color back");

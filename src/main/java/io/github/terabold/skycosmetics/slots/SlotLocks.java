@@ -154,7 +154,7 @@ public final class SlotLocks {
         io.github.terabold.skycosmetics.gui.hub.KeyBindButton.onlyInMenus(key);       // L and Advancements never both act
         io.github.terabold.skycosmetics.gui.hub.KeyBindButton.onlyInMenus(bindKey);
         Settings.register(SECTION, SlotLocks::read, SlotLocks::write);
-        Hub.add(new Section(SECTION, Section.FEATURE, Component.literal("Slot Locking"),
+        Hub.add(new Section(SECTION, Section.FEATURE, Component.literal("Slot locking"),
             Component.literal("Lock and bind slots"),
             Component.literal("Lock slots so their items can't be moved, sold or dropped by accident, and bind inventory slots to hotbar slots."),
             () -> new ItemStack(Items.TRIPWIRE_HOOK), SlotLocks::rows));
