@@ -145,7 +145,7 @@ public final class RarityBackgrounds {
                 if (s.isEmpty()) continue;
                 if (SlotArea.own(slot)) {
                     if (!(SlotArea.armor(slot) ? armor : inventory)) continue;
-                } else if (!menus || rule == OwnMenus.NONE || rule == OwnMenus.NO_HEADS && s.is(Items.PLAYER_HEAD)
+                } else if (!menus || rule == OwnMenus.NONE || rule == OwnMenus.NO_HEADS && head(s)
                     && !ItemFacts.of(s).pet() && (!loadouts || slot.getContainerSlot() % 9 >= 5)) {
                     continue;
                 }
@@ -159,6 +159,13 @@ public final class RarityBackgrounds {
         } catch (RuntimeException e) {
             Io.failed("Drawing rarity backgrounds", e);
         }
+    }
+
+    /** What No heads leaves out: a head, or any helmet (one worn on the head, or whose rarity line says HELMET). */
+    private static boolean head(ItemStack s) {
+        if (s.is(Items.PLAYER_HEAD)) return true;
+        var worn = s.get(net.minecraft.core.component.DataComponents.EQUIPPABLE);
+        return worn != null && worn.slot() == net.minecraft.world.entity.EquipmentSlot.HEAD || ItemFacts.of(s).helmet();
     }
 
     /** A HUD hotbar or off-hand slot. Never throws. */
@@ -463,15 +470,19 @@ public final class RarityBackgrounds {
             Mask.Fill::label, () -> fill, v -> fill = v, StylePicker.Sheet.FILLS)))
             .search(Component.translatable("skycosmetics.rarityBackgrounds.fill.search").getString()).enabledWhen(isOn));
         rows.add(option("opacity", new Control.Slider(() -> opacity, v -> { opacity = (int) Math.round(v); if (outlineLinked) outlineOpacity = linkedOutline(); },
-            MIN_OPACITY, MAX_OPACITY, 5, v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn));
+            MIN_OPACITY, MAX_OPACITY, 5, v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn).visibleWhen(() -> !gradient()));
+        // A gradient's two ends on one slider: the faint end (a share of the strong one, kept as that share) and the strong end.
+        rows.add(Option.of("rarityBackgrounds.opacityRange", Component.translatable("skycosmetics.rarityBackgrounds.opacity"),
+            Component.literal("How strong the color is: the gradient's faint end on the left knob, its strong end on the right."),
+            new Control.Range(() -> opacity * gradientMinimum / 100.0, () -> opacity, (lo, hi) -> {
+                opacity = (int) Math.clamp(Math.round(hi), MIN_OPACITY, MAX_OPACITY);
+                gradientMinimum = (int) Math.clamp(Math.round(lo * 100 / opacity), 0, 100);
+                if (outlineLinked) outlineOpacity = linkedOutline();
+            }, 0, MAX_OPACITY, 1)).enabledWhen(isOn).visibleWhen(RarityBackgrounds::gradient));
         rows.add(toggle("outline", () -> outline, v -> outline = v).enabledWhen(() -> on && shape.outlined()));
         rows.add(Option.of("rarityBackgrounds.outlineOpacity", Component.literal("Outline opacity"), Component.empty(),
             new Control.Slider(() -> outlineOpacity, v -> { outlineOpacity = (int) Math.round(v); outlineLinked = outlineOpacity == linkedOutline(); }, 0, 100, 1,
                 v -> Component.literal(Math.round(v) + "%"))).enabledWhen(isOn).visibleWhen(() -> outline && shape.outlined()));
-        rows.add(Option.of("rarityBackgrounds.gradientMinimum", Component.literal("Gradient minimum opacity"),
-            Component.literal("Opacity at the faint end, relative to the main opacity."),
-            new Control.Slider(() -> gradientMinimum, v -> gradientMinimum = (int) v, 0, 100, 5, v -> Component.literal(Math.round(v) + "%")))
-            .enabledWhen(isOn).visibleWhen(() -> fill != Mask.Fill.SOLID && fill != Mask.Fill.BEVELED));
 
         rows.add(Option.header("rarityBackgrounds.groupColors", Component.translatable("skycosmetics.rarityBackgrounds.group.colors")));
         // Custom keeps your own colors; editing a swatch while a named set shows starts them from that set.
@@ -513,6 +524,11 @@ public final class RarityBackgrounds {
                 default -> true;
             });
         }).toList();
+    }
+
+    /** Whether the fill fades from a strong end to a faint one. */
+    private static boolean gradient() {
+        return fill != Mask.Fill.SOLID && fill != Mask.Fill.BEVELED;
     }
 
     private static Option menuRule(String id, Supplier<OwnMenus> get, Consumer<OwnMenus> set) {

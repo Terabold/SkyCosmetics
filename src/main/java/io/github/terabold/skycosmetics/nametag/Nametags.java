@@ -73,38 +73,111 @@ public final class Nametags {
         if (p.text == Text.ORIGINAL && p.ownName.isEmpty() && p.font == NameFont.SERVER) return source;
         source = readable(source);
         String plain = source.getString();
-        int start = plain.indexOf(username);
+        int start = wordAt(plain, username, 0);
         if (start < 0) return source; // Unknown external label: preserve it instead of guessing.
         int end = start + username.length();
-        if (start > 0 && Character.isLetterOrDigit(plain.charAt(start - 1))
-            || end < plain.length() && Character.isLetterOrDigit(plain.charAt(end))) return source;
-        Component originalName = slice(source, start, end);
+        return Component.empty().append(slice(source, 0, start)).append(name(slice(source, start, end), own, username, true))
+            .append(slice(source, end, plain.length()));
+    }
+
+    /** The name put in place of {@code originalName}: yours with your display name and colors, in the chosen font when {@code withFont}. */
+    private static Component name(Component originalName, boolean own, String username, boolean withFont) {
         Component base = !own || p.ownName.isEmpty() ? originalName : Names.live(p.ownName.replace("{name}", username));
-        if (p.font != NameFont.SERVER) {
+        if (withFont && p.font != NameFont.SERVER) {
             FontDescription font = p.font == NameFont.MINECRAFT ? FontDescription.DEFAULT : UniformFont.VALUE;
-            MutableComponent withFont = Component.empty();
+            MutableComponent fonted = Component.empty();
             base.visit((style, text) -> {
-                withFont.append(Component.literal(text).setStyle(style.withFont(font)));
+                fonted.append(Component.literal(text).setStyle(style.withFont(font)));
                 return Optional.empty();
             }, Style.EMPTY);
-            base = withFont;
+            base = fonted;
         }
-        Component prefix = slice(source, 0, start), suffix = slice(source, end, plain.length());
-        if(!own || p.text==Text.ORIGINAL)return Component.empty().append(prefix).append(base).append(suffix);
+        if(!own || p.text==Text.ORIGINAL)return base;
         MutableComponent result=Component.empty();int[] index={0};int length=Math.max(1,base.getString().codePointCount(0,base.getString().length())-1);
         int[] colors = {p.color, p.colorEnd};
         base.visit((style,text)->{
             text.codePoints().forEach(cp->{
                 int i=index[0]++,color=switch(p.text) {
                     case SOLID -> p.color;
-                    case GRADIENT -> Names.mix(colors,(float)i/length);
+                    case GRADIENT -> Names.mix(colors,bend((float)i/length));
                     case CHROMA -> Chroma.nameColor(i);
                     default -> 0xFFFFFF;
                 };
                 result.append(Component.literal(new String(Character.toChars(cp))).setStyle(style.withColor(color&0xFFFFFF)));
             });return Optional.empty();
         },Style.EMPTY);
-        return Component.empty().append(prefix).append(result).append(suffix);
+        return result;
+    }
+
+    /** A gradient position bent so the two colors meet at the balance point rather than in the middle. */
+    public static float bend(float t) {
+        double mid = Math.clamp(p.gradientMid, .1, .9);
+        float at = Math.clamp(t, 0f, 1f);
+        return Math.abs(mid - .5) < 1e-3 ? at : (float) Math.pow(at, Math.log(.5) / Math.log(mid));
+    }
+
+    /** Where {@code word} first stands on its own in {@code text} at or after {@code from} ("Steve" is not in "Steve2"); -1 if nowhere. */
+    private static int wordAt(String text, String word, int from) {
+        for (int at = text.indexOf(word, from); at >= 0; at = text.indexOf(word, at + 1)) {
+            int end = at + word.length();
+            if ((at == 0 || !wordChar(text.charAt(at - 1))) && (end == text.length() || !wordChar(text.charAt(end)))) return at;
+        }
+        return -1;
+    }
+
+    private static boolean wordChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_';
+    }
+
+    /**
+     * A chat line or a tab-list name with your username in it: everywhere it stands as a word, your name as your
+     * nametag has it (display name, colors), in the server's font, keeping the name's click and hover. Lines without
+     * it are returned as they are, after one search. Never throws.
+     */
+    public static Component ownName(Component line) {
+        if (line == null || !p.enabled || !p.chatTab || p.text == Text.ORIGINAL && p.ownName.isEmpty()) return line;
+        try {
+            String username = Minecraft.getInstance().getUser().getName();
+            String plain = line.getString();
+            if (username.isEmpty() || plain.length() > 4096 || plain.indexOf(username) < 0) return line;
+            Component src = readable(line);
+            plain = src.getString();
+            MutableComponent out = Component.empty();
+            int from = 0, found = 0;
+            for (int at = wordAt(plain, username, 0); at >= 0 && found < 8; at = wordAt(plain, username, from), found++) {
+                int end = at + username.length();
+                out.append(slice(src, from, at)).append(withEvents(name(slice(src, at, end), true, username, false), styleAt(src, at)));
+                from = end;
+            }
+            return found == 0 ? line : out.append(slice(src, from, plain.length()));
+        } catch (RuntimeException e) {
+            io.github.terabold.skycosmetics.Io.failed("Showing your name in chat or the tab list", e);
+            return line;
+        }
+    }
+
+    /** The style of the character at {@code index}. */
+    private static Style styleAt(Component source, int index) {
+        Style[] found = {Style.EMPTY};
+        int[] offset = {0};
+        source.visit((style, text) -> {
+            if (index < offset[0] + text.length()) { found[0] = style; return Optional.of(Boolean.TRUE); }
+            offset[0] += text.length();
+            return Optional.empty();
+        }, Style.EMPTY);
+        return found[0];
+    }
+
+    /** {@code name} with the click, hover and insertion of the text it replaces (Hypixel's name links and cards). */
+    private static Component withEvents(Component name, Style from) {
+        if (from.getClickEvent() == null && from.getHoverEvent() == null && from.getInsertion() == null) return name;
+        MutableComponent out = Component.empty();
+        name.visit((style, text) -> {
+            out.append(Component.literal(text).setStyle(style.withClickEvent(from.getClickEvent())
+                .withHoverEvent(from.getHoverEvent()).withInsertion(from.getInsertion())));
+            return Optional.empty();
+        }, Style.EMPTY);
+        return out;
     }
     /** Legacy section-sign codes may split a username inside a literal component. Keep its inherited font. */
     private static Component readable(Component source) {

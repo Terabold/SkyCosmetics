@@ -1,6 +1,5 @@
 package io.github.terabold.skycosmetics.update;
 
-import io.github.terabold.skycosmetics.SkyCosmetics;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
 import io.github.terabold.skycosmetics.gui.ui.Ui;
@@ -9,16 +8,13 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.toasts.Toast;
 import net.minecraft.client.gui.components.toasts.ToastManager;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 
 /**
  * The once-a-session update toast, in the settings' colors: the logo, what happened, and where to go
  * ({@code /skycosmetics}). Build it on the render thread.
  */
 public final class UpdateToast implements Toast {
-    private static final Identifier LOGO = Identifier.fromNamespaceAndPath(SkyCosmetics.MOD_ID, "icon.png");
     private static final long SHOW_MS = 8000;
     private static final int H = 32, MIN_W = 160, MAX_W = 250;
     private final Component title, line;
@@ -81,7 +77,7 @@ public final class UpdateToast implements Toast {
         Shapes.round(g, 0, 0, width, H, Theme.RADIUS, Theme.CHROME);
         Shapes.frame(g, 0, 0, width, H, Theme.RADIUS, Theme.LINE);
         Shapes.round(g, 1, 6, 2, H - 12, 1, Theme.ACCENT);
-        g.blit(RenderPipelines.GUI_TEXTURED, LOGO, 9, 8, 0, 0, 16, 16, 128, 128, 128, 128);
+        io.github.terabold.skycosmetics.gui.ui.Logo.draw(g, 8, 7);
         g.text(font, titleText, 31, 7, Theme.TEXT, false);
         g.text(font, lineText, 31, 18, Theme.MUTED, false);
     }

@@ -373,6 +373,12 @@ public class SlotsTest implements FabricClientGameTest {
             }
         });
         check(drawnInFrame(ctx) == 32, "Loadouts No Heads excludes only the four right-side heads, preserving the left preview");
+        ctx.runOnClient(mc -> {
+            var menu = ((AbstractContainerScreen<?>) mc.screen).getMenu();
+            menu.getSlot(6).set(stack(Items.DIAMOND_HELMET, "T_LOADOUT_HELMET", null, "§6§lLEGENDARY HELMET"));
+            menu.getSlot(7).set(stack(Items.PAPER, "T_LOADOUT_MODEL_HELMET", null, "§d§lMYTHIC DUNGEON HELMET"));
+        });
+        check(drawnInFrame(ctx) == 32, "Loadouts No Heads leaves out helmets that aren't heads too: a worn one and a custom-model one");
         ctx.takeScreenshot("skycosmetics-loadouts-right-heads-only");
         ctx.runOnClient(mc -> RarityBackgrounds.where(false, true, false, false, RarityBackgrounds.OwnMenus.NONE, false));
         ctx.setScreen(() -> menu(Minecraft.getInstance(), AUCTIONS));

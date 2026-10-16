@@ -37,11 +37,9 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -151,7 +149,6 @@ public class StudioScreen extends Screen {
 
     private static final int BG = 0xE0101014;
     private static final Component TITLE = Component.literal("SkyCosmetics").withStyle(ChatFormatting.BOLD);
-    private static final Identifier LOGO = Identifier.fromNamespaceAndPath("skycosmetics", "icon.png");
     /** The title where the bold one would run under the Settings button (a narrow left column). */
     private static final Component TITLE_PLAIN = Component.literal("SkyCosmetics");
     private static final int TEXT = Theme.TEXT, MUTED = Theme.MUTED, GOLD = Theme.GOLD;
@@ -1958,7 +1955,7 @@ public class StudioScreen extends Screen {
         }
 
         {
-            g.blit(RenderPipelines.GUI_TEXTURED, LOGO, PAD + 6, PAD + 5, 0, 0, 16, 16, 128, 128, 128, 128);
+            io.github.terabold.skycosmetics.gui.ui.Logo.draw(g, PAD + 5, PAD + 4);
             g.text(font, title, PAD + 26, PAD + 9, Theme.ACCENT, false);
             drawList(g, mx, my);
         }

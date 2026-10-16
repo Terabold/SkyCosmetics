@@ -36,9 +36,9 @@ public final class StylePicker<T> extends AbstractWidget {
             sheet = new Mask.Sheet("slots/picker_" + name().toLowerCase(java.util.Locale.ROOT), n, 1);
         }
 
-        /** The style cell {@code i} shows; never fainter than 60%, so every option stays easy to tell apart. */
+        /** The style cell {@code i} shows, at the opacity in use: each looks as it will in menus. */
         Mask.Style style(int i) {
-            int op = Math.max(RarityBackgrounds.opacity, 60);
+            int op = RarityBackgrounds.opacity;
             return this == SHAPES
                 ? new Mask.Style(Mask.Shape.values()[i], RarityBackgrounds.fill, op, RarityBackgrounds.outline, RarityBackgrounds.gradientMinimum, RarityBackgrounds.outlineOpacity)
                 : new Mask.Style(RarityBackgrounds.shape, Mask.Fill.values()[i], op, RarityBackgrounds.outline, RarityBackgrounds.gradientMinimum, RarityBackgrounds.outlineOpacity);
@@ -49,7 +49,8 @@ public final class StylePicker<T> extends AbstractWidget {
         }
     }
 
-    private static final int BOX = Mask.CELL + 4, GAP = 2;
+    /** A cell: its frame, a blank pixel, then the slot, so an outline at the slot's edge is never lost in the frame. */
+    private static final int BOX = Mask.CELL + 6, GAP = 2;
     /** The color previews are tinted with: Legendary's, as it reads on any shape. */
     private static final Rarity SAMPLE = Rarity.LEGENDARY;
 
@@ -60,6 +61,7 @@ public final class StylePicker<T> extends AbstractWidget {
     private final Consumer<T> set;
     private final Sheet sheet;
     private final int cols;
+    private int tipFor = -1;
 
     StylePicker(int width, Host host, T[] values, Function<T, Component> label, Supplier<T> get, Consumer<T> set, Sheet sheet) {
         super(0, 0, width, 0, Component.empty());
@@ -105,9 +107,9 @@ public final class StylePicker<T> extends AbstractWidget {
         for (int i = 0; i < values.length; i++) {
             int x = getX() + i % cols * (BOX + GAP), y = getY() + i / cols * (BOX + GAP);
             g.fill(x, y, x + BOX, y + BOX, Theme.SURFACE);
-            SlotPreview.slot(g, x + 2, y + 2);
+            SlotPreview.slot(g, x + 3, y + 3);
             if (tex != null) {
-                g.blit(RenderPipelines.GUI_TEXTURED, tex, x + 2, y + 2, i * Mask.CELL, 0, Mask.CELL, Mask.CELL, tw, th, tint);
+                g.blit(RenderPipelines.GUI_TEXTURED, tex, x + 3, y + 3, i * Mask.CELL, 0, Mask.CELL, Mask.CELL, tw, th, tint);
             }
             int frame = i == selected ? (active ? Theme.ACCENT : Theme.MUTED) : i == hovered ? 0xFFFFFFFF : Theme.LINE;
             g.outline(x, y, BOX, BOX, frame);
@@ -119,9 +121,11 @@ public final class StylePicker<T> extends AbstractWidget {
         if (values.length <= cols && right + font.width(name) <= getRight()) {
             g.text(font, name, right, getY() + (BOX - 8) / 2, active ? Theme.TEXT : Theme.MUTED);
         }
-        if (hovered >= 0) {
-            g.requestCursor(CursorTypes.POINTING_HAND);
-            g.setTooltipForNextFrame(font, label.apply(values[hovered]), mouseX, mouseY);
+        if (hovered >= 0) g.requestCursor(CursorTypes.POINTING_HAND);
+        // The cell's name in the settings' own tooltip, which takes the place of the row's while over a cell.
+        if (hovered != tipFor) {
+            tipFor = hovered;
+            io.github.terabold.skycosmetics.gui.ui.Tips.set(this, hovered < 0 ? null : label.apply(values[hovered]), 150);
         }
     }
 

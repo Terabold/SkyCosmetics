@@ -30,9 +30,10 @@ import java.util.regex.Pattern;
  * @param tooltipStyle the server's tooltip style (by identity)
  * @param rarity null when no item rarity can be determined (ordinary menu buttons, vanilla items)
  * @param loadoutColor a saved setup button's name color, used only in the Loadouts selection area
+ * @param helmet the rarity line names a helmet ("LEGENDARY HELMET", "MYTHIC DUNGEON HELMET")
  */
 public record ItemFacts(Object lore, Object data, Object name, Object tooltipStyle, Rarity rarity,
-                        boolean recombobulated, boolean skyblock, boolean pet, Rarity loadoutColor) {
+                        boolean recombobulated, boolean skyblock, boolean pet, Rarity loadoutColor, boolean helmet) {
     /** Mixed into ItemStack: the facts last read for it. */
     public interface Holder {
         ItemFacts skycosmetics$facts();
@@ -93,7 +94,24 @@ public record ItemFacts(Object lore, Object data, Object name, Object tooltipSty
             return "Left-click to equip!".equals(text) || "Right-click to edit".equals(text);
         })) loadoutColor = nameRarity(name, false);
         boolean recomb = line != null && line.recombobulated || tag != null && tag.getIntOr("rarity_upgrades", 0) > 0;
-        return new ItemFacts(lore, data, name, tooltipStyle, rarity, recomb, !id.isEmpty() || styled != null || namedPet != null, pet, loadoutColor);
+        boolean helmet = lore != null && helmetLine(lore.lines());
+        return new ItemFacts(lore, data, name, tooltipStyle, rarity, recomb, !id.isEmpty() || styled != null || namedPet != null, pet, loadoutColor, helmet);
+    }
+
+    /** Whether the rarity line (the lowest line that reads like one) ends in HELMET. */
+    private static boolean helmetLine(List<Component> lines) {
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            String raw = lines.get(i).getString();
+            if (parse(raw) == null) continue;
+            String t = ChatFormatting.stripFormatting(raw);
+            if (t == null) return false;
+            String[] w = t.trim().split(" +");
+            // "a LEGENDARY HELMET a" when recombobulated: the word before the obfuscated letter.
+            int last = w.length - 1;
+            if (last > 0 && w[last].length() == 1) last--;
+            return w[last].equals("HELMET");
+        }
+        return false;
     }
 
     /** Pet shop heads have no rarity footer. Read the pet name's color, not the gray level prefix. */

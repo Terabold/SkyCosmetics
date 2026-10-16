@@ -34,11 +34,9 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositione
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
@@ -75,7 +73,6 @@ import java.util.function.Consumer;
 public class SettingsScreen extends Screen implements Host, OverlayHost {
     private static final int MAX_W = 680, MAX_H = 420, HEADER_H = 26, HEAD_H = 34, RAIL_W = 30, MIN_W = 280, MIN_H = 170;
     private static final int ROW_X = 8, ROW_Y = 6, GAP = 12, MIN_TEXT = 110, WHEEL = 30, BAR_W = 3;
-    private static final Identifier LOGO = Identifier.fromNamespaceAndPath(SkyCosmetics.MOD_ID, "icon.png");
     private static final String[] NONE = new String[0];
     /** How long a row found by a search glows after the jump. */
     private static final long FLASH_MS = 1600;
@@ -927,6 +924,9 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             for (Row r : rows) {
                 if (!r.setting() || r.failed || r.option.inlineHelp() || r.detail.isEmpty()) continue;
                 int ry = r.widget.getY() - r.ctrlY;
+                // Over the control itself its own tooltips speak (a picker's choices): the row's waits for the label.
+                var w = r.widget;
+                if (mx >= w.getX() && mx < w.getRight() && my >= w.getY() && my < w.getBottom()) continue;
                 if (my >= ry && my < ry + r.h && mx >= vx + r.textX && mx < vx + r.textX + r.textW) {
                     hovered = r;
                     break;
@@ -977,7 +977,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
     }
 
     private void header(GuiGraphicsExtractor g, int mx, int my, float delta) {
-        g.blit(RenderPipelines.GUI_TEXTURED, LOGO, wx + 7, wy + 5, 0, 0, 16, 16, 128, 128, 128, 128);
+        io.github.terabold.skycosmetics.gui.ui.Logo.draw(g, wx + 6, wy + 4);
         int tx = wx + 28, nameW = font.width(logoTitle);
         if (tx + nameW <= titleRight) {
             g.text(font, logoTitle, tx, wy + 9, Theme.ACCENT, false);

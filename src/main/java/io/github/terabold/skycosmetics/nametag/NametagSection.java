@@ -41,11 +41,14 @@ final class NametagSection {
         choice(r,"textMode","My name color","Only your username changes. Server levels, emblems, other players and score lines keep their formatting.",Text.values(),()->p.text,v->p.text=v);
         color(r,"color","Text color",()->p.color,v->p.color=v,false);
         color(r,"colorEnd","Gradient end",()->p.colorEnd,v->p.colorEnd=v,false);
+        add(r,"gradientMid","Gradient balance","Where the two colors meet: drag right for more of the first color, left for more of the end one. Right-click puts it back in the middle.",
+            new Control.Custom((host,width)->new GradientBalance(width,host)));
         toggle(r,"fullBright","Full brightness","Keep text readable independently of world lighting.",()->p.fullBright,v->p.fullBright=v);
         toggle(r,"shadow","Text shadow","Add a shadow behind the letters.",()->p.shadow,v->p.shadow=v);
         toggle(r,"styleScores","Style scoreboard text","Apply the color style to scores too; off preserves server formatting.",()->p.styleScores,v->p.styleScores=v);
         r.add(Option.of("ownName",t("My display name"),t("Local nametag only. Supports formatting, gradients and chroma; empty keeps the server name."),
             new Control.Action(t("Edit…"),()->Minecraft.getInstance().setScreen(new NametagNameScreen(parent)),()->p.enabled,Component.empty())));
+        toggle(r,"chatTab","My name in chat and tab","Your display name and colors in chat and the tab list too, as on your nametag. Only you see it; lines already in chat stay as they were.",()->p.chatTab,v->p.chatTab=v);
         r.add(Option.header("backgroundGroup",t("Background")));
         toggle(r,"background","Show background","Background behind each line, with the same through-wall visibility as its label.",()->p.background,v->p.background=v);
         color(r,"backgroundColor","Background color",()->p.backgroundColor|0xFF000000,v->p.backgroundColor=p.backgroundColor&0xFF000000|v&0xFFFFFF,false);
@@ -58,7 +61,7 @@ final class NametagSection {
         slider(r,"paddingX","Horizontal padding",()->p.paddingX,v->p.paddingX=v,0,10,.5);
         slider(r,"paddingY","Vertical padding",()->p.paddingY,v->p.paddingY=v,0,10,.5);
         r.add(Option.of("reset",t("Reset nametags"),t("Restore defaults, including turning this feature off."),new Control.Action(t("Reset"),NametagSettings::reset,()->true,Component.empty())));
-        var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "tabNames", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "opacity", "shadow", "ownName", "backgroundGroup", "background", "backgroundColor", "backgroundOpacity", "gradientBackground", "backgroundEnd", "radius", "paddingX", "paddingY", "reset");
+        var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "tabNames", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "gradientMid", "opacity", "shadow", "ownName", "chatTab", "backgroundGroup", "background", "backgroundColor", "backgroundOpacity", "gradientBackground", "backgroundEnd", "radius", "paddingX", "paddingY", "reset");
         return r.stream().filter(o -> release.contains(o.id())).map(o -> {
             Option compact = Set.of("scale", "height", "own", "inventory", "paddingX", "paddingY", "color", "colorEnd", "backgroundColor", "backgroundOpacity").contains(o.id()) ? o.beside() : o.compact();
             return compact.visibleWhen(() -> relevant(o.id()));
@@ -69,7 +72,7 @@ final class NametagSection {
         case "inventory" -> p.own;
         case "fadeStart" -> p.fade;
         case "color" -> p.text==Text.SOLID||p.text==Text.GRADIENT;
-        case "colorEnd" -> p.text==Text.GRADIENT;
+        case "colorEnd", "gradientMid" -> p.text==Text.GRADIENT;
         case "styleScores" -> p.scores;
         case "backgroundColor", "backgroundOpacity", "gradientBackground", "rounded", "paddingX", "paddingY" -> p.background;
         case "backgroundEnd" -> p.background&&p.gradientBackground;

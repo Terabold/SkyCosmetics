@@ -72,7 +72,7 @@ final class TabNames {
         return null;
     }
 
-    /** Whether {@code line} has {@code username} as a whole word ("Terbold" is not in "Terbold2"). */
+    /** Whether {@code line} has {@code username} as a whole word ("Steve" is not in "Steve2"). */
     static boolean names(String line, String username) {
         String plain = ChatFormatting.stripFormatting(line);
         if (plain == null) return false;

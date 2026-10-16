@@ -31,6 +31,13 @@ public sealed interface Control {
     record Slider(DoubleSupplier get, DoubleConsumer set, double min, double max, double step,
                   DoubleFunction<Component> label) implements Control {}
 
+    /** Two numbers on one track, {@code low <= high}, set together; in percent. Applies live like a slider. */
+    record Range(DoubleSupplier low, DoubleSupplier high, Set set, double min, double max, double step) implements Control {
+        public interface Set {
+            void set(double low, double high);
+        }
+    }
+
     /** One of several values: side by side when up to four short ones fit, else a drop-down list. */
     record Choice<T>(List<T> values, Function<T, Component> label, Supplier<T> get, Consumer<T> set) implements Control {}
 

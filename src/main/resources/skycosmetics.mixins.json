@@ -42,6 +42,7 @@
     "nametag.EntityRendererMixin",
     "nametag.NameTagFeatureRendererMixin",
     "nametag.EntityRenderStateMixin",
+    "nametag.TabOwnNameMixin",
     "zoom.CameraMixin",
     "zoom.MouseHandlerMixin",
     "zoom.GameRendererMixin",

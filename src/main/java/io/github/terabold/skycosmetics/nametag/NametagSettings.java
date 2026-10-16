@@ -11,13 +11,15 @@ public final class NametagSettings {
     public static final class Profile {
         public boolean enabled, hide, inventory, visibleOnly, shadow, fullBright;
         public boolean own = true, hidePlayersF1 = true, hideEntitiesF1 = true, hideArmorStandsF1 = true;
-        public boolean scores = true, styleScores, background = true, rounded = true, gradientBackground, tabNames = true;
+        public boolean scores = true, styleScores, background = true, rounded = true, gradientBackground, tabNames = true, chatTab = true;
         public Scope scope = Scope.PLAYERS;
         public Text text = Text.ORIGINAL;
         public NameFont font = NameFont.SERVER;
         public double scale = 1, height = 0, crouchScale = 1, distance = 64, fadeStart = 48;
         public boolean fade;
         public double opacity = 1, paddingX = 1, paddingY = 0, radius = 0;
+        /** Where the name gradient's two colors meet, from its start (0) to its end (1). */
+        public double gradientMid = .5;
         public int color = 0xFFFFFFFF, colorEnd = 0xFF7ADFFF;
         public int backgroundColor = 0x50000000, backgroundEnd = 0x50253645;
         public String ownName = "";
@@ -48,6 +50,7 @@ public final class NametagSettings {
         p.crouchScale=Math.clamp(p.crouchScale,.25,1); p.distance=Math.clamp(p.distance,1,64);
         p.fadeStart=Math.clamp(p.fadeStart,0,64); p.opacity=Math.clamp(p.opacity,0,1);
         p.paddingX=Math.clamp(p.paddingX,0,10); p.paddingY=Math.clamp(p.paddingY,0,10); p.radius=Math.clamp(p.radius,0,10);
+        p.gradientMid=Math.clamp(p.gradientMid,.1,.9);
         if (!o.has("paddingVersion") && p.paddingX == 3 && p.paddingY == 2) { p.paddingX = 1; p.paddingY = 0; }
         changed();
     }

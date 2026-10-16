@@ -82,7 +82,7 @@ public final class SlotLocks {
         boolean small() { return this == PADLOCK || this == DOT || this == CORNER || this == SBE_LOCK; }
 
         /** Drawn in the color picked here; the others keep their own colors. */
-        boolean tinted() { return this == PADLOCK || this == DOT || this == CORNER || this == OUTLINE || this == BOX || this == DASHED || this == TINT; }
+        boolean tinted() { return this != NEU_PADLOCK && this != SBA_PADLOCK && this != FIRMAMENT_LOCK && this != SBE_LOCK && this != NONE; }
     }
 
     static final List<Icon> LOCK_MARKS = List.of(Icon.PADLOCK, Icon.NEU_PADLOCK, Icon.SBA_PADLOCK, Icon.FIRMAMENT_LOCK, Icon.SBE_LOCK,
@@ -527,10 +527,11 @@ public final class SlotLocks {
             if (m != null) mark(g, s.x, s.y, colorOf(i), m);
             Integer from = binding();
             if (from != null && bindsHere(screen)) {
-                if (i == from) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x60000000 | bindColor & 0xFFFFFF); // where it starts
+                // Where it starts and the slot it would end on show the bound look itself, as the binding will.
+                if (i == from) emphasis(g, s.x, s.y, 0xFF000000 | bindColor);
                 else if (bindable(from, i)) {
-                    g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x40FFFFFF);                                  // where it can end
-                    if (under) g.outline(s.x - 1, s.y - 1, 18, 18, 0xFF000000 | bindColor);
+                    if (under) emphasis(g, s.x, s.y, 0xFF000000 | bindColor);
+                    else g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x40FFFFFF);                              // where it can end, as NEU shows it
                 } else if (under) g.fill(s.x, s.y, s.x + 16, s.y + 16, 0x50FF3030);                      // where it can't
             }
         } catch (RuntimeException e) {
@@ -622,8 +623,20 @@ public final class SlotLocks {
             line(g, from[0], from[1], to[0], to[1], c);
         }
         if (!framed) return;
-        if (sa != null) g.outline(sa.x - 1, sa.y - 1, 18, 18, c);
-        if (sb != null) g.outline(sb.x - 1, sb.y - 1, 18, 18, c);
+        if (sa != null) emphasis(g, sa.x, sa.y, c);
+        if (sb != null) emphasis(g, sb.x, sb.y, c);
+    }
+
+    /**
+     * A bound slot picked out (hovered, being bound, just bound): the bound look again at {@code argb}'s own
+     * opacity, so it stands out in the same design; None and Tint get a frame, having no edge of their own.
+     */
+    private static void emphasis(GuiGraphicsExtractor g, int x, int y, int argb) {
+        switch (bindIcon) {
+            case OUTLINE -> outlineAt(g, x, y, argb);
+            case NONE, TINT -> g.outline(x - 1, y - 1, 18, 18, argb);
+            default -> markAt(g, x, y, argb, bindIcon);
+        }
     }
 
     /**
@@ -655,11 +668,14 @@ public final class SlotLocks {
 
     /** The outline style: the rarity backgrounds' own shape (rounded when they have none), in the lock color. */
     private static void outline(GuiGraphicsExtractor g, int x, int y, int rgb) {
+        outlineAt(g, x, y, (int) Math.round((rgb >>> 24) * opacity / 100.0) << 24 | rgb & 0xFFFFFF);
+    }
+
+    private static void outlineAt(GuiGraphicsExtractor g, int x, int y, int argb) {
         Mask.Shape shape = RarityBackgrounds.on && RarityBackgrounds.shape.outlined() ? RarityBackgrounds.shape : Mask.Shape.ROUNDED;
         Identifier tex = OUTLINE.ensure(shape.ordinal(), (img, i, x0, y0, n, s) ->
             Mask.paint(img, x0, y0, n, s, new Mask.Style(shape, Mask.Fill.SOLID, 0, true, 0, 100), 4));
-        int tint = (int) Math.round((rgb >>> 24) * opacity / 100.0) << 24 | rgb & 0xFFFFFF;
-        g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, 0, 0, Mask.CELL, Mask.CELL, OUTLINE.texWidth(), OUTLINE.texHeight(), tint);
+        g.blit(RenderPipelines.GUI_TEXTURED, tex, x - 1, y - 1, 0, 0, Mask.CELL, Mask.CELL, OUTLINE.texWidth(), OUTLINE.texHeight(), argb);
     }
 
     // Pixel art, 16 columns a row unless noted; each letter a color of the mark's palette, '.' nothing.
@@ -676,7 +692,11 @@ public final class SlotLocks {
 
     /** A mark over the slot's item: a padlock, a dot, a corner, a frame or a tint, in the chosen corner when it's small. */
     private static void mark(GuiGraphicsExtractor g, int x, int y, int rgb, Icon icon) {
-        int a = (int) Math.round((rgb >>> 24) * opacity / 100.0), c = a << 24 | rgb & 0xFFFFFF;
+        markAt(g, x, y, (int) Math.round((rgb >>> 24) * opacity / 100.0) << 24 | rgb & 0xFFFFFF, icon);
+    }
+
+    private static void markAt(GuiGraphicsExtractor g, int x, int y, int c, Icon icon) {
+        int a = c >>> 24, rgb = c & 0xFFFFFF;
         switch (icon) {
             case NONE, OUTLINE -> { }                                         // nothing, or drawn under the item
             case NEU_PADLOCK -> pixels(g, x, y, NEU_LOCK, NEU_GOLD, 0x80); // the whole slot at half opacity
@@ -691,14 +711,18 @@ public final class SlotLocks {
                     g.fill(x, y + i, x + 1, y + i + 1, c); g.fill(x + 15, y + i, x + 16, y + i + 1, c);
                 }
             }
-            case STITCHED -> stitched(g, x, y);
+            case STITCHED -> rope(g, x, y, c);
             default -> small(g, x, y, c, icon);
         }
     }
 
-    /** NEU's bound-slot frame: a rope of two blues weaving between the slot's edge and one pixel in. */
-    private static void stitched(GuiGraphicsExtractor g, int x, int y) {
-        int dark = 0xB3325D9F, light = 0xB33279B9;
+    /**
+     * NEU's kind of bound-slot frame: a rope weaving between the slot's edge and one pixel in, in {@code c} and a
+     * shade darker (NEU's own is two blues).
+     */
+    private static void rope(GuiGraphicsExtractor g, int x, int y, int c) {
+        int rgb = c & 0xFFFFFF, a = c & 0xFF000000;
+        int light = a | rgb, dark = a | (int) ((rgb >> 16 & 0xFF) * .78f) << 16 | (int) ((rgb >> 8 & 0xFF) * .78f) << 8 | (int) ((rgb & 0xFF) * .78f);
         for (int i = 1; i < 15; i++) {
             int in = (i / 2) % 2, col = i % 2 == 0 ? dark : light; // in and out every two pixels
             g.fill(x + i, y + in, x + i + 1, y + in + 1, col);
@@ -794,7 +818,7 @@ public final class SlotLocks {
                 case CHAT -> "Chat"; case ACTION_BAR -> "Action bar"; case OFF -> "Off"; }), () -> tell, v -> tell = v)));
 
         r.add(Option.header("slotLocks.bound", Component.literal("Bound slots")));
-        r.add(picker("bindIcon", "Mark", "Outline takes the place of the rarity background's outline; Box is Firmament's; the blue rope is NEU's.",
+        r.add(picker("bindIcon", "Mark", "Every one takes the color below. Outline takes the place of the rarity background's outline; Box is Firmament's; the rope is NEU's.",
             BOUND_MARKS, () -> bindIcon, v -> bindIcon = v, () -> bindColor));
         r.add(row("bindColor", "Color", "", new Control.Color(() -> bindColor, v -> bindColor = v, false)));
         r.add(row("swapWith", "Swap with", "Clicking either end of a binding swaps the two, like that hotbar number key over the inventory slot.",
@@ -849,7 +873,7 @@ public final class SlotLocks {
             case PADLOCK -> "Padlock"; case NEU_PADLOCK -> "NEU padlock"; case SBA_PADLOCK -> "SkyblockAddons padlock";
             case FIRMAMENT_LOCK -> "Firmament lock"; case SBE_LOCK -> "SkyBlock Enhancements lock"; case DOT -> "Dot";
             case CORNER -> "Corner"; case OUTLINE -> "Outline (rarity background's shape)"; case BOX -> "Box (Firmament)";
-            case DASHED -> "Dashed frame (Skyblocker)"; case STITCHED -> "Blue rope (NEU)"; case TINT -> "Tint"; case NONE -> "None";
+            case DASHED -> "Dashed frame (Skyblocker)"; case STITCHED -> "Rope (NEU)"; case TINT -> "Tint"; case NONE -> "None";
         };
     }
 

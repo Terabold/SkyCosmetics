@@ -30,6 +30,7 @@ public final class Controls {
             case Control.Header h -> 0;
             case Control.Toggle t -> ToggleSwitch.W;
             case Control.Slider s -> Math.clamp(rowW * 36 / 100, SLIDER_MIN, SLIDER_MAX);
+            case Control.Range r -> Math.clamp(rowW * 36 / 100, SLIDER_MIN, SLIDER_MAX);
             case Control.Choice<?> c -> choiceWidth(c, Math.clamp(rowW * 46 / 100, 100, 230));
             case Control.Key k -> KeyBindButton.W;
             case Control.Action a -> Math.clamp(ActionButton.fit(a.label()), 40, Math.max(60, rowW / 2));
@@ -42,6 +43,7 @@ public final class Controls {
     public static int stackedWidth(Option o, int avail) {
         return switch (o.control()) {
             case Control.Slider s -> Math.min(avail, STACKED_MAX);
+            case Control.Range r -> Math.min(avail, STACKED_MAX);
             case Control.Choice<?> c -> choiceWidth(c, Math.min(avail, STACKED_MAX + 40));
             default -> Math.min(width(o, avail), avail);
         };
@@ -73,6 +75,13 @@ public final class Controls {
             }
             case Control.Slider s -> {
                 OptionSlider slider = new OptionSlider(o.title(), width, s, host);
+                yield new Built(slider, () -> {
+                    slider.refresh();
+                    slider.active = o.enabled().getAsBoolean();
+                });
+            }
+            case Control.Range r -> {
+                RangeSlider slider = new RangeSlider(o.title(), width, r, host);
                 yield new Built(slider, () -> {
                     slider.refresh();
                     slider.active = o.enabled().getAsBoolean();

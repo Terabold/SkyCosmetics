@@ -2,6 +2,29 @@
 
 SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions use its old command, `/skinstudio`.
 
+## 1.4.0-beta.5 — 2026-10-16
+
+### New
+- **Your name in chat and the tab list** as your nametag has it (display name, colors, gradient), with Hypixel's
+  click and hover on it kept. Only you see it. Nametags > "My name in chat and tab".
+- **Gradient balance** for a gradient name: one slider drawn as the gradient itself, its knob where the two colors
+  meet. Right for more of the first color, left for more of the end one.
+- **Rarity backgrounds: one opacity slider for a gradient.** Its two knobs are the faint end and the strong end, in
+  place of the separate "Gradient minimum opacity" row.
+
+### Changed
+- **Bound slots take your color in every look**, NEU's rope too. Hovering a binding, making one and the flash after
+  it show the look you picked instead of a plain frame.
+- Wardrobe, Loadouts and Equipment: "No Heads" is now **"No Helmets"** and leaves out every helmet, not only those
+  that are heads.
+- The shape and fill previews show your real opacity and keep a blank pixel inside their frame, so an outline is
+  never lost in it; their names no longer fight the row's own tooltip.
+- The logo in the mod's screens has no dark square behind it and is a little bigger.
+- "Your Names in Chat" (item names) is now "Item Names in Chat", apart from the new name option.
+
+### Fixed
+- Item names in chat no longer fail on a line another mod prints at the title screen.
+
 ## 1.4.0-beta.4 — 2026-10-15
 
 ### New

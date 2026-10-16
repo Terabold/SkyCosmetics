@@ -73,6 +73,38 @@ public class NametagTest implements FabricClientGameTest {
                         "selected name color overrides rename color while preserving bold");
                     return Optional.empty();
                 },net.minecraft.network.chat.Style.EMPTY);
+                // Your name in chat and the tab list: the nametag's colors, the line's text and the name's click kept.
+                p.text=Text.GRADIENT;p.color=0xFFFF0000;p.colorEnd=0xFF0000FF;p.gradientMid=.5;p.chatTab=true;changed();
+                var click=new net.minecraft.network.chat.ClickEvent.SuggestCommand("/msg "+username);
+                Component line=Component.empty().append(Component.literal("[MVP+] ").withColor(0x55FFFF))
+                    .append(Component.literal(username).withStyle(s->s.withColor(0x55FFFF).withClickEvent(click)))
+                    .append(Component.literal(": hi "+username+"2"));
+                Component chat=Nametags.ownName(line);
+                check(chat.getString().equals(line.getString()),"own name in chat keeps the line's text");
+                int[] firsts={0}; boolean[] tail={false};
+                chat.visit((style,value)->{
+                    if(value.equals(username.substring(0,1))&&firsts[0]++==0)
+                        check(style.getColor()!=null&&style.getColor().getValue()==0xFF0000&&style.isBold()&&click.equals(style.getClickEvent()),
+                            "own name in chat takes the nametag's gradient and bold and keeps its click");
+                    if(value.equals(": hi "+username+"2"))tail[0]=true;
+                    return Optional.empty();
+                },net.minecraft.network.chat.Style.EMPTY);
+                check(firsts[0]>0&&tail[0],"only the whole-word name is restyled in chat");
+                var info=mc.getConnection().getPlayerInfo(mc.player.getUUID());
+                if(info!=null){
+                    int[] tabFirst={-1};
+                    mc.gui.getTabList().getNameForDisplay(info).visit((style,value)->{
+                        if(tabFirst[0]<0&&value.equals(username.substring(0,1))&&style.getColor()!=null)tabFirst[0]=style.getColor().getValue();
+                        return Optional.empty();
+                    },net.minecraft.network.chat.Style.EMPTY);
+                    check(tabFirst[0]==0xFF0000,"own name in the tab list takes the nametag's colors");
+                }
+                p.chatTab=false;changed();
+                check(Nametags.ownName(line)==line,"chat and tab names off: lines stay as they were");
+                p.gradientMid=.8;changed();
+                check(Math.abs(Nametags.bend(.8f)-.5f)<.01f&&Nametags.bend(0)==0&&Math.abs(Nametags.bend(1)-1)<1e-4,
+                    "gradient balance: the colors meet where it is set, the ends stay put");
+                p.gradientMid=.5;p.chatTab=true;p.text=Text.SOLID;changed();
                 mc.options.setCameraType(CameraType.FIRST_PERSON);
                 check(!Nametags.ownVisible(mc.player),"own label never floats in first person");
                 mc.options.setCameraType(CameraType.THIRD_PERSON_FRONT);

@@ -2,7 +2,6 @@ package io.github.terabold.skycosmetics.update;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.terabold.skycosmetics.Io;
-import io.github.terabold.skycosmetics.SkyCosmetics;
 import io.github.terabold.skycosmetics.gui.hub.ActionButton;
 import io.github.terabold.skycosmetics.gui.ui.Shapes;
 import io.github.terabold.skycosmetics.gui.ui.Theme;
@@ -17,10 +16,8 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 
@@ -43,7 +40,6 @@ import java.util.Locale;
  * (asked from {@link #getHeight}, which the settings read every frame), so the row grows and shrinks with it.
  */
 public final class UpdateCard extends AbstractWidget {
-    private static final Identifier LOGO = Identifier.fromNamespaceAndPath(SkyCosmetics.MOD_ID, "icon.png");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
     private static final int PAD = 8, LINE = 18, MAX_NOTES = 8, GAP = 4;
 
@@ -317,7 +313,7 @@ public final class UpdateCard extends AbstractWidget {
         Shapes.roundGradient(g, x, y, w, height, Theme.RADIUS, Theme.mix(Theme.SURFACE, Theme.ACCENT_BG, 0.55f),
             Theme.mix(Theme.SURFACE, Theme.ACCENT_BG_END, 0.35f));
         Shapes.frame(g, x, y, w, height, Theme.RADIUS, Theme.fade(warn ? Theme.WARN : Theme.ACCENT, 0.55f));
-        g.blit(RenderPipelines.GUI_TEXTURED, LOGO, x + PAD, y + PAD + 2, 0, 0, 16, 16, 128, 128, 128, 128);
+        io.github.terabold.skycosmetics.gui.ui.Logo.draw(g, x + PAD - 1, y + PAD + 1);
         g.text(font, title, x + PAD + 22, y + PAD, Theme.TEXT, false);
         g.text(font, sub, x + PAD + 22, y + PAD + 11, Theme.MUTED, false);
         int ty = y + messageY;
