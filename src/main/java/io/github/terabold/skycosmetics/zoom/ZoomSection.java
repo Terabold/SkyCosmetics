@@ -29,10 +29,10 @@ final class ZoomSection {
         compatibility = others.isEmpty() ? "Optional camera feature. Check key conflicts before enabling another zoom mod."
             : "Other zoom mods detected: " + String.join(", ", others) + ". Disable their zoom or this one to avoid stacking.";
         Hub.add(new Section("zoom", Section.FEATURE, text("Zoom"), text(""),
-            text(compatibility), () -> new ItemStack(Items.ENDER_EYE), screen -> rows()));
+            text(compatibility), () -> new ItemStack(Items.ENDER_EYE), ZoomSection::rows));
     }
 
-    private static List<Option> rows() {
+    private static List<Option> rows(net.minecraft.client.gui.screens.Screen screen) {
         List<Option> r = new ArrayList<>();
         toggle(r, "enabled", "Enable zoom", "Off by default to avoid competing with another mod's zoom.", () -> enabled, v -> { enabled = v; Zoom.reset(); });
         choice(r, "style", "Initial zoom animation", "How the view reaches the starting zoom when you press the key. Independent of mouse movement.",
@@ -59,7 +59,11 @@ final class ZoomSection {
         toggle(r, "hideHand", "Hide hand", "Temporarily hide first-person hands and held items.", () -> p().hideHand, v -> p().hideHand = v);
         r.add(Option.header("resetGroup", text("Reset")));
         r.add(Option.of("reset", text("Reset zoom settings"), text("Restores the defaults and disables zoom. Keeps keybinds."),
-            new Control.Action(text("Reset"), ZoomSettings::reset, () -> true, Component.empty())));
+            new Control.Action(text("Reset"), () -> {
+                ZoomSettings.reset();
+                if (screen instanceof io.github.terabold.skycosmetics.hub.Host h) h.changed();
+                else io.github.terabold.skycosmetics.Settings.save();
+            }, () -> true, Component.empty())));
         return r.stream().map(o -> {
             Option compact = o.compact();
             if (o.id().equals("inSeconds") || o.id().equals("outSeconds")) compact = compact.beside();
@@ -119,6 +123,8 @@ final class ZoomSection {
         r.add(Option.of(id, text(title), text(help), new Control.Choice<>(Arrays.asList(values), v -> text(label(v)), get, set)));
     }
     private static String label(Object v) {
+        if (v == Cinematic.CUSTOM) return "Responsive";
+        if (v == Cinematic.VANILLA) return "Cinematic";
         if (!(v instanceof Enum<?> e)) return v.toString();
         String s = e.name().toLowerCase(Locale.ROOT).replace('_', ' ');
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);

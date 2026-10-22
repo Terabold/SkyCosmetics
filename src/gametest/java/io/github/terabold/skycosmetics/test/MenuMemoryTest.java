@@ -60,7 +60,47 @@ public final class MenuMemoryTest implements FabricClientGameTest {
             ctx.setScreen(() -> null);
             ctx.runOnClient(mc -> { MenuState.read(before); Settings.save(); });
         }
+        leaving(ctx);
         System.out.println("[SkyCosmeticsTest] persistent menu preferences and coalesced writes passed");
+    }
+
+    /**
+     * Leaving a world with a menu open: the item scanners let go of the menu (it would keep the old world alive on
+     * the title screen) and the SkyBlock profile is forgotten until the next server says it again.
+     */
+    private static void leaving(ClientGameTestContext ctx) {
+        try (var world = ctx.worldBuilder().create()) {
+            world.getClientLevel().waitForChunksRender();
+            world.getServer().runCommand("tellraw @a {\"text\":\"You are playing on profile: Apple\"}");
+            ctx.waitTicks(5);
+            check(ctx.computeOnClient(mc -> "Apple".equals(io.github.terabold.skycosmetics.items.Profiles.current())),
+                "the SkyBlock profile is read from chat");
+            ctx.runOnClient(mc -> {
+                var menu = net.minecraft.world.inventory.ChestMenu.sixRows(105, mc.player.getInventory(), new net.minecraft.world.SimpleContainer(54));
+                mc.player.containerMenu = menu;
+                mc.setScreen(new net.minecraft.client.gui.screens.inventory.ContainerScreen(menu, mc.player.getInventory(),
+                    net.minecraft.network.chat.Component.literal("Wardrobe (1/2)")));
+            });
+            ctx.waitTicks(25); // both scanners have looked at it
+            check(ctx.computeOnClient(mc -> held(io.github.terabold.skycosmetics.items.Mine.class) != null),
+                "the item scanner saw the open menu");
+        }
+        ctx.waitTicks(10);
+        check(ctx.computeOnClient(mc -> held(io.github.terabold.skycosmetics.items.Mine.class) == null
+            && held(io.github.terabold.skycosmetics.items.OwnedItems.class) == null), "out of the world, no menu is held on to");
+        check(ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.items.Profiles.current() == null),
+            "out of the world, the SkyBlock profile is forgotten");
+    }
+
+    /** A scanner's last menu, read by reflection. */
+    private static Object held(Class<?> scanner) {
+        try {
+            var f = scanner.getDeclaredField("menuScreen");
+            f.setAccessible(true);
+            return f.get(null);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("no menuScreen field in " + scanner.getSimpleName(), e);
+        }
     }
 
     private static boolean saved(Path file) {
@@ -99,5 +139,5 @@ public final class MenuMemoryTest implements FabricClientGameTest {
             catch (Exception e) { throw new AssertionError("fixture cleanup", e); }
         }
     }
-    private static void check(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
+    private static void check(boolean ok, String message) { Report.check(ok, message); }
 }

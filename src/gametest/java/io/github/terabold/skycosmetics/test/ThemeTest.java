@@ -209,11 +209,11 @@ public class ThemeTest implements FabricClientGameTest {
             window(ctx, w[0], w[1], w[2]);
             open(ctx, mc -> mc.player.getItemBySlot(EquipmentSlot.CHEST));
             String size = w[0] + "x" + w[1] + (w[2] > 0 ? "-guiscale-" + w[2] : "");
-            for (String tab : new String[]{"Skins", "Dyes", "Name & Glint", "Saved"}) {
-                if (!ctx.tryClickScreenButton(tab) && tab.equals("Name & Glint")) ctx.clickScreenButton("Name");
+            for (String tab : new String[]{"Skins", "Dyes", "Name & glint", "Saved"}) {
+                if (!ctx.tryClickScreenButton(tab) && tab.equals("Name & glint")) ctx.clickScreenButton("Name");
                 ctx.waitTicks(2);
                 ctx.runOnClient(mc -> themedOnly(mc, size + " " + tab));
-                if (tab.equals("Dyes") || tab.equals("Name & Glint")) {
+                if (tab.equals("Dyes") || tab.equals("Name & glint")) {
                     ctx.takeScreenshot("skycosmetics-74-theme-gold-studio-" + size + "-" + (tab.equals("Dyes") ? "dyes" : "name-glint"));
                 }
             }
@@ -222,7 +222,7 @@ public class ThemeTest implements FabricClientGameTest {
         window(ctx, 1920, 1080, 2);
         open(ctx, mc -> mc.player.getItemBySlot(EquipmentSlot.CHEST));
         ctx.clickScreenButton("Dyes");
-        ctx.clickScreenButton("Custom Dye…");
+        ctx.clickScreenButton("Custom dye…");
         ctx.waitTicks(4);
         check(ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).popup() != null), "the custom dye pop-up opened");
         ctx.takeScreenshot("skycosmetics-75-theme-gold-custom-dye");

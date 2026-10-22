@@ -349,7 +349,11 @@ public final class Hand {
         String n = name == null || name.isBlank() ? freeName() : cleanName(name, "");
         Preset p = new Preset(n, setup());
         PRESETS.removeIf(x -> x.name().equals(n));
-        if (PRESETS.size() >= MAX_PRESETS) PRESETS.removeFirst();
+        if (PRESETS.size() >= MAX_PRESETS) {
+            // Full: the automatic "Previous setup" isn't kept, rather than one of your presets being dropped.
+            if (n.equals(PREVIOUS)) return p;
+            PRESETS.removeFirst();
+        }
         PRESETS.add(p);
         return p;
     }

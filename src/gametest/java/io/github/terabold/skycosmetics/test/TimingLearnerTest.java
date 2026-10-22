@@ -325,6 +325,6 @@ public class TimingLearnerTest implements FabricClientGameTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError(what);
+        Report.check(ok, what);
     }
 }

@@ -175,7 +175,7 @@ public final class GradientPopup implements StudioPopup {
         if (hadSelection) {
             int half = bw / 2;
             AnimatedDyeEditor.segment(g, font, "Selection", x + PAD, toggleY, half - 1, !whole, mouseX, mouseY);
-            AnimatedDyeEditor.segment(g, font, "Whole Name", x + PAD + half + 1, toggleY, bw - half - 1, whole, mouseX, mouseY);
+            AnimatedDyeEditor.segment(g, font, "Whole name", x + PAD + half + 1, toggleY, bw - half - 1, whole, mouseX, mouseY);
         }
 
         // The name as it would look, on a tooltip's dark background, then the gradient itself.
@@ -207,15 +207,15 @@ public final class GradientPopup implements StudioPopup {
         picker.render(g, mouseX, mouseY);
 
         int[] b = buttons();
-        button(g, font, "Save Preset", b[0], buttonsY, b[1], false, mouseX, mouseY);
-        button(g, font, whole ? "Apply to Name" : "Apply to Selection", b[2], buttonsY, b[3], true, mouseX, mouseY);
+        button(g, font, "Save preset", b[0], buttonsY, b[1], false, mouseX, mouseY);
+        button(g, font, whole ? "Apply to name" : "Apply to selection", b[2], buttonsY, b[3], true, mouseX, mouseY);
     }
 
     /** x and width of Save Preset, then of Apply. */
     private int[] buttons() {
         Font font = Minecraft.getInstance().font;
         int bw = w - 2 * PAD;
-        int save = Math.min(bw / 2 - 2, font.width("Save Preset") + 14);
+        int save = Math.min(bw / 2 - 2, font.width("Save preset") + 14);
         return new int[]{x + PAD, save, x + PAD + save + 4, bw - save - 4};
     }
 
@@ -230,7 +230,7 @@ public final class GradientPopup implements StudioPopup {
             previewB = b;
             previewWhole = whole;
             previewW = width;
-            String text = name.isBlank() ? "Your Item Name" : name;
+            String text = name.isBlank() ? "Your item name" : name;
             boolean all = whole || a == b || name.isBlank();
             Names.Edit e = Names.gradient(text, all ? 0 : a, all ? text.length() : b, stops());
             preview = NameBox.fit(font, Names.parse(e.text()), width);

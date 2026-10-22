@@ -47,8 +47,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: gametest-screenshots
-          path: build/run/clientGameTest/screenshots
+          name: gametest-report
+          path: |
+            build/run/clientGameTest/report.html
+            build/run/clientGameTest/screenshots
           if-no-files-found: ignore
       - name: Screenshots in the log
         if: always() && hashFiles('.github/show-screenshots.txt') != ''

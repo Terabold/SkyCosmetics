@@ -72,6 +72,7 @@ public class SlotLocksTest implements FabricClientGameTest {
 
             // The key over slot 10 locks it.
             hover(ctx, 10);
+            int clicksBefore = PacketLog.count("ServerboundContainerClickPacket");
             ctx.getInput().pressKey(GLFW.GLFW_KEY_L);
             ctx.waitTicks(2);
             check(ctx.computeOnClient(mc -> SlotLocks.isLocked(10)), "the lock key over a slot locks it");
@@ -84,6 +85,8 @@ public class SlotLocksTest implements FabricClientGameTest {
                 && mc.player.getInventory().getItem(10).is(Items.GOLDEN_APPLE)), "a click on a locked slot picks nothing up");
             check(ctx.computeOnClient(mc -> DataSafetyTest.chat(mc).stream().anyMatch(l -> l.contains("Protected your item: Golden Apple"))),
                 "and chat says the item was protected, by name");
+            check(PacketLog.count("ServerboundContainerClickPacket") == clicksBefore,
+                "locking and a stopped click send the server nothing");
 
             ctx.runOnClient(mc -> {
                 Slot s10 = slot(mc, 10), s9 = slot(mc, 9), s15 = slot(mc, 15);
@@ -104,12 +107,15 @@ public class SlotLocksTest implements FabricClientGameTest {
             // Bound: shift-click on the inventory end swaps it with the hotbar slot.
             ctx.runOnClient(mc -> SlotLocks.testBind(9, 0));
             hover(ctx, 9);
+            int beforeSwap = PacketLog.count("ServerboundContainerClickPacket");
             ctx.getInput().holdShift();
             ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
             ctx.getInput().releaseShift();
             ctx.waitTicks(4);
             check(ctx.computeOnClient(mc -> mc.player.getInventory().getItem(0).is(Items.DIAMOND_SWORD)
                 && mc.player.getInventory().getItem(9).is(Items.STICK)), "a shift-click on a bound slot swaps it with its hotbar slot");
+            check(PacketLog.count("ServerboundContainerClickPacket") == beforeSwap + 1,
+                "the swap is one ordinary click, as a number key over the slot would send");
             ctx.takeScreenshot("skycosmetics-slot-lock-binding");
 
             // Swapping with a plain click, when chosen.

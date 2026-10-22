@@ -93,6 +93,11 @@ public final class Mine {
             Cosmetics.Ident pet = PetTracker.currentIdent();
             if (pet != null && pet.uuid() != null) nowLive.add(pet.uuid());
             menu(mc, p, nowLive, nowForeign);
+        } else {
+            // Out of a world: let go of the last menu, its slots and stacks, which would keep that world alive.
+            menuScreen = null;
+            SLOTS.clear();
+            java.util.Arrays.fill(INVENTORY, null);
         }
         int owned = OwnedItems.version();
         if (!nowLive.equals(live) || !nowForeign.equals(foreign) || owned != ownedVersion) {

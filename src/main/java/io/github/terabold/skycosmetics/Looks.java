@@ -215,10 +215,14 @@ public final class Looks {
                     ? clampStrength(l.get("glintStrength").getAsFloat()) : null;
                 String color = s(l, "glintColor");
                 if (color != null && !color.equals("chroma") && !color.matches("#[0-9A-Fa-f]{6}")) color = null;
+                String rawTrim = s(l, "trim"), rawModel = s(l, "model");
+                String trim = io.github.terabold.skycosmetics.render.Trims.valid(rawTrim);
+                String model = io.github.terabold.skycosmetics.render.ItemModels.valid(rawModel);
                 Look look = new Look(s(l, "skin"), s(l, "dye"), s(l, "name"), s(l, "glint"), color, speed,
-                    strength, s(l, "label"), io.github.terabold.skycosmetics.render.Trims.valid(s(l, "trim")),
-                    io.github.terabold.skycosmetics.render.ItemModels.valid(s(l, "model")));
-                if (!look.empty() || l.keySet().stream().anyMatch(field -> !FIELDS.contains(field))) into.put(k, look);
+                    strength, s(l, "label"), trim, model);
+                // A trim or model this version doesn't know (a newer Minecraft's) is kept in the file, never erased.
+                boolean keptRaw = rawTrim != null && trim == null || rawModel != null && model == null;
+                if (!look.empty() || keptRaw || l.keySet().stream().anyMatch(field -> !FIELDS.contains(field))) into.put(k, look);
                 String type = s(l, "type");
                 if (itemTypes != null && type != null && into.containsKey(k)) itemTypes.put(k, type);
             } catch (RuntimeException e) {
@@ -260,6 +264,13 @@ public final class Looks {
         return entry instanceof JsonObject object && object.keySet().stream().anyMatch(field -> !FIELDS.contains(field));
     }
 
+    /** The file's value for {@code field} when this version can't read it (so couldn't have changed it): kept as it was. */
+    private static void keepUnknown(JsonElement prior, JsonObject into, String field, java.util.function.UnaryOperator<String> valid) {
+        if (!(prior instanceof JsonObject p)) return;
+        String raw = s(p, field);
+        if (raw != null && valid.apply(raw) == null) into.addProperty(field, raw);
+    }
+
     private static JsonObject write(Map<String, Look> m, Map<String, String> itemTypes, JsonElement old) {
         JsonObject o = new JsonObject();
         for (Map.Entry<String, Look> e : m.entrySet()) {
@@ -272,7 +283,9 @@ public final class Looks {
             if (e.getValue().glint() != null) l.addProperty("glint", e.getValue().glint());
             if (e.getValue().glintColor() != null) l.addProperty("glintColor", e.getValue().glintColor());
             if (e.getValue().trim() != null) l.addProperty("trim", e.getValue().trim());
+            else keepUnknown(prior, l, "trim", io.github.terabold.skycosmetics.render.Trims::valid);
             if (e.getValue().model() != null) l.addProperty("model", e.getValue().model());
+            else keepUnknown(prior, l, "model", io.github.terabold.skycosmetics.render.ItemModels::valid);
             if (e.getValue().glintSpeed() != null) l.addProperty("glintSpeed", e.getValue().glintSpeed());
             if (e.getValue().glintStrength() != null) l.addProperty("glintStrength", e.getValue().glintStrength());
             if (e.getValue().label() != null) l.addProperty("label", e.getValue().label());

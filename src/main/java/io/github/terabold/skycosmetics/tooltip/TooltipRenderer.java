@@ -24,8 +24,9 @@ import java.util.function.Consumer;
 public final class TooltipRenderer {
     public record Layout(int x, int y, int width, int height, int fullHeight, float scale, int padding, boolean scrollable) {}
 
-    private static Screen screen;
-    private static Object owner;
+    /** The screen and item the last tooltip was for, held weakly: a closed menu (and its world) must be free to go. */
+    private static java.lang.ref.WeakReference<Screen> screen = new java.lang.ref.WeakReference<>(null);
+    private static java.lang.ref.WeakReference<Object> owner = new java.lang.ref.WeakReference<>(null);
     private static int hoverX, hoverY, contentWidth, contentHeight;
     private static double target, shown, minimum, limit;
     private static long seen, advanced;
@@ -55,8 +56,8 @@ public final class TooltipRenderer {
     }
 
     public static void reset() {
-        screen = null;
-        owner = null;
+        screen = new java.lang.ref.WeakReference<>(null);
+        owner = new java.lang.ref.WeakReference<>(null);
         seen = advanced = 0;
         target = shown = minimum = limit = 0;
         last = null;
@@ -104,14 +105,14 @@ public final class TooltipRenderer {
         } else if (current instanceof TooltipItemSource source) {
             currentOwner = source.tooltipItem();
         }
-        if (current != screen || currentOwner != owner || now - seen > 250 || width != contentWidth || height != contentHeight
+        if (current != screen.get() || currentOwner != owner.get() || now - seen > 250 || width != contentWidth || height != contentHeight
             || Math.abs(mx - hoverX) > 4 || Math.abs(my - hoverY) > 4) {
             target = shown = 0;
             hoverX = mx;
             hoverY = my;
         }
-        screen = current;
-        owner = currentOwner;
+        if (screen.get() != current) screen = new java.lang.ref.WeakReference<>(current);
+        if (owner.get() != currentOwner) owner = new java.lang.ref.WeakReference<>(currentOwner);
         contentWidth = width;
         contentHeight = height;
         limit = Math.max(0, height + 2 * box.padding() - (g.guiHeight() - 10) / box.scale());
@@ -156,7 +157,7 @@ public final class TooltipRenderer {
     public static boolean wheel(Screen view, double mx, double my, double dy, boolean shift) {
         if (view instanceof io.github.terabold.skycosmetics.gui.StudioScreen studio && studio.scrollsContent(mx, my)) return false;
         if (!TooltipSettings.enabled || TooltipSettings.scroll == TooltipSettings.Scroll.OFF || !Double.isFinite(dy) || dy == 0
-            || view != screen || Util.getMillis() - seen > 250 || limit <= minimum || last == null
+            || view != screen.get() || Util.getMillis() - seen > 250 || limit <= minimum || last == null
             || TooltipSettings.shiftToScroll && !shift || Math.abs(mx - hoverX) > 4 || Math.abs(my - hoverY) > 4) return false;
         target = Math.clamp(target - dy * TooltipSettings.scrollStep, minimum, limit);
         if (TooltipSettings.scroll == TooltipSettings.Scroll.NORMAL) shown = target;
@@ -165,7 +166,7 @@ public final class TooltipRenderer {
 
     public static Layout lastLayout() { return last; }
     public static int borderColor() {
-        if (TooltipSettings.rarityBorder && owner instanceof net.minecraft.world.item.ItemStack stack) {
+        if (TooltipSettings.rarityBorder && owner.get() instanceof net.minecraft.world.item.ItemStack stack) {
             var rarity = io.github.terabold.skycosmetics.slots.ItemFacts.of(stack).rarity();
             if (rarity != null) return 0xFF000000 | io.github.terabold.skycosmetics.slots.RarityBackgrounds.color(rarity);
         }

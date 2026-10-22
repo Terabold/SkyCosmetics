@@ -68,9 +68,6 @@ public class ColorPicker {
 
     // Layout, from layout().
     private int svW, svH, hueX, infoY, recentY;
-    /** Top colour of each square column; rebuilt only when the hue or width changes. */
-    private int[] columnTop = new int[0];
-    private float columnHue = Float.NaN;
 
     public ColorPicker(int x, int y, int width, int height) {
         this.x = x;
@@ -177,12 +174,10 @@ public class ColorPicker {
     public void render(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Font font = Minecraft.getInstance().font;
 
-        if (columnHue != hue || columnTop.length != svW) {
-            columnTop = new int[svW];
-            for (int i = 0; i < svW; i++) columnTop[i] = 0xFF000000 | hsvToRgb(hue, i / (float) Math.max(1, svW - 1), 1);
-            columnHue = hue;
-        }
-        for (int i = 0; i < svW; i++) g.fillGradient(x + i, y, x + i + 1, y + svH, columnTop[i], 0xFF000000);
+        // Two quads: white to the hue across (saturation), then clear to black down (value). That is the same
+        // v * lerp(white, hue, s) the HSV square is, at two draws a frame instead of one per pixel column.
+        io.github.terabold.skycosmetics.gui.ui.Shapes.gradient(g, x, y, x + svW, y + svH, 0xFFFFFFFF, 0xFF000000 | hsvToRgb(hue, 1, 1));
+        g.fillGradient(x, y, x + svW, y + svH, 0x00000000, 0xFF000000);
         g.outline(x - 1, y - 1, svW + 2, svH + 2, Theme.LINE);
         int cx = x + Math.round(sat * (svW - 1)), cy = y + Math.round((1 - val) * (svH - 1));
         g.outline(cx - 3, cy - 3, 7, 7, 0xFF000000);

@@ -1,5 +1,7 @@
 package io.github.terabold.skycosmetics.data;
 
+import io.github.terabold.skycosmetics.test.Report;
+
 import com.mojang.datafixers.util.Pair;
 import io.github.terabold.skycosmetics.Settings;
 import io.github.terabold.skycosmetics.Textures;
@@ -127,5 +129,5 @@ public final class PreviewRecorderTest implements FabricClientGameTest {
         stack.set(DataComponents.LORE, new ItemLore(List.of(Component.literal("Click to preview!"), Component.literal("More information"))));
         return stack;
     }
-    private static void check(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
+    private static void check(boolean condition, String message) { Report.check(condition, message); }
 }

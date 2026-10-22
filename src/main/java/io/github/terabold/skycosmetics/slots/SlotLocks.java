@@ -89,7 +89,7 @@ public final class SlotLocks {
         Icon.DOT, Icon.CORNER, Icon.OUTLINE, Icon.BOX, Icon.DASHED, Icon.TINT, Icon.NONE);
     static final List<Icon> BOUND_MARKS = List.of(Icon.OUTLINE, Icon.BOX, Icon.STITCHED, Icon.DASHED, Icon.TINT, Icon.DOT, Icon.CORNER, Icon.NONE);
 
-    /** Where the lines between bound slots start: the outlines' edges, or the slots' centres. */
+    /** Where the lines between bound slots start: the outlines' edges, or the slots' centers. */
     public enum LineFrom { EDGES, CENTRES }
 
     public enum Place { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, CENTER }
@@ -236,15 +236,20 @@ public final class SlotLocks {
 
     /** A double-click gathers every stack like the one on the cursor, locked slots' too: then it doesn't happen. */
     private static boolean pullsFromLocked() {
+        return lockedPulledFrom() >= 0;
+    }
+
+    /** The locked inventory slot a double-click would gather from, or -1. */
+    private static int lockedPulledFrom() {
         var p = Minecraft.getInstance().player;
-        if (p == null) return false;
+        if (p == null) return -1;
         ItemStack carried = p.containerMenu.getCarried();
-        if (carried.isEmpty()) return false;
+        if (carried.isEmpty()) return -1;
         for (Slot s : p.containerMenu.slots) {
             if (s.container instanceof Inventory && s.hasItem() && isLocked(s.getContainerSlot())
-                && ItemStack.isSameItemSameComponents(s.getItem(), carried)) return true;
+                && ItemStack.isSameItemSameComponents(s.getItem(), carried)) return s.getContainerSlot();
         }
-        return false;
+        return -1;
     }
 
     /** Whether Q must not drop the held item. */
@@ -257,7 +262,8 @@ public final class SlotLocks {
         boolean stop = blocks(slot, button, input);
         if (stop) {
             var p = Minecraft.getInstance().player;
-            int at = slot != null && slot.container instanceof Inventory && isLocked(slot.getContainerSlot()) ? slot.getContainerSlot() : button;
+            int at = slot != null && slot.container instanceof Inventory && isLocked(slot.getContainerSlot()) ? slot.getContainerSlot()
+                : input == ContainerInput.PICKUP_ALL ? lockedPulledFrom() : button;
             told(p == null || at < 0 || at >= p.getInventory().getContainerSize() ? ItemStack.EMPTY : p.getInventory().getItem(at), at);
         }
         return stop;
@@ -281,7 +287,7 @@ public final class SlotLocks {
         Component how = Component.literal(bound
             ? "This slot is bound to a hotbar slot, which locks it. Tap " : "This slot is locked. Tap ")
             .append(key.getTranslatedKeyMessage())
-            .append(bound ? " over it to remove the binding, or turn off \"Bound slots are locked\" in Slot Locking." : " over it to unlock it.");
+            .append(bound ? " over it to remove the binding, or turn off \"Bound slots are locked\" in Slot locking." : " over it to unlock it.");
         if (tell == Tell.CHAT && mc.player != null) {
             mc.player.sendSystemMessage(SkyCosmetics.prefix().append(Component.literal("Protected your item: ")
                 .withStyle(net.minecraft.ChatFormatting.RED).append(name.copy()).append(Component.literal(". "))
@@ -470,19 +476,37 @@ public final class SlotLocks {
     private static Bucket bucket(boolean create) {
         load();
         var user = Minecraft.getInstance().getUser();
-        String account = user == null ? "unknown" : user.getProfileId().toString();
+        java.util.UUID id = user == null ? null : user.getProfileId();
+        if (id != keyUser || keyAccount == null) {
+            keyUser = id;
+            keyAccount = id == null ? "unknown" : id.toString();
+        }
+        String account = keyAccount;
         String profile = Profiles.current();
         if (profile != null && !profile.equals(LAST_PROFILE.get(account))) {
             LAST_PROFILE.put(account, profile);
             save();
         }
-        String k = account + "|" + LAST_PROFILE.getOrDefault(account, "*") + switch (Where.island()) {
-            case RIFT -> "|rift";
-            case SAFARI -> "|safari";
-            case MAIN -> "";
-        };
-        return create ? BUCKETS.computeIfAbsent(k, x -> new Bucket()) : BUCKETS.get(k);
+        // Out of SkyBlock (singleplayer, to try it) with no profile named: a set of its own, never a real profile's.
+        String last = profile == null && !Where.skyBlock() ? "singleplayer" : LAST_PROFILE.getOrDefault(account, "*");
+        Where.Island island = Where.island();
+        if (!last.equals(keyLast) || island != keyIsland || !account.equals(keyFor)) {
+            keyFor = account;
+            keyLast = last;
+            keyIsland = island;
+            bucketKey = account + "|" + last + switch (island) {
+                case RIFT -> "|rift";
+                case SAFARI -> "|safari";
+                case MAIN -> "";
+            };
+        }
+        return create ? BUCKETS.computeIfAbsent(bucketKey, x -> new Bucket()) : BUCKETS.get(bucketKey);
     }
+
+    /** The last bucket key and what it was made of. */
+    private static java.util.UUID keyUser;
+    private static String keyAccount, keyFor, keyLast, bucketKey;
+    private static Where.Island keyIsland;
 
     // ------------------------------------------------------------- drawing ---
 
@@ -828,8 +852,8 @@ public final class SlotLocks {
         r.add(row("show", "Lines between them", "From one slot's outline to the other's: always, or for the slot under the mouse (and all while you hold shift).",
             new Control.Choice<>(List.of(Show.values()), v -> Component.literal(switch (v) {
                 case ALWAYS -> "Always"; case HOVER -> "On hover"; case HIDDEN -> "Hidden"; }), () -> show, v -> show = v)));
-        r.add(row("lineFrom", "Lines start at", "The middle of the outlines' edges (the bottom of one, the top of the other, as in Firmament), or the slots' centres.",
-            new Control.Choice<>(List.of(LineFrom.values()), v -> Component.literal(v == LineFrom.EDGES ? "Edges" : "Centres"),
+        r.add(row("lineFrom", "Lines start at", "The middle of the outlines' edges (the bottom of one, the top of the other, as in Firmament), or the slots' centers.",
+            new Control.Choice<>(List.of(LineFrom.values()), v -> Component.literal(v == LineFrom.EDGES ? "Edges" : "Centers"),
                 () -> lineFrom, v -> lineFrom = v)).visibleWhen(() -> show != Show.HIDDEN));
         r.add(row("boundLocked", "Bound slots are locked", "Off: a bound slot moves like any other, and only the swap click swaps it (Firmament's and NEU's way).",
             new Control.Toggle(() -> boundLocked, v -> boundLocked = v)));

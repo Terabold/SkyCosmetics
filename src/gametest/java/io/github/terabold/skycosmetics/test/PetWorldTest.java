@@ -508,7 +508,6 @@ final class PetWorldTest {
     }
 
     static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError("[SkyCosmeticsTest] world heads: " + what);
-        System.out.println("[SkyCosmeticsTest] ok: " + what);
+        Report.check(ok, "world heads: " + what);
     }
 }

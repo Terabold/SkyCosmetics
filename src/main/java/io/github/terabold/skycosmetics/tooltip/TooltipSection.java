@@ -58,7 +58,7 @@ public final class TooltipSection {
         r.add(Option.header("tooltipBorder", text("borderGroup")));
         r.add(Option.of("customBorder", Component.literal("Override border"), Component.literal("Off keeps the resource pack or server tooltip frame."),
             new Control.Toggle(() -> TooltipSettings.customBorder, v -> TooltipSettings.customBorder = v)));
-        r.add(Option.of("rarityBorder", Component.literal("Border color"), Component.literal("Item rarity uses the same detection and palette as Rarity Backgrounds."),
+        r.add(Option.of("rarityBorder", Component.literal("Border color"), Component.literal("Item rarity uses the same detection and palette as Rarity backgrounds."),
             new Control.Choice<>(List.of(true, false), v -> Component.literal(v ? "Item rarity" : "Custom color"),
                 () -> TooltipSettings.rarityBorder, v -> TooltipSettings.rarityBorder = v)));
         r.add(row("border", new Control.Color(() -> TooltipSettings.border, v -> TooltipSettings.border = v, true)));

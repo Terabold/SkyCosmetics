@@ -861,6 +861,7 @@ public class SettingsScreen extends Screen implements Host, OverlayHost {
             lastScroll = words.length == 0 ? scroll : scrollBeforeSearch;
             MenuState.remember(sectionId);
         }
+        Tips.forget(); // the widget last hovered would keep this screen alive
         super.removed();
     }
 

@@ -32,7 +32,7 @@ public final class Chroma {
     public static void init() {
         Settings.register("chroma", Chroma::read, Chroma::write);
         Hub.add(new Section("chroma", Section.FEATURE, text("Animated chroma"), Component.empty(),
-            text("Choose Rainbow or your own colors. Use the Chroma buttons in Name & Glint to apply it to an item."),
+            text("Choose Rainbow or your own colors. Use the Chroma buttons in Name & glint to apply it to an item."),
             () -> new ItemStack(Items.MAGENTA_DYE), parent -> rows()));
     }
 
@@ -44,15 +44,15 @@ public final class Chroma {
             new Control.Custom((host, width) -> new io.github.terabold.skycosmetics.gui.hub.ChromaButton(width, 24, b -> {}))));
         rows.add(Option.of("custom", text("Animated palette"), text("Rainbow cycles through the spectrum. My colors blends your colors in a repeating loop."),
             new Control.Choice<>(List.of(false, true), v -> text(v ? "My colors" : "Rainbow"), () -> custom, v -> { custom = v; changed(); })));
-        rows.add(Option.of("wave", text("Color Wave"), text("Off gives the whole name or glint one moving color."),
+        rows.add(Option.of("wave", text("Color wave"), text("Off gives the whole name or glint one moving color."),
             new Control.Toggle(() -> wave, v -> { wave = v; changed(); })));
         rows.add(Option.of("reverse", text("Reverse"), text("Reverses the movement of the colors."),
             new Control.Toggle(() -> reverse, v -> { reverse = v; changed(); })));
-        rows.add(slider("speed", "Color Speed", "Separate from glint movement speed. 1x cycles every 2.4 seconds.", () -> speed, v -> speed = v, 0.1, 4, 0.1, "x"));
-        rows.add(slider("spread", "Color Spread", "How far apart adjacent letters are in the color cycle.", () -> spread, v -> spread = v, 0, 25, 0.5, "%"));
-        rows.add(slider("saturation", "Rainbow Saturation", "Lower values soften rainbow colors.", () -> saturation, v -> saturation = v, 0, 100, 1, "%").enabledWhen(() -> !custom));
-        rows.add(slider("brightness", "Rainbow Brightness", "Brightness of the rainbow palette.", () -> brightness, v -> brightness = v, 10, 100, 1, "%").enabledWhen(() -> !custom));
-        rows.add(slider("count", "Palette Colors", "The first 2–8 colors below form a seamless loop.", () -> count, v -> count = (int) v, 2, 8, 1, "").enabledWhen(() -> custom));
+        rows.add(slider("speed", "Color speed", "Separate from glint movement speed. 1x cycles every 2.4 seconds.", () -> speed, v -> speed = v, 0.1, 4, 0.1, "x"));
+        rows.add(slider("spread", "Color spread", "How far apart adjacent letters are in the color cycle.", () -> spread, v -> spread = v, 0, 25, 0.5, "%"));
+        rows.add(slider("saturation", "Rainbow saturation", "Lower values soften rainbow colors.", () -> saturation, v -> saturation = v, 0, 100, 1, "%").enabledWhen(() -> !custom));
+        rows.add(slider("brightness", "Rainbow brightness", "Brightness of the rainbow palette.", () -> brightness, v -> brightness = v, 10, 100, 1, "%").enabledWhen(() -> !custom));
+        rows.add(slider("count", "Palette colors", "The first 2–8 colors below form a seamless loop.", () -> count, v -> count = (int) v, 2, 8, 1, "").enabledWhen(() -> custom));
         for (int i = 0; i < colors.length; i++) {
             int at = i;
             rows.add(Option.of("color" + i, text("Color " + (i + 1)), text("Colors blend in order, including the last back to the first."),
@@ -73,7 +73,7 @@ public final class Chroma {
     private static Option slider(String id, String title, String help, DoubleSupplier get, DoubleConsumer set,
                                  double min, double max, double step, String unit) {
         return Option.of(id, text(title), text(help), new Control.Slider(get, v -> { set.accept(v); changed(); },
-            min, max, step, v -> text(String.format(Locale.ROOT, "%.1f%s", v, unit))));
+            min, max, step, v -> text(String.format(Locale.ROOT, step >= 1 ? "%.0f%s" : "%.1f%s", v, unit))));
     }
 
     public static void changed() {

@@ -128,9 +128,9 @@ public final class TimingLearner {
         Settings.register("learnTiming", v -> enabled = Settings.bool(v, enabled), () -> new JsonPrimitive(enabled));
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             if (mc.level != level || !enabled) {
+                if (mc.level != level) MissingAnimations.reset(); // its own switch is "Learn new skins", not this one
                 level = mc.level;
                 TRACKS.clear(); // entity ids and container slots mean something else now
-                MissingAnimations.reset();
                 resetLag();
             }
             if (++ticks % 100 != 0) return;
@@ -143,14 +143,19 @@ public final class TimingLearner {
     // ------------------------------------------------------------ packets ---
     // From ClientPacketListenerMixin, on the main thread, after the packet was applied.
 
+    /** Whether item updates are looked at: for animation timing, or for learning animations the repo lacks. */
+    private static boolean looking() {
+        return enabled || Settings.learnSkins;
+    }
+
     public static void onEquipment(ClientboundSetEquipmentPacket p) {
-        if (!enabled) return;
+        if (!looking()) return;
         long now = clock.getAsLong();
         for (Pair<EquipmentSlot, ItemStack> s : p.getSlots()) observe(key(1, p.getEntity(), s.getFirst().ordinal()), s.getSecond(), now);
     }
 
     public static void onSlot(ClientboundContainerSetSlotPacket p) {
-        if (enabled) observe(key(2, p.getContainerId(), p.getSlot()), p.getItem(), clock.getAsLong());
+        if (looking()) observe(key(2, p.getContainerId(), p.getSlot()), p.getItem(), clock.getAsLong());
     }
 
     /** A new menu: what its slots show has nothing to do with what any menu slot showed before. */
@@ -160,19 +165,19 @@ public final class TimingLearner {
     }
 
     public static void onContent(ClientboundContainerSetContentPacket p) {
-        if (!enabled) return;
+        if (!looking()) return;
         long now = clock.getAsLong();
         List<ItemStack> items = p.items();
         for (int i = 0; i < items.size(); i++) observe(key(2, p.containerId(), i), items.get(i), now);
     }
 
     public static void onInventory(ClientboundSetPlayerInventoryPacket p) {
-        if (enabled) observe(key(3, 0, p.slot()), p.contents(), clock.getAsLong());
+        if (looking()) observe(key(3, 0, p.slot()), p.contents(), clock.getAsLong());
     }
 
     /** Item displays, item frames and dropped items carry their item as entity data. */
     public static void onEntityData(ClientboundSetEntityDataPacket p) {
-        if (!enabled) return;
+        if (!looking()) return;
         long now = -1;
         for (SynchedEntityData.DataValue<?> v : p.packedItems()) {
             if (!(v.value() instanceof ItemStack s)) continue;
@@ -208,6 +213,7 @@ public final class TimingLearner {
         String value = stack.isEmpty() ? null : texture(stack);
         String hash = value == null ? null : hashOf(idx, value);
         MissingAnimations.observe(key, stack, value, hash, now);
+        if (!enabled) return; // learning missing animations only: no timing
         Anim[] anims = hash == null ? null : idx.byHash.get(hash);
         Track t = TRACKS.isEmpty() ? null : TRACKS.get(key);
         if (anims == null) {

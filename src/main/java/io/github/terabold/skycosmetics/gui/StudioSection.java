@@ -37,7 +37,9 @@ public final class StudioSection {
     private static List<Option> rows(Screen settings) {
         List<Option> rows = new ArrayList<>();
         rows.add(Option.header("groupStudio", Component.translatable("skycosmetics.menu.group.studio")));
-        rows.add(Option.of("openStudio", Component.empty(), Component.translatable("skycosmetics.option.openStudio.tooltip"), openStudio(settings)));
+        boolean back = settings instanceof SettingsScreen s && s.parent() instanceof StudioScreen;
+        rows.add(Option.of("openStudio", Component.empty(),
+            Component.translatable(back ? "skycosmetics.option.openStudio.back.tooltip" : "skycosmetics.option.openStudio.tooltip"), openStudio(settings)));
         rows.add(Option.of("openKey", Component.translatable("skycosmetics.option.openKey"),
             Component.translatable("skycosmetics.option.openKey.tooltip"), new Control.Key(SkyCosmetics::openKey))
             .search(Component.translatable("skycosmetics.option.openKey.search").getString()));
@@ -73,10 +75,10 @@ public final class StudioSection {
     private static Control openStudio(Screen settings) {
         Screen parent = settings instanceof SettingsScreen s ? s.parent() : null;
         if (parent instanceof StudioScreen) {
-            return new Control.Action(Component.literal("Open Skin Studio"), settings::onClose,
+            return new Control.Action(Component.translatable("skycosmetics.option.openStudio.back"), settings::onClose,
                 () -> true, Component.empty());
         }
-        return new Control.Action(Component.literal("Open Skin Studio"), () -> {
+        return new Control.Action(Component.translatable("skycosmetics.option.openStudio"), () -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) mc.setScreen(new StudioScreen(settings, SkyCosmetics.heldOrHelmet(mc)));
         }, () -> Minecraft.getInstance().player != null, Component.translatable("skycosmetics.option.openStudio.noWorld"));

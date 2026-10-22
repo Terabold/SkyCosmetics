@@ -211,7 +211,7 @@ final class DyeWidgetsTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError("[SkyCosmeticsTest] failed: " + what);
+        Report.check(ok, what);
     }
 
     /** Hosts both widgets the way a real screen would: forwards every mouse and key event. */

@@ -39,8 +39,8 @@ final class NametagSection {
         r.add(Option.header("text",t("Text")));
         choice(r,"font","Font","Font for player names in Apply to. Server badges keep their own fonts.",NameFont.values(),()->p.font,v->p.font=v);
         choice(r,"textMode","My name color","Only your username changes. Server levels, emblems, other players and score lines keep their formatting.",Text.values(),()->p.text,v->p.text=v);
-        color(r,"color","Name color",()->p.color,v->p.color=v,false);
-        color(r,"colorEnd","Gradient end",()->p.colorEnd,v->p.colorEnd=v,false);
+        color(r,"color","Name color","Your name's color.",()->p.color,v->p.color=v,false);
+        color(r,"colorEnd","Gradient end","Your name's second gradient color.",()->p.colorEnd,v->p.colorEnd=v,false);
         add(r,"gradientMid","Gradient balance","Where the two colors meet: drag right for more of the first color, left for more of the end one. Right-click puts it back in the middle.",
             new Control.Custom((host,width)->new GradientBalance(width,host)));
         toggle(r,"fullBright","Full brightness","Keep text readable independently of world lighting.",()->p.fullBright,v->p.fullBright=v);
@@ -51,16 +51,16 @@ final class NametagSection {
         toggle(r,"chatTab","My name in chat and tab","Your display name and colors in chat and the tab list too, as on your nametag. Only you see it; lines already in chat stay as they were.",()->p.chatTab,v->p.chatTab=v);
         r.add(Option.header("backgroundGroup",t("Background")));
         toggle(r,"background","Show background","Background behind each line, with the same through-wall visibility as its label.",()->p.background,v->p.background=v);
-        color(r,"backgroundColor","Background color",()->p.backgroundColor|0xFF000000,v->p.backgroundColor=p.backgroundColor&0xFF000000|v&0xFFFFFF,false);
+        color(r,"backgroundColor","Background color","The plate's color.",()->p.backgroundColor|0xFF000000,v->p.backgroundColor=p.backgroundColor&0xFF000000|v&0xFFFFFF,false);
         percent(r,"backgroundOpacity","Background opacity","0% hides the plate; 100% is solid.",()->(p.backgroundColor>>>24)/255.0,v->{
             int a=(int)Math.round(v*255)<<24; p.backgroundColor=a|p.backgroundColor&0xFFFFFF; p.backgroundEnd=a|p.backgroundEnd&0xFFFFFF;},0,1,.05);
         toggle(r,"gradientBackground","Gradient","Blend vertically between two colors, including their opacity.",()->p.gradientBackground,v->p.gradientBackground=v);
-        color(r,"backgroundEnd","Gradient end",()->p.backgroundEnd|0xFF000000,v->p.backgroundEnd=p.backgroundEnd&0xFF000000|v&0xFFFFFF,false);
+        color(r,"backgroundEnd","Gradient end","The plate's second gradient color.",()->p.backgroundEnd|0xFF000000,v->p.backgroundEnd=p.backgroundEnd&0xFF000000|v&0xFFFFFF,false);
         toggle(r,"rounded","Rounded corners","Adjust corner rounding independently of padding.",()->p.rounded,v->p.rounded=v);
         slider(r,"radius","Corner radius",()->p.radius,v->{p.radius=v;p.rounded=v>0;},0,5,.5);
         slider(r,"paddingX","Horizontal padding",()->p.paddingX,v->p.paddingX=v,0,10,.5);
         slider(r,"paddingY","Vertical padding",()->p.paddingY,v->p.paddingY=v,0,10,.5);
-        r.add(Option.of("reset",t("Reset nametags"),t("Restore defaults, including turning this feature off."),new Control.Action(t("Reset"),NametagSettings::reset,()->true,Component.empty())));
+        r.add(Option.of("reset",t("Reset nametags"),t("Restore defaults, including turning this feature off."),new Control.Action(t("Reset"),()->{NametagSettings.reset();if(parent instanceof Host h)h.changed();else io.github.terabold.skycosmetics.Settings.save();},()->true,Component.empty())));
         var release = Set.of("enabled", "preview", "visibility", "scope", "hide", "own", "inventory", "tabNames", "scores", "layout", "scale", "height", "text", "font", "textMode", "color", "colorEnd", "gradientMid", "opacity", "shadow", "ownName", "chatTab", "backgroundGroup", "background", "backgroundColor", "backgroundOpacity", "gradientBackground", "backgroundEnd", "radius", "paddingX", "paddingY", "reset");
         return r.stream().filter(o -> release.contains(o.id())).map(o -> {
             Option compact = Set.of("scale", "height", "own", "inventory", "paddingX", "paddingY", "color", "colorEnd", "backgroundColor", "backgroundOpacity").contains(o.id()) ? o.beside() : o.compact();
@@ -93,5 +93,5 @@ final class NametagSection {
         String s=value.toString().toLowerCase(Locale.ROOT).replace('_',' ');
         return Character.toUpperCase(s.charAt(0))+s.substring(1);
     }
-    private static void color(List<Option>r,String id,String title,IntSupplier get,IntConsumer set,boolean alpha){add(r,id,title,alpha?"Color and opacity.":"Your name's color.",new Control.Color(get,v->{set.accept(v);changed();},alpha));}
+    private static void color(List<Option>r,String id,String title,String help,IntSupplier get,IntConsumer set,boolean alpha){add(r,id,title,help,new Control.Color(get,v->{set.accept(v);changed();},alpha));}
 }

@@ -26,6 +26,8 @@ public final class Nametags {
     public record DrawStyle(boolean shadow, int normalAlpha, int faintAlpha, int backgroundColor, Plate plate, float opacity, boolean seeThrough) {}
     private static final Map<Component, DrawStyle> DRAW = new java.util.IdentityHashMap<>();
     public static DrawStyle drawStyle(Component text) { return p.enabled ? DRAW.get(text) : null; }
+    /** A new world frame: last frame's labels are drawn, so their styles go (never halfway through a frame). */
+    static void frame() { DRAW.clear(); }
     private Nametags() {}
     public static void init() { Settings.register("nametags",NametagSettings::read,NametagSettings::write); NametagSection.register(); NametagOverlay.init(); TabNames.register(); }
     public static int kind(Entity e) { return e instanceof Player?0:e instanceof ArmorStand?2:1; }
@@ -226,7 +228,7 @@ public final class Nametags {
         Component name=source==null?null:styled(d.cache,source);
         // Real sneaking, read before "visible surfaces only" borrows vanilla's sneaking path below.
         boolean sneaking = s.isDiscrete;
-        if (DRAW.size() >= 1024) DRAW.clear();
+        if (DRAW.size() >= 8192) DRAW.clear(); // a frame never has this many; only a backstop
         if (name != null) mark(s, name, alpha, d.cache, sneaking);
         if (s.scoreText != null && p.scores) {
             if (d.cache.score == null) d.cache.score = new NametagState.Cache();

@@ -279,7 +279,8 @@ public final class OtherLooks {
      * null when nothing moved.
      */
     public static Looks.Look take(Change c, String itemType, String label) {
-        if (!c.movable()) return null;
+        // Looks can't be saved (a newer version's file): the other mod keeps its change rather than it being lost.
+        if (!c.movable() || !Looks.writable()) return null;
         boolean type = c.uuid() == null;
         String key = type ? c.type() : c.uuid();
         Looks.Look before = type ? Looks.byType(key) : Looks.byUuid(key);

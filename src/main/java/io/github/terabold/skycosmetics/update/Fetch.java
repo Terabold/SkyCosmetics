@@ -17,6 +17,12 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -97,25 +103,59 @@ public final class Fetch {
                                   BooleanSupplier cancelled) throws IOException {
         if (size <= 0 || size > MAX_JAR) throw new IOException("the release lists an unexpected size (" + size + " bytes)");
         MessageDigest sha = sha256();
+        Thread reader = Thread.currentThread();
+        AtomicLong lastBytes = new AtomicLong(System.nanoTime());
+        AtomicBoolean stalled = new AtomicBoolean(), done = new AtomicBoolean();
         try (Transport.Response r = open(t, url, userAgent);
              OutputStream out = Files.newOutputStream(to, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
                  StandardOpenOption.WRITE)) {
-            InputStream in = r.body();
-            byte[] buf = new byte[64 * 1024];
-            long got = 0;
-            progress.at(0, size);
-            for (int n; (n = in.read(buf)) != -1; ) {
+            // A read can block for good (a dropped connection with no reset): Cancel, or no bytes for a while,
+            // closes the body and wakes the read, so the update thread is never stuck.
+            ScheduledFuture<?> watch = WATCHDOG.scheduleWithFixedDelay(() -> {
+                boolean stall = System.nanoTime() - lastBytes.get() > STALL_NANOS;
+                if (!cancelled.getAsBoolean() && !stall) return;
+                synchronized (done) {
+                    if (done.get()) return; // the download already ended: never interrupt what the thread does next
+                    stalled.set(stall);
+                    try { r.close(); } catch (IOException | RuntimeException ignored) { }
+                    reader.interrupt();
+                }
+            }, 250, 250, TimeUnit.MILLISECONDS);
+            try {
+                InputStream in = r.body();
+                byte[] buf = new byte[64 * 1024];
+                long got = 0;
+                progress.at(0, size);
+                for (int n; (n = in.read(buf)) != -1; ) {
+                    if (cancelled.getAsBoolean()) throw new Cancelled();
+                    lastBytes.set(System.nanoTime());
+                    got += n;
+                    if (got > size) throw new IOException("the download is bigger than the release says");
+                    out.write(buf, 0, n);
+                    sha.update(buf, 0, n);
+                    progress.at(got, size);
+                }
+                if (got != size) throw new IOException("the download stopped early (" + got + " of " + size + " bytes)");
+            } catch (IOException e) {
                 if (cancelled.getAsBoolean()) throw new Cancelled();
-                got += n;
-                if (got > size) throw new IOException("the download is bigger than the release says");
-                out.write(buf, 0, n);
-                sha.update(buf, 0, n);
-                progress.at(got, size);
+                if (stalled.get()) throw new IOException("the download stopped receiving data", e);
+                throw e;
+            } finally {
+                synchronized (done) { done.set(true); }
+                watch.cancel(false);
+                Thread.interrupted(); // the update thread goes on to its next task uninterrupted
             }
-            if (got != size) throw new IOException("the download stopped early (" + got + " of " + size + " bytes)");
         }
         return HexFormat.of().formatHex(sha.digest());
     }
+
+    /** How long a download may receive nothing before it is given up. */
+    private static final long STALL_NANOS = TimeUnit.SECONDS.toNanos(30);
+    private static final ScheduledExecutorService WATCHDOG = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread th = new Thread(r, "SkyCosmetics-download-watch");
+        th.setDaemon(true);
+        return th;
+    });
 
     /** The download was cancelled. */
     public static final class Cancelled extends IOException {

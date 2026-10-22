@@ -24,6 +24,13 @@ public final class Profiles {
         ClientReceiveMessageEvents.GAME.register((msg, overlay) -> { if (!overlay) read(msg); });
         // Chat mods (SkyHanni, Skyblocker...) may hide the line; it still counts.
         ClientReceiveMessageEvents.GAME_CANCELED.register((msg, overlay) -> { if (!overlay) read(msg); });
+        // A new server, or another account, says its profile again: until then none is assumed.
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, mc) -> {
+            if (current != null) {
+                current = null;
+                OwnedItems.profileChanged();
+            }
+        });
     }
 
     private static void read(Component msg) {

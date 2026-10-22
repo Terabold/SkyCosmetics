@@ -3,6 +3,7 @@ package io.github.terabold.skycosmetics.test;
 import com.mojang.authlib.GameProfile;
 import io.github.terabold.skycosmetics.Cosmetics;
 import io.github.terabold.skycosmetics.Looks;
+import io.github.terabold.skycosmetics.gui.StudioScreen;
 import io.github.terabold.skycosmetics.items.Mine;
 import io.github.terabold.skycosmetics.items.OwnedItems;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -50,6 +51,7 @@ final class TypeLooksTest {
             check(styled(mine), "your own boots wear the look for every Scam Boots");
             check(mine.getStyledHoverName().getString().equals("Scam Boots"), "and its name");
         });
+        resetAndUndo(ctx);
 
         // An auction menu: someone else's boots, the ones you sold, and boots without a UUID.
         ctx.runOnClient(mc -> {
@@ -100,6 +102,67 @@ final class TypeLooksTest {
         ctx.waitTicks(2);
     }
 
+    /**
+     * The studio's removals on one item while a look for every item of its type exists: the summary's [x] drops one
+     * part, Reset drops the item's whole look and leaves the type's, and both come back with Undo or Ctrl+Z.
+     */
+    private static void resetAndUndo(ClientGameTestContext ctx) {
+        int[] was = ctx.computeOnClient(mc -> new int[]{mc.getWindow().getWidth(), mc.getWindow().getHeight(), mc.options.guiScale().get()});
+        StudioLayoutTest.window(ctx, 1920, 1080, 2); // where the preview column shows the summary with its [x]s
+        ctx.runOnClient(mc -> Looks.putItem("t-mine-boots", TYPE, Looks.Look.NONE.withDye("DYE_AURORA").withName("&9Mine")));
+        StudioLayoutTest.open(ctx, mc -> mc.player.getInventory().getItem(11));
+        ctx.runOnClient(mc -> {
+            check(StudioLayoutTest.widget(mc, "This item only") != null, "the studio edits this item only");
+            check(((StudioScreen) mc.screen).summaryShown(), "the summary is shown");
+        });
+
+        // The dye line's [x]: only the dye goes; Undo puts it back.
+        int[] dyeX = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).summaryClearAt(1));
+        StudioLayoutTest.click(ctx, dyeX[0], dyeX[1]);
+        ctx.waitTicks(2);
+        ctx.runOnClient(mc -> {
+            Looks.Look l = Looks.byUuid("t-mine-boots");
+            check(l != null && l.dye() == null && "&9Mine".equals(l.name()), "the summary's [x] removes only the dye");
+            var undo = StudioLayoutTest.widget(mc, "Undo");
+            check(undo != null && undo.visible, "and offers Undo");
+        });
+        int[] undoAt = ctx.computeOnClient(mc -> {
+            var undo = StudioLayoutTest.widget(mc, "Undo");
+            return new int[]{undo.getX() + undo.getWidth() / 2, undo.getY() + undo.getHeight() / 2};
+        });
+        StudioLayoutTest.click(ctx, undoAt[0], undoAt[1]);
+        ctx.waitTicks(2);
+        ctx.runOnClient(mc -> {
+            Looks.Look l = Looks.byUuid("t-mine-boots");
+            check(l != null && "DYE_AURORA".equals(l.dye()) && "&9Mine".equals(l.name()), "Undo puts the dye back");
+        });
+
+        // Reset: the item's own look goes, the type's stays; Ctrl+Z puts the item's back exactly.
+        int[] resetAt = ctx.computeOnClient(mc -> {
+            var reset = StudioLayoutTest.widget(mc, "Reset");
+            check(reset != null && reset.active, "Reset is there");
+            return new int[]{reset.getX() + reset.getWidth() / 2, reset.getY() + reset.getHeight() / 2};
+        });
+        StudioLayoutTest.click(ctx, resetAt[0], resetAt[1]);
+        ctx.waitTicks(2);
+        ctx.runOnClient(mc -> {
+            check(Looks.byUuid("t-mine-boots") == null, "Reset removes the item's own look");
+            check(Looks.byType(TYPE) != null && "DYE_AURORA".equals(Looks.byType(TYPE).dye()), "and leaves the look for every Scam Boots");
+            check(((StudioScreen) mc.screen).footer().startsWith("Reset. The look for every"), "and says the type's look still applies");
+            mc.screen.keyPressed(new net.minecraft.client.input.KeyEvent(org.lwjgl.glfw.GLFW.GLFW_KEY_Z, 0, org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL));
+        });
+        ctx.waitTicks(2);
+        ctx.runOnClient(mc -> {
+            Looks.Look l = Looks.byUuid("t-mine-boots");
+            check(l != null && "DYE_AURORA".equals(l.dye()) && "&9Mine".equals(l.name()), "Ctrl+Z after Reset puts the whole look back");
+        });
+        ctx.takeScreenshot("skycosmetics-40-studio-reset-undone");
+        ctx.setScreen(() -> null);
+        ctx.runOnClient(mc -> Looks.put(false, "t-mine-boots", null));
+        StudioLayoutTest.window(ctx, was[0], was[1], was[2]);
+        ctx.waitTicks(2);
+    }
+
     /** Drawn as a restyled copy (dyed), not as Hypixel's stack. */
     private static boolean styled(ItemStack s) {
         ItemStack shown = Cosmetics.forRender(s, null);
@@ -123,6 +186,6 @@ final class TypeLooksTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError("[SkyCosmeticsTest] failed: " + what);
+        Report.check(ok, what);
     }
 }

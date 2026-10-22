@@ -2,6 +2,44 @@
 
 SkyCosmetics was called **Skin Studio** before 1.4.0. Entries for older versions use its old command, `/skinstudio`.
 
+## 1.4.0-beta.7 — 2026-10-22
+
+A release-readiness pass: a review of the whole mod, its fixes, and a test run that checks every feature.
+
+### Fixed
+- **Nothing lost:** an edit made as the game closes (a half-typed name or color in the studio) is saved. The studio's
+  Reset and the [x] next to a skin, dye, name or glint can be undone (Undo, or Ctrl+Z), like every other removal.
+  "Move here" no longer removes another mod's look when SkyCosmetics can't save it. A look with a model or trim this
+  version doesn't know keeps it in the file. A pet that Hypixel gives a new id keeps its own look.
+- **Updates:** an update left in a copied game folder's config never touches the other folder's jars. A download
+  that stops receiving data is given up after 30 seconds and Cancel always works; the published-skins and repo
+  downloads can't hang either. Switching Stable/Betas shows that channel's version at once. A newer download replaces
+  a waiting one instead of leaving both jars.
+- **My Items** keeps each Minecraft account's items apart (two accounts can each have an "Apple" profile), and
+  forgets the profile when you leave a server. Turning off "Learn animation timing" no longer stops "Learn new skins".
+- **Names in chat** never change what another player wrote.
+- Slot locking: a blocked double-click names the right item. Locks tried in singleplayer have a set of their own,
+  never a SkyBlock profile's.
+- "Reset nametags" and "Reset zoom settings" are saved and show at once. Zoom's smoothing reads Responsive and
+  Cinematic, as its help says. Background color rows say what they color.
+- A full viewmodel preset list never drops one of your presets to keep "Previous setup".
+- Labels everywhere read in sentence case with American spelling (Behavior, Centers), and the studio card says
+  "Open the studio".
+
+### Faster and lighter
+- Nametags: players not on the tab list no longer rescan it every frame; styles no longer flicker in big lobbies.
+- Slot locks look up their set once per change instead of several times per slot per frame.
+- The color square draws in two quads instead of one per pixel column; list view wraps names once per search.
+- Closing a menu, the studio or the settings, or leaving a server, no longer keeps the old world in memory through
+  a tooltip, the item scanners or the settings' hover state.
+
+### Tests
+- The test run now keeps going after a failure and writes `report.html` with every test, every check and its
+  screenshots; it also checks that the mod never sent chat or a command to the server during the whole run.
+- New checks: studio Reset/Undo, leaving a world with a menu open, update channel and copied-folder cases, the
+  report command, other players' chat, Reset buttons that save, a bound swap being exactly one ordinary click, and the
+  text rules (no middle dots, sentence case) over every language text and every settings row.
+
 ## 1.4.0-beta.6 — 2026-10-16
 
 ### Changed

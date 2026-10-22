@@ -24,7 +24,9 @@ final class TabNames {
     private static final int MAX_LINE = 256, MAX_REMEMBERED = 512;
     private static List<Entry> entries = List.of();
     private static long at;
+    /** Found this half second, misses too (as {@link #MISS}): an NPC or a player off the list costs one lookup, not a scan a frame. */
     private static final Map<String, Component> found = new HashMap<>();
+    private static final Component MISS = Component.empty();
     private static final Map<String, Component> remembered = new LinkedHashMap<>(64, .75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, Component> e) { return size() > MAX_REMEMBERED; }
     };
@@ -40,8 +42,12 @@ final class TabNames {
         Component own = info == null ? null : info.getTabListDisplayName();
         if (own != null && names(own.getString(), username)) return remember(username, own);
         refresh();
-        Component hit = found.computeIfAbsent(username, TabNames::search);
-        return hit != null ? remember(username, hit) : remembered.get(username);
+        Component hit = found.get(username);
+        if (hit == null) {
+            hit = search(username);
+            found.put(username, hit == null ? MISS : hit);
+        }
+        return hit != MISS ? remember(username, hit) : remembered.get(username);
     }
 
     private static Component remember(String username, Component text) {
@@ -68,14 +74,17 @@ final class TabNames {
     }
 
     private static Component search(String username) {
-        for (Entry e : entries) if (names(e.plain(), username)) return e.text();
+        for (Entry e : entries) if (namesPlain(e.plain(), username)) return e.text(); // already stripped once
         return null;
     }
 
     /** Whether {@code line} has {@code username} as a whole word ("Steve" is not in "Steve2"). */
     static boolean names(String line, String username) {
         String plain = ChatFormatting.stripFormatting(line);
-        if (plain == null) return false;
+        return plain != null && namesPlain(plain, username);
+    }
+
+    private static boolean namesPlain(String plain, String username) {
         for (int at = plain.indexOf(username); at >= 0; at = plain.indexOf(username, at + 1)) {
             int end = at + username.length();
             boolean before = at == 0 || !word(plain.charAt(at - 1)), after = end == plain.length() || !word(plain.charAt(end));
@@ -101,6 +110,7 @@ final class TabNames {
 
     /** {@code /skycosmetics debug names}: the nearest players and where each name comes from; copied too. */
     static void register() {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> clear());
         net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> dispatcher.register(
             net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal("skycosmetics").then(
                 net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal("debug").then(

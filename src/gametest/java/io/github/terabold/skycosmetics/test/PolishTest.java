@@ -62,11 +62,11 @@ public class PolishTest implements FabricClientGameTest {
             });
             ctx.getInput().setCursorPos(0, 0); ctx.waitTicks(12);
             ctx.takeScreenshot("skycosmetics-110-names-grid");
-            ctx.clickScreenButton("View: Grid"); ctx.getInput().setCursorPos(0, 0); ctx.waitTicks(3);
+            ctx.clickScreenButton("View: grid"); ctx.getInput().setCursorPos(0, 0); ctx.waitTicks(3);
             ctx.takeScreenshot("skycosmetics-111-names-list");
             ctx.runOnClient(mc -> { studio(mc).pick("inv:4"); search(mc).setValue("animated"); });
             ctx.waitTicks(8); ctx.takeScreenshot("skycosmetics-112-gif-badge-list");
-            ctx.clickScreenButton("View: List"); ctx.getInput().setCursorPos(0, 0); ctx.waitTicks(3);
+            ctx.clickScreenButton("View: list"); ctx.getInput().setCursorPos(0, 0); ctx.waitTicks(3);
             ctx.takeScreenshot("skycosmetics-113-gif-badge-grid");
             trims(ctx);
             compatibility(ctx);
@@ -91,7 +91,7 @@ public class PolishTest implements FabricClientGameTest {
         check(view.getY() == search.getY() && view.getX() >= search.getX() + search.getWidth() + 4,
             "view switch shares the search toolbar without overlapping it");
         studio(mc).children().stream().filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget w
-            && w.getMessage().getString().equals("Custom Dye…")).forEach(c -> {
+            && w.getMessage().getString().equals("Custom dye…")).forEach(c -> {
                 var custom = (net.minecraft.client.gui.components.AbstractWidget) c;
                 check(custom.getY() != view.getY() || custom.getX() + custom.getWidth() + 4 <= view.getX(),
                     "custom dye does not overlap the view switch");
@@ -115,8 +115,8 @@ public class PolishTest implements FabricClientGameTest {
             check(Trims.valid("bad|bad|bad") == null, "invalid trim syntax is ignored");
             studio(mc).pick("inv:2");
         });
-        ctx.clickScreenButton("Model & Trims"); ctx.waitTicks(3);
-        ctx.clickScreenButton("Armor Trims"); ctx.waitForScreen(StudioScreen.class); ctx.waitTicks(3);
+        ctx.clickScreenButton("Model & trims"); ctx.waitTicks(3);
+        ctx.clickScreenButton("Armor trims"); ctx.waitForScreen(StudioScreen.class); ctx.waitTicks(3);
         ctx.clickScreenButton("Eye Armor Trim"); ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> Looks.byUuid(UUID + 2).trim().equals("minecraft:eye|minecraft:gold")), "the actual pattern picker applies its selection");
         ctx.takeScreenshot("skycosmetics-114-trim-editor");

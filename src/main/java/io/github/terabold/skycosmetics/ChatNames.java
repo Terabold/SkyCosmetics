@@ -28,6 +28,12 @@ import java.util.regex.Pattern;
  */
 public final class ChatNames {
     private static final Pattern LEVEL = Pattern.compile("^\\[Lvl \\d+] ");
+    /**
+     * What a player wrote, as Hypixel shows it: "[MVP+] Bob: ...", "Guild > [413] ♲ Bob [STAFF]: ...", "From Bob: ...".
+     * Never rewritten: your names replace Hypixel's wording of your items, not other people's words.
+     */
+    private static final Pattern PLAYER_CHAT = Pattern.compile(
+        "^(?:[A-Za-z-]{1,12} > |From |To )?(?:\\[[^\\]]{1,20}] |[^\\w\\s\\[]{1,2} )*[A-Za-z0-9_]{1,16}(?: \\[[^\\]]{1,12}])?: ");
     private static final long EVERY_MS = 2000;
     private static final int MIN_LENGTH = 4, MAX_NAMES = 512, MAX_LINE = 4096;
 
@@ -39,8 +45,13 @@ public final class ChatNames {
 
     private ChatNames() {}
 
-    /** The line with your names in it, or the line itself (most lines: one regex search). Never throws. */
+    /** A chat line with your names in it, or the line itself (most lines: one regex search). Never throws. */
     public static Component apply(Component line) {
+        return rename(line, true);
+    }
+
+    /** {@code chat}: a line of the chat box, where what a player wrote is left as written. */
+    private static Component rename(Component line, boolean chat) {
         // Out of a world (a mod's line at the title screen) items aren't ready yet, and there is nothing of yours to name.
         if (!Settings.chatNames || line == null || Minecraft.getInstance().level == null) return line;
         try {
@@ -48,6 +59,8 @@ public final class ChatNames {
             if (any == null) return line;
             String plain = line.getString();
             if (plain.length() > MAX_LINE || !any.matcher(plain).find()) return line;
+            String bare = ChatFormatting.stripFormatting(plain);
+            if (chat && bare != null && PLAYER_CHAT.matcher(bare).find()) return line;
             return replace(line);
         } catch (RuntimeException e) {
             Io.failed("Showing your item names in chat", e);
@@ -60,7 +73,7 @@ public final class ChatNames {
         if (!Settings.chatNames || lines == null || lines.size() < 2) return lines;
         List<Component> out = null;
         for (int i = 1; i < lines.size(); i++) {
-            Component was = lines.get(i), now = apply(was);
+            Component was = lines.get(i), now = rename(was, false);
             if (now != was) {
                 if (out == null) out = new ArrayList<>(lines);
                 out.set(i, now);

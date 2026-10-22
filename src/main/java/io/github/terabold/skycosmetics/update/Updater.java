@@ -190,10 +190,12 @@ public final class Updater {
             Path jar = path(pending, "jar"), old = path(pending, "old");
             Semver running = Semver.parse(e.current()), want = Semver.parse(to);
             boolean isNew = running != null && want != null && running.compareTo(want) >= 0;
-            if (isNew) {
-                if (old != null && !same(old, e.running())) log("Removed the old jar: " + Installer.remove(old));
-                if (jar != null && !same(jar, e.running()) && Files.exists(jar)) Installer.remove(jar); // a copy beside a newer one
-            } else if (jar != null && !same(jar, e.running())) {
+            if (!ours(jar, e) && !ours(old, e)) {
+                log("The unfinished update in updates.json is for another game folder (a copied instance); left alone");
+            } else if (isNew) {
+                if (ours(old, e) && !same(old, e.running())) log("Removed the old jar: " + Installer.remove(old));
+                if (ours(jar, e) && !same(jar, e.running()) && Files.exists(jar)) Installer.remove(jar); // a copy beside a newer one
+            } else if (ours(jar, e) && !same(jar, e.running())) {
                 Installer.Removal r = Installer.remove(jar);
                 log("SkyCosmetics " + to + " didn't load; removed it (" + r + ")");
                 failedOnStart = "SkyCosmetics " + to + " didn't load, so it was removed. Get it from the release page.";
@@ -220,7 +222,7 @@ public final class Updater {
         cancel.set(true);
         if (pending == null) return;
         Path old = path(pending, "old"), jar = path(pending, "jar");
-        if (old == null || jar == null || !Files.isRegularFile(jar)) return;
+        if (!ours(old, env) || !ours(jar, env) || !Files.isRegularFile(jar)) return;
         Installer.Removal r = Installer.remove(old);
         log("Installing " + str(pending, "version") + " on exit: old jar " + r);
         if (r == Installer.Removal.REMOVED || r == Installer.Removal.RENAMED) saveState(true);
@@ -287,6 +289,11 @@ public final class Updater {
             set(new Status(Kind.ERROR, null, error, checkedAt, 0, 0, null));
             return;
         }
+        show(list, manual, false);
+    }
+
+    /** The offer in {@code list} for this game and channel, on the card; {@code quiet}: no download, no toast. */
+    private static void show(List<Releases.Release> list, boolean manual, boolean quiet) {
         Env e = env;
         Releases.Offer offer = Releases.pick(list, Semver.parse(e.current()), e.mc(), betas());
         if (offer == null) {
@@ -312,6 +319,7 @@ public final class Updater {
             return;
         }
         set(new Status(Kind.AVAILABLE, offer, null, checkedAt, 0, 0, blocked));
+        if (quiet) return;
         if (!manual && autoDownload && blocked == null) {
             download(offer);
         } else if (!manual) {
@@ -405,7 +413,11 @@ public final class Updater {
                 return;
             }
             Path target = e.mods().resolve(offer.jar().name());
+            Path previous = pending == null ? null : path(pending, "jar");
             Installer.place(part, target, e.running());
+            if (previous != null && ours(previous, e) && !same(previous, target) && !same(previous, e.running())) {
+                log("Removed the update it replaces: " + Installer.remove(previous));
+            }
             JsonObject p = new JsonObject();
             p.addProperty("version", offer.version());
             p.addProperty("from", e.current());
@@ -505,7 +517,14 @@ public final class Updater {
     }
 
     public static void setChannel(Channel c) {
+        Channel was = channel();
         channel = c;
+        Kind k = status.kind();
+        // Picked again from the list already fetched: no request, no download, no toast.
+        if (c != was && k != Kind.IDLE && k != Kind.READY && !busy()) EXEC.execute(() -> run(() -> {
+            List<Releases.Release> list = cachedList();
+            if (list != null) show(list, false, true);
+        }));
     }
 
     private static boolean betas() {
@@ -633,6 +652,16 @@ public final class Updater {
 
     private static void log(String s) {
         SkyCosmetics.LOG.info("[updates] {}", s);
+    }
+
+    /** Whether {@code p} is a file in this game's mods folder: an update never touches a file anywhere else. */
+    private static boolean ours(Path p, Env e) {
+        if (p == null || e.mods() == null || p.getParent() == null) return false;
+        try {
+            return Files.isSameFile(p.getParent(), e.mods());
+        } catch (IOException ex) {
+            return p.getParent().toAbsolutePath().normalize().equals(e.mods().toAbsolutePath().normalize());
+        }
     }
 
     private static boolean same(Path a, Path b) {

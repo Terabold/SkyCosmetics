@@ -141,8 +141,8 @@ public final class Remote {
             .connectTimeout(Duration.ofSeconds(10)).build();
         var request = HttpRequest.newBuilder(URI.create(URL)).header("User-Agent", "SkyCosmetics").timeout(Duration.ofSeconds(30)).GET();
         if (!etag.isEmpty() && etag.length() < 200) request.header("If-None-Match", etag);
-        HttpResponse<byte[]> r = http.send(request.build(),
-            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofByteArray(), MAX_BYTES));
+        HttpResponse<byte[]> r = Repo.send(http, request.build(),
+            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofByteArray(), MAX_BYTES), Duration.ofSeconds(60));
         if (r.statusCode() == 304) {
             Files.writeString(tag, etag, StandardCharsets.UTF_8); // touch: checked now
             return false;

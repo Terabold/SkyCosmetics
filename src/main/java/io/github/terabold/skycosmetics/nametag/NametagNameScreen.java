@@ -13,7 +13,7 @@ public final class NametagNameScreen extends Screen {
     private final Screen parent;
     private NameBox box;
     private int x,y,w;
-    public NametagNameScreen(Screen parent){super(Component.literal("My Nametag"));this.parent=parent;}
+    public NametagNameScreen(Screen parent){super(Component.literal("My nametag"));this.parent=parent;}
     @Override protected void init(){
         w=Math.min(340,width-24);x=(width-w)/2;y=Math.max(1,(height-210)/2);
         box=addRenderableWidget(new NameBox(font,x+12,y+40,w-24,20));box.setMaxLength(128);box.setValue(p.ownName);

@@ -935,6 +935,6 @@ public class SlotsTest implements FabricClientGameTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError(TAG + "failed: " + what);
+        Report.check(ok, what);
     }
 }

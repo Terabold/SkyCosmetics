@@ -533,7 +533,6 @@ public class GlintRenderTest implements FabricClientGameTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError("[SkyCosmeticsTest] glint: " + what);
-        System.out.println("[SkyCosmeticsTest] ok: " + what);
+        Report.check(ok, "glint: " + what);
     }
 }

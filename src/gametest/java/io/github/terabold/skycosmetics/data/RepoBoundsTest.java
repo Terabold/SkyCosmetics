@@ -1,5 +1,7 @@
 package io.github.terabold.skycosmetics.data;
 
+import io.github.terabold.skycosmetics.test.Report;
+
 import com.sun.net.httpserver.HttpServer;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -105,5 +107,5 @@ public final class RepoBoundsTest implements FabricClientGameTest {
         try { read.run(); } catch (IOException expected) { return; }
         throw new AssertionError("oversized or escaping entry was accepted");
     }
-    private static void check(boolean ok) { if (!ok) throw new AssertionError("normal entry must remain readable"); }
+    private static void check(boolean ok) { Report.check(ok, "normal entry must remain readable"); }
 }

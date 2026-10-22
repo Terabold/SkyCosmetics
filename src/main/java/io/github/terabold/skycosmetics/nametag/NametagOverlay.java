@@ -30,7 +30,7 @@ public final class NametagOverlay {
     private NametagOverlay() {}
 
     static void init() {
-        LevelRenderEvents.START_MAIN.register(context -> { clear(); worldPass = true; });
+        LevelRenderEvents.START_MAIN.register(context -> { clear(); Nametags.frame(); worldPass = true; });
         LevelRenderEvents.END_MAIN.register(context -> {
             try {
                 if (count == 0 || !NametagSettings.p.enabled) return;

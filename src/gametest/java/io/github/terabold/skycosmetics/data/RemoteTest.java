@@ -1,5 +1,7 @@
 package io.github.terabold.skycosmetics.data;
 
+import io.github.terabold.skycosmetics.test.Report;
+
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
@@ -28,7 +30,7 @@ public final class RemoteTest implements FabricClientGameTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError(what);
+        Report.check(ok, what);
     }
 
     @Override public void runTest(ClientGameTestContext ctx) {

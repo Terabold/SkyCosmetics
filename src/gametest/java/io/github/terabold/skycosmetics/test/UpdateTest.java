@@ -403,6 +403,13 @@ public class UpdateTest implements FabricClientGameTest {
         checkNow(ctx);
         waitFor(ctx, Updater.Kind.AVAILABLE);
         check(ctx.computeOnClient(mc -> Updater.status().offer().version()).equals("1.6.0-beta.1"), "Betas offer the beta");
+        // Another channel alone, without Check now: the card follows it, from the list already fetched.
+        int asked = gh.requests.size();
+        ctx.runOnClient(mc -> Updater.setChannel(Updater.Channel.STABLE));
+        ctx.waitFor(mc -> Updater.status().kind() == Updater.Kind.AVAILABLE && "1.5.0".equals(Updater.status().offer().version()), 20 * 5);
+        ctx.runOnClient(mc -> Updater.setChannel(Updater.Channel.BETAS));
+        ctx.waitFor(mc -> Updater.status().kind() == Updater.Kind.AVAILABLE && "1.6.0-beta.1".equals(Updater.status().offer().version()), 20 * 5);
+        check(gh.requests.size() == asked, "switching the channel offers that channel's version without asking GitHub again");
         ctx.runOnClient(mc -> Updater.setChannel(Updater.Channel.STABLE));
         checkNow(ctx);
         waitFor(ctx, Updater.Kind.AVAILABLE);
@@ -478,6 +485,7 @@ public class UpdateTest implements FabricClientGameTest {
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> card(mc).getHeight()) == 0, "Dismiss puts it away");
 
+
         // On 1.5.0, the newest stable: up to date (the quiet line), with the check time.
         checkNow(ctx);
         waitFor(ctx, Updater.Kind.CURRENT);
@@ -543,6 +551,22 @@ public class UpdateTest implements FabricClientGameTest {
         waitFor(ctx, Updater.Kind.FAILED);
         check(Updater.status().message().contains("no checksum") && !Files.exists(mods2.resolve("skycosmetics-1.5.0+26.1.2.jar")),
             "no checksum, no install");
+
+        // An unfinished update copied along with the config from another game folder: its jars are never touched.
+        Path elsewhere = fresh(root.resolve("other-instance").resolve("mods"));
+        Path elsewhereOld = write(elsewhere.resolve("skycosmetics-1.4.0.jar"), FakeGitHub.jar("skycosmetics", "1.4.0", "~26.1"));
+        Path elsewhereNew = write(elsewhere.resolve("skycosmetics-1.5.0+26.1.2.jar"), jar150);
+        JsonObject copied = JsonParser.parseString(readState(state)).getAsJsonObject();
+        JsonObject theirs = new JsonObject();
+        theirs.addProperty("version", "1.5.0");
+        theirs.addProperty("from", "1.4.0");
+        theirs.addProperty("jar", elsewhereNew.toString());
+        theirs.addProperty("old", elsewhereOld.toString());
+        copied.add("pending", theirs);
+        Files.writeString(state, copied.toString());
+        Updater.testRestart(new Updater.Env(mods, newJar, "1.5.0", MC, INSTALLED::get));
+        check(Files.exists(elsewhereOld) && Files.exists(elsewhereNew), "another game folder's jars are left alone at start");
+        check(Files.exists(newJar) && !readState(state).contains("\"pending\""), "and the copied update is dropped");
 
         // Not running from a jar (as in development): the card offers only the release page.
         Updater.testSetup(gh, new Updater.Env(null, null, "1.4.0", MC, INSTALLED::get), state);

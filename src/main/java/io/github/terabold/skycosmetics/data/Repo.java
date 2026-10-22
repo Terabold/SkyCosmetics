@@ -570,21 +570,42 @@ public final class Repo {
         return part;
     }
 
+    /**
+     * {@code http.send} with a deadline for the whole answer. A request's own timeout covers only the headers: a
+     * body that stops arriving would otherwise block the download thread (and keep "Loading skins" up) for good.
+     */
+    static <T> HttpResponse<T> send(HttpClient http, HttpRequest request, HttpResponse.BodyHandler<T> body, Duration within)
+            throws IOException, InterruptedException {
+        var answer = http.sendAsync(request, body);
+        try {
+            return answer.get(within.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            answer.cancel(true);
+            throw new java.net.http.HttpTimeoutException("no complete answer within " + within.toSeconds() + " s");
+        } catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof IOException io) throw io;
+            throw new IOException(e.getCause());
+        } catch (InterruptedException e) {
+            answer.cancel(true);
+            throw e;
+        }
+    }
+
     /** Bounded even when a response is chunked or its Content-Length is incorrect. Download thread only. */
     static String fetchSha(HttpClient http, URI uri) throws IOException, InterruptedException {
-        HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri)
+        HttpResponse<String> r = send(http, HttpRequest.newBuilder(uri)
             .header("Accept", "application/vnd.github.sha").header("User-Agent", "SkyCosmetics")
             .timeout(Duration.ofSeconds(20)).GET().build(),
-            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofString(), MAX_COMMIT_BYTES));
+            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofString(), MAX_COMMIT_BYTES), Duration.ofSeconds(45));
         return r.statusCode() == 200 ? RepoSource.firstSha(r.body()) : null;
     }
 
     /** Never replace the installed repo here, and remove partial files on HTTP, size or ZIP failures. */
     static void fetchArchive(HttpClient http, URI uri, Path part) throws IOException, InterruptedException {
         try {
-            HttpResponse<Path> r = http.send(HttpRequest.newBuilder(uri).header("User-Agent", "SkyCosmetics")
+            HttpResponse<Path> r = send(http, HttpRequest.newBuilder(uri).header("User-Agent", "SkyCosmetics")
                 .timeout(Duration.ofMinutes(5)).GET().build(),
-                HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofFile(part), MAX_ARCHIVE_BYTES));
+                HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofFile(part), MAX_ARCHIVE_BYTES), Duration.ofMinutes(15));
             if (r.statusCode() != 200) throw new IOException("HTTP " + r.statusCode() + " for " + uri);
             try (ZipFile z = new ZipFile(part.toFile())) {
                 if (z.size() < MIN_ITEMS) throw new IOException("downloaded zip has only " + z.size() + " entries");

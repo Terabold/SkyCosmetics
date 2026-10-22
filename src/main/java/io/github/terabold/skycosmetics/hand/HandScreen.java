@@ -63,7 +63,7 @@ public final class HandScreen extends Screen implements Host {
 
     /** The editor's pages: the pose, its swing, and how the hand behaves. */
     private enum Tab {
-        POSE("Pose"), SWING("Swing"), BEHAVIOUR("Behaviour");
+        POSE("Pose"), SWING("Swing"), BEHAVIOUR("Behavior");
         final String title;
         Tab(String title) { this.title = title; }
     }

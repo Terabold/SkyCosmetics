@@ -26,6 +26,22 @@ public class ReportTest implements FabricClientGameTest {
             check(home == null || !r.contains(home), "the report holds no local paths");
             check(Report.issueUrl().startsWith("https://github.com/Terabold/SkyCosmetics/issues/new?template=bug_report.yml"), "the report goes to the issue form");
         });
+        // The command a player types: the report on the clipboard, and a line in chat with the issue page.
+        try (var world = ctx.worldBuilder().create()) {
+            world.getClientLevel().waitForChunksRender();
+            ctx.runOnClient(mc -> {
+                mc.keyboardHandler.setClipboard("x");
+                mc.player.connection.sendCommand("skycosmetics report");
+            });
+            ctx.waitTicks(3);
+            ctx.runOnClient(mc -> {
+                String copied = mc.keyboardHandler.getClipboard();
+                check(copied.startsWith("SkyCosmetics ") && copied.contains("Testing a report"), "/skycosmetics report copies the report");
+                var lines = DataSafetyTest.chat(mc);
+                check(lines.stream().anyMatch(l -> l.contains("Report copied.") && l.contains("[Open the issue page]")),
+                    "and says so in chat, with the issue page: " + lines.subList(Math.max(0, lines.size() - 3), lines.size()));
+            });
+        }
         System.out.println("[SkyCosmeticsTest] bug report checks passed");
     }
 }

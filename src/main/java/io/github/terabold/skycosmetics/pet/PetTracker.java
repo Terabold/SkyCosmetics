@@ -210,9 +210,15 @@ public final class PetTracker {
                 }
             }
             if (known != null) {
-                KNOWN.remove(known.uuid);
+                String old = known.uuid;
+                KNOWN.remove(old);
                 known.uuid = p.uuid;
                 KNOWN.put(known.uuid, known);
+                // Its "this pet only" look follows it to the new uuid, so it keeps showing in menus and the world.
+                var look = io.github.terabold.skycosmetics.Looks.byUuid(old);
+                if (look != null && io.github.terabold.skycosmetics.Looks.byUuid(p.uuid) == null) {
+                    io.github.terabold.skycosmetics.Looks.putItem(p.uuid, io.github.terabold.skycosmetics.Looks.itemType(old), look);
+                }
             }
         }
         if (known == null) {

@@ -119,6 +119,13 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             String longer = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.ChatNames.apply(
                 net.minecraft.network.chat.Component.literal("Two " + realName + "s")).getString());
             if (!longer.equals("Two " + realName + "s")) throw new AssertionError("a longer word was changed: " + longer);
+            // What other players write stays as they wrote it.
+            for (String written : List.of("[MVP+] Bob: anyone have a " + realName + "?", "Guild > [413] ♲ Bob [STAFF]: my " + realName,
+                    "Party > Bob: " + realName, "From [VIP] Bob: selling " + realName)) {
+                String shown = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.ChatNames.apply(
+                    net.minecraft.network.chat.Component.literal(written)).getString());
+                StudioLayoutTest.check(shown.equals(written), "another player's words keep their item name: " + shown);
+            }
             List<String> lore = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.ChatNames.applyLore(List.of(
                 net.minecraft.network.chat.Component.literal(realName), net.minecraft.network.chat.Component.literal("Chestplate: " + realName)))
                 .stream().map(net.minecraft.network.chat.Component::getString).toList());
@@ -178,7 +185,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.runOnClient(mc -> {
                 var labels = mc.screen.children().stream().filter(net.minecraft.client.gui.components.AbstractWidget.class::isInstance)
                     .map(net.minecraft.client.gui.components.AbstractWidget.class::cast).map(w -> w.getMessage().getString()).toList();
-                check(labels.contains("Name & Glint") && !labels.contains("Dyes"), "helmet navigation keeps full feature names and omits body dyes");
+                check(labels.contains("Name & glint") && !labels.contains("Dyes"), "helmet navigation keeps full feature names and omits body dyes");
             });
 
             ctx.runOnClient(mc -> ((StudioScreen)mc.screen).pick("worn:CHEST"));
@@ -231,7 +238,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.clickScreenButton("Dyes");
             ctx.waitTicks(20);
             ctx.takeScreenshot("skycosmetics-08e-studio-dye-icons");
-            ctx.clickScreenButton("Custom Dye…");
+            ctx.clickScreenButton("Custom dye…");
             ctx.waitTicks(5);
             ctx.takeScreenshot("skycosmetics-08e2-studio-custom-dye");
             int[] animated = ctx.computeOnClient(mc -> ((StudioScreen) mc.screen).popup().toggleAt(true));
@@ -243,7 +250,7 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
             ctx.takeScreenshot("skycosmetics-08e3-studio-custom-dye-animated");
             ctx.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE);
             ctx.waitTicks(2);
-            if (!ctx.tryClickScreenButton("Name & Glint")) ctx.clickScreenButton("Name");
+            if (!ctx.tryClickScreenButton("Name & glint")) ctx.clickScreenButton("Name");
             ctx.waitTicks(5);
             ctx.takeScreenshot("skycosmetics-08f-studio-name-glint");
             // Different screen sizes: the layout must adapt, never overlap or crash.
@@ -405,6 +412,6 @@ public class SkyCosmeticsClientTest implements FabricClientGameTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError("[SkyCosmeticsTest] failed: " + what);
+        Report.check(ok, what);
     }
 }

@@ -56,7 +56,7 @@ import java.util.regex.Pattern;
 public final class OwnedItems {
     public enum Category {
         HELMET("Helmets"), CHESTPLATE("Chestplates"), LEGGINGS("Leggings"), BOOTS("Boots"),
-        PET("Pets"), WEAPON("Weapons & Tools"), DEPLOYABLE("Power Orbs");
+        PET("Pets"), WEAPON("Weapons & tools"), DEPLOYABLE("Power orbs");
 
         public final String label;
 
@@ -70,6 +70,8 @@ public final class OwnedItems {
         public String source;
         /** SkyBlock profile it was seen on ("Apple"), or null if seen before the profile was known. */
         public String profile;
+        /** The Minecraft account it was seen on: two accounts can each have an "Apple". Null in older files. */
+        public String account;
         public long seen;
         JsonElement itemJson;
         ItemStack item;
@@ -152,6 +154,8 @@ public final class OwnedItems {
                         if (io.github.terabold.skycosmetics.Settings.storedItems) scan(mc);
                     }
                     else if (!COLD.isEmpty()) warm();
+                } else {
+                    menuScreen = null;
                 }
                 if (saveAt >= 0 && System.currentTimeMillis() >= saveAt) save();
             } catch (RuntimeException e) {
@@ -168,6 +172,12 @@ public final class OwnedItems {
         return version;
     }
 
+    /** The Minecraft account playing (its profile UUID), or null. */
+    private static String account() {
+        var user = net.minecraft.client.Minecraft.getInstance().getUser();
+        return user == null || user.getProfileId() == null ? null : user.getProfileId().toString();
+    }
+
     /** Called by {@link Profiles} when Hypixel reports a different profile. */
     static void profileChanged() {
         version++;
@@ -180,9 +190,10 @@ public final class OwnedItems {
     public static List<Owned> list() {
         if (!io.github.terabold.skycosmetics.Settings.storedItems) return List.of();
         if (sortedFor != version) {
-            String profile = Profiles.current();
+            String profile = Profiles.current(), account = account();
             List<Owned> out = new ArrayList<>();
             for (Owned o : ITEMS.values()) {
+                if (account != null && o.account != null && !o.account.equals(account)) continue; // another account's
                 if (profile == null || o.profile == null || o.profile.equals(profile)) out.add(o);
             }
             out.sort(Comparator.comparing((Owned o) -> o.category)
@@ -289,6 +300,7 @@ public final class OwnedItems {
             o.lastRef = s;
             o.source = source;
             if (o.profile == null && Profiles.current() != null) o.profile = Profiles.current();
+            if (o.account == null) o.account = account();
             if (o.item == null || now - o.refreshedAt > REFRESH_MS) {
                 // Hypixel sends the same item again each time a menu opens: only a change is kept.
                 if (!ItemStack.isSameItemSameComponents(o.stack(), s)) {
@@ -313,6 +325,7 @@ public final class OwnedItems {
         o.category = cat;
         o.source = source;
         o.profile = Profiles.current();
+        o.account = account();
         o.seen = now;
         o.item = s.copyWithCount(1);
         o.lastRef = s;
@@ -414,6 +427,7 @@ public final class OwnedItems {
         String source = Cosmetics.str(e, "source");
         o.source = source != null ? source : "";
         o.profile = Cosmetics.str(e, "profile");
+        o.account = Cosmetics.str(e, "account");
         o.seen = e.get("seen") instanceof JsonPrimitive p && p.isNumber() ? p.getAsLong() : 0;
         JsonElement item = e.get("item");
         o.itemJson = Io.fits(item) ? item : null;
@@ -429,6 +443,7 @@ public final class OwnedItems {
             e.addProperty("category", o.category.name());
             e.addProperty("source", o.source);
             if (o.profile != null) e.addProperty("profile", o.profile);
+            if (o.account != null) e.addProperty("account", o.account);
             e.addProperty("seen", o.seen);
             if (o.itemJson == null && o.item != null) o.itemJson = encode(o.item);
             if (o.itemJson != null && !o.itemJson.isJsonNull()) e.add("item", o.itemJson);

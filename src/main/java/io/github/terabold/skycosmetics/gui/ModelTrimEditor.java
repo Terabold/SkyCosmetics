@@ -44,10 +44,10 @@ final class ModelTrimEditor {
         boolean armor = Trims.allowed(item);
         if (!armor) { trims = false; return buildModels(add, item, own, inherited, y); }
         int half = (w - 4) / 2;
-        boolean wrap = armor && half < Minecraft.getInstance().font.width("Armor Trims") + 12;
-        add.accept(at(new TabButton(Component.literal("Item Model").withColor(Theme.ACCENT & 0xFFFFFF), armor && !wrap ? half : w, 26, !trims || !armor,
+        boolean wrap = armor && half < Minecraft.getInstance().font.width("Armor trims") + 12;
+        add.accept(at(new TabButton(Component.literal("Item model").withColor(Theme.ACCENT & 0xFFFFFF), armor && !wrap ? half : w, 26, !trims || !armor,
             b -> { trims = false; rebuild.run(); }), x, y));
-        if (armor) add.accept(at(new TabButton(Component.literal("Armor Trims").withColor(Theme.ACCENT & 0xFFFFFF), wrap ? w : w - half - 4, 26, trims,
+        if (armor) add.accept(at(new TabButton(Component.literal("Armor trims").withColor(Theme.ACCENT & 0xFFFFFF), wrap ? w : w - half - 4, 26, trims,
             b -> { trims = true; rebuild.run(); }), wrap ? x : x + half + 4, wrap ? y + 30 : y));
         int start = y + (wrap ? 60 : 30);
         if (armor && trims) return buildTrims(add, item, own, inherited, start);
@@ -66,13 +66,13 @@ final class ModelTrimEditor {
         add.accept(at(search, x, y)); y += 22;
         int bw = (width - 4) / 2;
         boolean shared = inherited.model() != null && !inherited.model().equals("original");
-        boolean wrap = shared && bw < Minecraft.getInstance().font.width("Use Shared Model") + 12;
-        button(add, "Reset Model", x, y, shared && !wrap ? bw : width, () -> model(shared ? "original" : null));
-        if (shared) button(add, "Use Shared Model", wrap ? x : x + bw + 4, wrap ? y + 24 : y,
+        boolean wrap = shared && bw < Minecraft.getInstance().font.width("Use shared model") + 12;
+        button(add, "Reset model", x, y, shared && !wrap ? bw : width, () -> model(shared ? "original" : null));
+        if (shared) button(add, "Use shared model", wrap ? x : x + bw + 4, wrap ? y + 24 : y,
             wrap ? width : width - bw - 4, () -> model(null)); y += wrap ? 48 : 24;
         var ident = Cosmetics.identify(item);
         String axe = ident == null ? null : ItemModels.oldAxe(ident.type());
-        if (axe != null) { button(add, "Original Axe", x, y, width, () -> model(axe)); y += 24; }
+        if (axe != null) { button(add, "Original axe", x, y, width, () -> model(axe)); y += 24; }
         String current = own.model() != null ? own.model() : inherited.model();
         activeLabel = current == null || current.equals("original") ? "Original appearance"
             : models.stream().filter(c -> c.id().equals(current)).map(Model::name).findFirst().orElse("Original appearance");
@@ -111,7 +111,7 @@ final class ModelTrimEditor {
             material = existing.material().unwrapKey().map(k -> k.identifier().toString()).orElse(material); }
         if (token != null && !token.equals("off")) { String[] parts = token.split("\\|"); pattern = parts[0]; material = parts[1]; }
         final String p = pattern, m = material;
-        button(add, "Remove Trim", x, y, width, () -> trim("off")); y += 24;
+        button(add, "Remove trim", x, y, width, () -> trim("off")); y += 24;
         activeLabel = token == null && existing == null || "off".equals(token) ? "No trim" :
             patterns.stream().filter(c -> c.id().equals(p)).map(c -> c.name().getString().replace(" Armor Trim", "")).findFirst().orElse("Sentry")
             + " in " + materials.stream().filter(c -> c.id().equals(m)).map(c -> c.name().getString().replace(" Material", "")).findFirst().orElse("Gold");

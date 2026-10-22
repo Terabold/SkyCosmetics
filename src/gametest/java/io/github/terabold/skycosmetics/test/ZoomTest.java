@@ -139,7 +139,13 @@ public class ZoomTest implements FabricClientGameTest {
             ctx.waitTicks(4);
             check(ctx.computeOnClient(mc -> mc.player.isScoping()), "vanilla spyglass still works");
             near(ctx.computeOnClient(mc -> Zoom.magnification()), 1, .0001, "using a spyglass never activates custom zoom");
-            check(corner(ctx, "skycosmetics-127-native-spyglass") == 0, "native spyglass keeps its own overlay");
+            // The spyglass's black surround can take a few more frames on a busy PC: looked at again before failing.
+            int spyglassCorner = corner(ctx, "skycosmetics-127-native-spyglass");
+            for (int attempt = 0; attempt < 4 && spyglassCorner != 0; attempt++) {
+                ctx.waitTicks(5);
+                spyglassCorner = corner(ctx, "skycosmetics-127-native-spyglass");
+            }
+            check(spyglassCorner == 0, "native spyglass keeps its own overlay");
             // Native spyglass FOV returns gradually; the removed replacement hook used to bypass that modifier.
             ctx.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT); ctx.waitTicks(16);
             near(fov(ctx), fov, .04, "stopping spyglass use restores the view");

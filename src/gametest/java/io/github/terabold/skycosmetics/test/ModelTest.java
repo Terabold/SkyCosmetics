@@ -95,7 +95,7 @@ public class ModelTest implements FabricClientGameTest {
             ctx.clickScreenButton("Model");
             ctx.waitTicks(3);
             check(ctx.computeOnClient(mc -> mc.screen instanceof StudioScreen), "model controls stay inside Studio");
-            ctx.clickScreenButton("Original Axe");
+            ctx.clickScreenButton("Original axe");
             check(ctx.computeOnClient(mc -> Looks.byUuid(UUID).model().equals("minecraft:diamond_axe")), "original axe shortcut saves correct material");
             ctx.takeScreenshot("skycosmetics-140-original-axe");
             ctx.runOnClient(mc -> mc.screen.children().stream().filter(SearchBox.class::isInstance).map(SearchBox.class::cast)
@@ -103,7 +103,7 @@ public class ModelTest implements FabricClientGameTest {
             ctx.waitTicks(3); ctx.takeScreenshot("skycosmetics-141-model-search");
             ctx.clickScreenButton("Netherite Sword"); ctx.waitTicks(2);
             check(ctx.computeOnClient(mc -> Looks.byUuid(UUID).model().equals("minecraft:netherite_sword")), "icon search selects a vanilla model");
-            ctx.clickScreenButton("Reset Model");
+            ctx.clickScreenButton("Reset model");
             check(ctx.computeOnClient(mc -> Looks.byUuid(UUID).model().equals("original")), "Original is an explicit override");
             window(ctx, 1050, 720, 3);
             ctx.waitTicks(4);
@@ -113,7 +113,7 @@ public class ModelTest implements FabricClientGameTest {
                         && widget.getBottom() <= mc.screen.height, "picker controls fit the minimum GUI viewport");
             });
             ctx.takeScreenshot("skycosmetics-142-model-small-window");
-            ctx.clickScreenButton("Use Shared Model");
+            ctx.clickScreenButton("Use shared model");
             check(ctx.computeOnClient(mc -> Looks.byUuid(UUID) == null), "reset removes a model-only saved look");
             ctx.runOnClient(mc -> armor(mc));
             window(ctx,1280,720,2);

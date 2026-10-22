@@ -59,6 +59,45 @@ public class SettingsClientTest implements FabricClientGameTest {
             keyButton(ctx);
             names(ctx, sp);
             menus(ctx);
+            resetsSave(ctx);
+        }
+    }
+
+    /** "Reset nametags" and "Reset zoom settings" are written to settings.json, not only changed in memory. */
+    private static void resetsSave(ClientGameTestContext ctx) {
+        java.nio.file.Path file = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("skycosmetics/settings.json");
+        com.google.gson.JsonObject before = ctx.computeOnClient(mc -> io.github.terabold.skycosmetics.Settings.snapshot());
+        try {
+            ctx.runOnClient(mc -> {
+                io.github.terabold.skycosmetics.nametag.NametagSettings.p.scale = 2.0;
+                io.github.terabold.skycosmetics.zoom.ZoomSettings.enabled = true;
+                io.github.terabold.skycosmetics.Settings.save();
+            });
+            ctx.waitFor(mc -> saved(file, "nametags", "scale", 2.0) && saved(file, "zoom", "enabled", true), 20 * 5);
+            ctx.runOnClient(mc -> {
+                for (String section : java.util.List.of("nametags", "zoom")) {
+                    for (var o : io.github.terabold.skycosmetics.hub.Hub.find(section).rows().apply(null)) {
+                        if (o.id().equals("reset")) ((io.github.terabold.skycosmetics.hub.Control.Action) o.control()).run().run();
+                    }
+                }
+            });
+            ctx.waitFor(mc -> saved(file, "nametags", "scale", 1.0) && saved(file, "zoom", "enabled", false), 20 * 5);
+            check(true, "both Reset buttons save their defaults");
+        } finally {
+            ctx.runOnClient(mc -> {
+                io.github.terabold.skycosmetics.Settings.restore(before);
+                io.github.terabold.skycosmetics.Settings.save();
+            });
+        }
+    }
+
+    private static boolean saved(java.nio.file.Path file, String section, String key, Object value) {
+        try {
+            var o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject().getAsJsonObject(section);
+            if (o == null || !o.has(key)) return false;
+            return value instanceof Boolean b ? o.get(key).getAsBoolean() == b : Math.abs(o.get(key).getAsDouble() - ((Number) value).doubleValue()) < 1e-6;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -391,6 +430,6 @@ public class SettingsClientTest implements FabricClientGameTest {
     }
 
     private static void check(boolean ok, String what) {
-        if (!ok) throw new AssertionError("[SkyCosmeticsTest] failed: " + what);
+        Report.check(ok, what);
     }
 }

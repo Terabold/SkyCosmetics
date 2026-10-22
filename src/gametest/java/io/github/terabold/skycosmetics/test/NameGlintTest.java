@@ -164,7 +164,7 @@ final class NameGlintTest {
         ctx.waitTicks(3);
         window(ctx, 1280, 720, 2);
         StudioLayoutTest.open(ctx, mc -> mc.player.getInventory().getItem(5));
-        if (!ctx.tryClickScreenButton("Name & Glint")) ctx.clickScreenButton("Name");
+        if (!ctx.tryClickScreenButton("Name & glint")) ctx.clickScreenButton("Name");
         ctx.waitTicks(3);
 
         selection(ctx);
@@ -206,13 +206,18 @@ final class NameGlintTest {
             check(box.isFocused() && box.getCursorPosition() == 9 && box.selectionStart() == 9,
                 "a click on the styled 'o' of 'of' puts the cursor before it: " + box.getCursorPosition());
         });
-        unfocus(ctx);
         double scale = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
-        ctx.getInput().setCursorPos(of[0] * scale, of[1] * scale);
-        ctx.waitTicks(1);
-        ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-        ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-        ctx.waitTicks(1);
+        // Two clicks count as a double-click only within Minecraft's quarter second: a busy PC can stretch the gap,
+        // so a missed double-click is tried again (the selection is what is checked, not the timing).
+        for (int attempt = 0; attempt < 3; attempt++) {
+            unfocus(ctx);
+            ctx.getInput().setCursorPos(of[0] * scale, of[1] * scale);
+            ctx.waitTicks(1);
+            ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            ctx.waitTicks(1);
+            if (ctx.computeOnClient(mc -> screen(mc).nameBox().selectionEnd() == 11)) break;
+        }
         ctx.runOnClient(mc -> {
             NameBox box = screen(mc).nameBox();
             check(box.selectionStart() == 9 && box.selectionEnd() == 11, "a double-click selects 'of': "
@@ -271,7 +276,7 @@ final class NameGlintTest {
      * gradient when not.
      */
     private static void gradientBuilder(ClientGameTestContext ctx) {
-        ctx.tryClickScreenButton("Reset Name");
+        ctx.tryClickScreenButton("Reset name");
         ctx.waitTicks(2);
         int saved = ctx.computeOnClient(mc -> GradientPresets.list().size());
         ctx.runOnClient(mc -> {
@@ -305,7 +310,7 @@ final class NameGlintTest {
         int[] save = ctx.computeOnClient(mc -> gp.saveAt());
         click(ctx, save[0], save[1]);
         ctx.waitTicks(2);
-        check(ctx.computeOnClient(mc -> GradientPresets.list().size()) == saved + 1, "Save Preset keeps it");
+        check(ctx.computeOnClient(mc -> GradientPresets.list().size()) == saved + 1, "Save preset keeps it");
         ctx.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         ctx.waitTicks(12);
         check(ctx.computeOnClient(mc -> screen(mc).gradientPopup() == null), "Esc closes the builder");
@@ -334,14 +339,14 @@ final class NameGlintTest {
         window(ctx, 1280, 720, 2);
         unfocus(ctx);
 
-        AbstractWidget mine = ctx.computeOnClient(mc -> labelled(mc, "Your Gradient").getLast());
+        AbstractWidget mine = ctx.computeOnClient(mc -> labelled(mc, "Your gradient").getLast());
         double scale = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
         ctx.getInput().setCursorPos((mine.getX() + 3) * scale, (mine.getY() + 3) * scale);
         ctx.waitTicks(1);
         ctx.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> GradientPresets.list().size()) == saved, "a right-click removes a saved gradient");
-        ctx.clickScreenButton("Reset Name");
+        ctx.clickScreenButton("Reset name");
         ctx.waitTicks(2);
     }
 
@@ -368,7 +373,7 @@ final class NameGlintTest {
         ctx.runOnClient(mc -> screen(mc).nameBox().setValue("&dPink Blade"));
         ctx.waitTicks(10);
         check("&dPink Blade".equals(name(ctx)), "typing sets a custom name");
-        ctx.clickScreenButton("Reset Name");
+        ctx.clickScreenButton("Reset name");
         ctx.waitTicks(2);
         check(name(ctx) == null && ctx.computeOnClient(NameGlintTest::value).equals(HYPIXEL),
             "Reset name removes the custom name and refills Hypixel's");
@@ -377,7 +382,7 @@ final class NameGlintTest {
     /**
      * Any colour on the selected letters, live. Where the tab has room the picker is open under the style
      * buttons: a click or a drag recolours the selection without piling up codes, and with the box not being
-     * typed in it colours the whole name. Elsewhere "Custom Color…" opens the shared pop-up.
+     * typed in it colours the whole name. Elsewhere "Custom color…" opens the shared pop-up.
      */
     private static void nameColour(ClientGameTestContext ctx) {
         ColorPicker inline = ctx.computeOnClient(mc -> screen(mc).namePicker());
@@ -386,7 +391,7 @@ final class NameGlintTest {
             return;
         }
         ctx.runOnClient(mc -> screen(mc).nameBox().select(2, 8)); // "Aspect"
-        press(ctx, mc -> labelled(mc, "Custom Color…").getFirst());
+        press(ctx, mc -> labelled(mc, "Custom color…").getFirst());
         ColorPopup p = ctx.computeOnClient(mc -> screen(mc).popup());
         check(p != null && !p.isAnimated(), "Custom color... opens the single-color pop-up");
         click(ctx, p.picker().x() + 30, p.picker().y() + 12);
@@ -398,7 +403,7 @@ final class NameGlintTest {
         ctx.waitTicks(2);
         check(ctx.computeOnClient(mc -> screen(mc).popup() == null) && v.equals(name(ctx)),
             "closing the pop-up saves the name: " + name(ctx));
-        ctx.clickScreenButton("Reset Name");
+        ctx.clickScreenButton("Reset name");
         ctx.waitTicks(2);
     }
 
@@ -440,7 +445,7 @@ final class NameGlintTest {
         String whole = ctx.computeOnClient(NameGlintTest::value);
         check(whole.equals("&" + ColorPicker.hex(p.rgb()) + "Aspect of the End"), "with the box unfocused, the whole name: " + whole);
         check(ctx.computeOnClient(mc -> !screen(mc).nameBox().isFocused()), "and the box shows the styled name");
-        ctx.clickScreenButton("Reset Name");
+        ctx.clickScreenButton("Reset name");
         ctx.waitTicks(2);
         check(name(ctx) == null, "Reset name after the picker");
     }
@@ -465,7 +470,7 @@ final class NameGlintTest {
         press(ctx, mc -> screen(mc).glintSquare("Purple (default)"));
         check(look(ctx).glintColor() == null, "Purple is Minecraft's own color: nothing stored");
 
-        press(ctx, mc -> labelled(mc, "Custom Color…").getLast());
+        press(ctx, mc -> labelled(mc, "Custom color…").getLast());
         ColorPopup p = ctx.computeOnClient(mc -> screen(mc).popup());
         check(p != null, "the glint Custom color... opens the pop-up");
         click(ctx, p.picker().x() + 40, p.picker().y() + 20);

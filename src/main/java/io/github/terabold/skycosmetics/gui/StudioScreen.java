@@ -80,7 +80,7 @@ import java.util.function.UnaryOperator;
  */
 public class StudioScreen extends Screen {
     private enum Tab {
-        SKINS("Skins"), DYES("Dyes"), STYLE("Name & Glint"), MODELS("Model & Trims"), SAVED("Saved"),
+        SKINS("Skins"), DYES("Dyes"), STYLE("Name & glint"), MODELS("Model & trims"), SAVED("Saved"),
         OTHER("Other Mods");
 
         final String label;
@@ -1055,12 +1055,12 @@ public class StudioScreen extends Screen {
                 }
             }
             case DYES -> {
-                int bw = font.width("Custom Dye…") + 12;
+                int bw = font.width("Custom dye…") + 12;
                 boolean wrap = midW < 280;
                 int sw = Math.min(midW - 84 - (wrap ? 0 : bw + 4), SEARCH_W);
                 viewButton(y);
                 y = search(y, "Search: aurora, warden…", sw);
-                Button custom = addRenderableWidget(new ActionButton(Component.literal("Custom Dye…"), bw, 16,
+                Button custom = addRenderableWidget(new ActionButton(Component.literal("Custom dye…"), bw, 16,
                     ActionButton.Kind.SECONDARY, b -> openDyePopup()));
                 custom.setPosition(wrap ? midX : midX + sw + 4, wrap ? y : y - 22);
                 if (wrap) y += 20;
@@ -1102,13 +1102,12 @@ public class StudioScreen extends Screen {
         labelStep = gs >= 2 ? 9 : 10;
         cardH = gs >= 3 ? 48 : gs == 2 ? 50 : CARD_H;
         nameLines.clear(); nameLead.clear();
-        listLayout();
         placePopup();
     }
 
     /** Keep the view selector in the results toolbar without taking a row from the results. */
     private void viewButton(int y) {
-        Button view = addRenderableWidget(new ActionButton(Component.literal(resultList ? "View: List" : "View: Grid"),
+        Button view = addRenderableWidget(new ActionButton(Component.literal(resultList ? "View: list" : "View: grid"),
             80, 16, ActionButton.Kind.SECONDARY, b -> {
                 resultList = !resultList;
                 scroll = 0;
@@ -1161,7 +1160,7 @@ public class StudioScreen extends Screen {
     private void openDyePopup() {
         if (ident() == null) return;
         String current = look().dye() != null ? look().dye() : inherited().dye();
-        openPopup(new ColorPopup(Component.literal("Custom Dye"), current, true, this::queueDye).onClose(this::flushPending));
+        openPopup(new ColorPopup(Component.literal("Custom dye"), current, true, this::queueDye).onClose(this::flushPending));
     }
 
     /** Shows a pop-up over the middle column until it is closed or the tab, item or scope changes. */
@@ -1213,8 +1212,8 @@ public class StudioScreen extends Screen {
         String typeName = inherited().name();
         nameBaseline = (typeName != null ? typeName : Names.toCodes(Cosmetics.originalName(target()))).trim();
         // Reset name sits on the "Name" title row, right-aligned over the box it resets.
-        int rw = font.width("Reset Name") + 12;
-        resetName = addRenderableWidget(new ActionButton(Component.literal("Reset Name"), rw, NAME_HEAD - 1,
+        int rw = font.width("Reset name") + 12;
+        resetName = addRenderableWidget(new ActionButton(Component.literal("Reset name"), rw, NAME_HEAD - 1,
             ActionButton.Kind.SECONDARY, b -> resetName()));
         resetName.setPosition(right - rw, y0);
         nameBox = new NameBox(font, midX, y0 + NAME_HEAD, right - midX - infoW - 4, boxH);
@@ -1273,7 +1272,7 @@ public class StudioScreen extends Screen {
             pos[1] = Math.max(pos[1] + PICKER_H, gradientBottom);
         } else {
             pos[1] = gradients(midX, pos[1], right - midX, 16) + 2;
-            place(pos, right, 2, keepFocus(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, 16,
+            place(pos, right, 2, keepFocus(Component.literal("Custom color…"), font.width("Custom color…") + 12, 16,
                 this::openNameColour));
             pos[1] += 16;
         }
@@ -1346,7 +1345,7 @@ public class StudioScreen extends Screen {
             }
         }
         pos[0] += 1; // the usual 2 px before a button
-        place(pos, right, 2, new ActionButton(Component.literal("Custom Color…"), font.width("Custom Color…") + 12, sq,
+        place(pos, right, 2, new ActionButton(Component.literal("Custom color…"), font.width("Custom color…") + 12, sq,
             ActionButton.Kind.SECONDARY, b -> openGlintColour()));
         place(pos, right, 2, new io.github.terabold.skycosmetics.gui.hub.ChromaButton(66, sq, b -> {
                 pendingGlint = null;
@@ -1466,20 +1465,20 @@ public class StudioScreen extends Screen {
     private void openGlintColour() {
         flushPending();
         String current = look().glintColor() != null ? look().glintColor() : inherited().glintColor();
-        openPopup(new ColorPopup(Component.literal("Glint Color"), current != null ? current : PURPLE, false, hex -> {
+        openPopup(new ColorPopup(Component.literal("Glint color"), current != null ? current : PURPLE, false, hex -> {
             queueGlint(l -> l.withGlintColor(hex));
             colourReset.active = true;
             glintPick = null;
         }).onClose(this::flushPending));
     }
 
-    /** "Custom Color…" for the name: the pop-up's colour goes on the letters selected when it opened, live. */
+    /** "Custom color…" for the name: the pop-up's colour goes on the letters selected when it opened, live. */
     private void openNameColour() {
         if (nameBox == null) return;
         String base = nameBox.getValue();
         int from = nameBox.selectionStart(), to = nameBox.selectionEnd();
         String start = Names.colourAt(base, from);
-        openPopup(new ColorPopup(Component.literal("Name Color"), start != null ? start : "#FFFFFF", false, hex -> {
+        openPopup(new ColorPopup(Component.literal("Name color"), start != null ? start : "#FFFFFF", false, hex -> {
             if (nameBox != null) setName(Names.format(base, from, to, "&" + hex), true);
         }).onClose(this::flushPending));
     }
@@ -1569,7 +1568,7 @@ public class StudioScreen extends Screen {
         Tips.set(chroma, Names.parse(Names.chroma() + "Animated chroma").append(Component.literal(" uses your shared animated palette")
             .withStyle(ChatFormatting.GRAY)));
         for (int[] st : own) {
-            Button b = gradientSwatch("Your Gradient", st, gw, h, "Right-click to remove");
+            Button b = gradientSwatch("Your gradient", st, gw, h, "Right-click to remove");
             customGradients.put(b, st);
             all.add(b);
         }
@@ -1698,7 +1697,7 @@ public class StudioScreen extends Screen {
     private Component scopeLabel(Cosmetics.Ident id) {
         if (id == null) return Component.literal("Pick an item");
         return byType ? Component.literal("Every " + Repo.get().typeName(id.type()))
-            : Component.literal("This Item Only");
+            : Component.literal("This item only");
     }
 
     private void switchTab(Tab t) {
@@ -1791,10 +1790,24 @@ public class StudioScreen extends Screen {
         pendingName = null;
         pendingDye = null;
         pendingGlint = null;
+        Runnable back = putBack();
         Looks.put(byType, key(id), null);
-        flash(inherited().empty() ? "Reset to original"
-            : "Reset. The look for every " + Repo.get().typeName(id.type()) + " still applies.", 0xFFFFAA66);
+        offerUndo(inherited().empty() ? "Reset to original"
+            : "Reset. The look for every " + Repo.get().typeName(id.type()) + " still applies.", back);
         rebuildWidgets();
+    }
+
+    /** Before a removal: how to put the picked item's look back exactly as it is now, for Undo. */
+    private Runnable putBack() {
+        Cosmetics.Ident id = widgetsFor;
+        if (id == null) return null;
+        boolean type = byType;
+        String k = key(id), itemType = id.type();
+        Looks.Look before = look();
+        return () -> {
+            if (type) Looks.put(true, k, before);
+            else Looks.putItem(k, itemType, before);
+        };
     }
 
     private void toggleScope() {
@@ -1806,6 +1819,10 @@ public class StudioScreen extends Screen {
     }
 
     private void useTexture() {
+        if (widgetsFor == null) {
+            flash("Pick an item on the left first", 0xFFFF6666);
+            return;
+        }
         String tex = Textures.normalise(texBox.getValue());
         if (tex == null) {
             flash("Not a skin texture: paste a Value, URL or hash", 0xFFFF6666);
@@ -1871,6 +1888,7 @@ public class StudioScreen extends Screen {
             p.close(); // applies a half-typed hex value; its close action saves
         }
         flushPending();
+        io.github.terabold.skycosmetics.gui.ui.Tips.forget();
         super.removed();
     }
 
@@ -1908,8 +1926,8 @@ public class StudioScreen extends Screen {
             return;
         }
         if (shownCatalog != Repo.get()) {
-            refilter(); // repo finished (re)loading while open
             nameLines.clear(); nameLead.clear();
+            refilter(); // repo finished (re)loading while open; in list view this wraps the names again
         }
         if (builtFor != OwnedItems.version() || !Objects.equals(ident(), widgetsFor)) {
             buildRows(); // finds the picked item again if it only moved
@@ -2715,7 +2733,7 @@ public class StudioScreen extends Screen {
         boolean inView = mouseY >= top && mouseY < bottom;
         g.enableScissor(midX, top, midX + midW, bottom);
         g.text(font, "Name", midX, nameTop + 3 - dy, Theme.ACCENT, false);
-        g.text(font, "Enchant Glint", midX, glintTop - dy, Theme.ACCENT, false);
+        g.text(font, "Enchant glint", midX, glintTop - dy, Theme.ACCENT, false);
         // Live: the glint shows here. 3x in the roomy layout, 2x in the compact one.
         bigItem(g, target(), glintIconX, glintIconY - dy, glintIcon, inView ? mouseX : -1, mouseY, null);
         g.disableScissor();
@@ -2915,6 +2933,8 @@ public class StudioScreen extends Screen {
         if (mx < cx || mx >= cx + 8 || my < summaryY - 1) return false;
         int line = (int) ((my - summaryY + 1) / SUMMARY_H);
         Looks.Look l = look();
+        Runnable back = putBack();
+        String removed = switch (line) { case 0 -> "Skin removed"; case 1 -> "Dye removed"; case 2 -> "Name removed"; default -> "Glint removed"; };
         switch (line) {
             case 0 -> {
                 if (l.skin() == null) return false;
@@ -2942,6 +2962,7 @@ public class StudioScreen extends Screen {
                 return false;
             }
         }
+        if (back != null) offerUndo(removed, back);
         return true;
     }
 

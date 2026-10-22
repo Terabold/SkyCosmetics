@@ -96,6 +96,13 @@ public final class Settings {
         for (Key k : KEYS.values()) read(k, o);
     }
 
+    /** For tests: every key as {@code o} (a {@link #snapshot}) has it, as if the file held it. */
+    public static void restore(JsonObject o) {
+        if (o == null) return;
+        last = o.deepCopy();
+        for (Key k : KEYS.values()) read(k, last);
+    }
+
     /** One key failing (a hand-edited value a feature can't take) never stops the others. */
     private static void read(Key k, JsonObject o) {
         try {

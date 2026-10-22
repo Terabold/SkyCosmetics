@@ -47,6 +47,11 @@ public final class Tips {
     private static final Map<AbstractWidget, Tip> WIDGETS = new WeakHashMap<>();
     private static final Hover WIDGET_HOVER = new Hover();
 
+    /** A screen of ours closed: let go of the widget last hovered, which would keep that screen (and the world) alive. */
+    public static void forget() {
+        WIDGET_HOVER.settled(null);
+    }
+
     private Tips() {}
 
     /** What one list has under the mouse, and since when. */

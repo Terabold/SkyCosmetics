@@ -69,6 +69,7 @@ public final class Io {
 
     /** Serialises {@code json} off-thread. Build the JSON on the caller's thread; it must not be mutated afterwards. */
     public static void writeAsync(Path file, JsonElement json) {
+        JsonElement late = null;
         synchronized (PENDING) {
             PENDING.put(file, json);
             if (!draining) {
@@ -76,12 +77,14 @@ public final class Io {
                 try {
                     WRITER.execute(Io::drain);
                 } catch (RejectedExecutionException e) {
+                    // The game is closing and the writer has stopped (a screen saving as it closes, after the
+                    // flush): written here and now instead, so a last edit is never lost.
                     draining = false;
-                    PENDING.remove(file);
-                    throw e;
+                    late = PENDING.remove(file);
                 }
             }
         }
+        if (late != null) write(file, late);
     }
 
     private static void drain() {
